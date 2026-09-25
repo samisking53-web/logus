@@ -74,3 +74,29 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 앱 시작화면(components/splash-screen.tsx)
+   1.25초 동안 보여준 뒤 0.4초에 걸쳐 사라진다.
+   사라진 뒤에는 visibility: hidden이라 아래 화면의 터치를 막지 않는다. */
+.splash-screen {
+  animation: splash-fade-out 0.4s ease-in 1.25s forwards;
+}
+
+/* 같은 창에서 이미 본 경우(새로고침 등)에는 처음부터 숨긴다 */
+.splash-seen .splash-screen {
+  display: none;
+}
+
+@keyframes splash-fade-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* 폰의 '동작 줄이기' 설정이 켜져 있으면 서서히 사라지지 않고 1.25초 뒤 바로 숨긴다 */
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen {
+    animation-duration: 1ms;
+  }
+}

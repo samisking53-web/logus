@@ -14,7 +14,9 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     // standalone: 주소창 없이 앱처럼 열린다
     display: "standalone",
-    background_color: "#ffffff",
+    // 설치한 앱을 열 때 안드로이드가 먼저 보여주는 화면의 배경색.
+    // 앱 시작화면(components/splash-screen.tsx)의 연보라 배경(--brand-soft)과 맞춘다
+    background_color: "#f2ebff",
     theme_color: "#ffffff",
     // 임시 아이콘이다. 디자인이 정해지면 public/icons/ 안의 파일을 같은 이름·크기의 PNG로 바꾼다.
     // 아이폰 홈 화면 아이콘은 app/apple-icon.png(180x180), 브라우저 탭 아이콘은 app/favicon.ico

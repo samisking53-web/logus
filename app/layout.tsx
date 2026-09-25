@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { SplashScreenScript } from "@/components/splash-screen";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -51,6 +52,8 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`}>
+        {/* 앱 시작화면을 이 창에서 이미 봤는지 확인한다. 다른 내용보다 먼저 실행되도록 맨 앞에 둔다 */}
+        <SplashScreenScript />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
