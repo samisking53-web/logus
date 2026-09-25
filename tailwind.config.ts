@@ -66,6 +66,16 @@ export default {
           strong: color("reward-strong"),
           soft: color("reward-soft"),
         },
+        // 외부 브랜드 색 (로그인 버튼 전용)
+        kakao: {
+          DEFAULT: color("kakao"),
+          foreground: color("kakao-foreground"),
+        },
+        google: {
+          DEFAULT: color("google"),
+          foreground: color("google-foreground"),
+          line: color("google-line"),
+        },
         member: {
           "1": color("member-1"),
           "2": color("member-2"),

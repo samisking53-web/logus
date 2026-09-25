@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { SplashScreenScript } from "@/components/splash-screen";
+import { SplashScreen, SplashScreenScript } from "@/components/splash-screen";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -61,6 +61,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          {/* 앱을 열면 잠깐 보였다가 사라지는 시작화면 (LOG EARTH). 로그인 화면이든 홈이든 가장 먼저 보인다 */}
+          <SplashScreen />
         </ThemeProvider>
       </body>
     </html>

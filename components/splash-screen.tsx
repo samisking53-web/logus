@@ -18,7 +18,7 @@ export function SplashScreenScript() {
   return <script dangerouslySetInnerHTML={{ __html: checkSeenScript }} />;
 }
 
-// app/(tabs)/layout.tsx에 둔다. 하단 탭 화면(홈/탐색/마이로그)을 처음 열 때 화면 전체를 덮는다.
+// app/layout.tsx에 둔다. 앱을 처음 열 때 어떤 화면(로그인·홈 등)이든 그 위를 덮는다.
 export function SplashScreen() {
   return (
     <div
