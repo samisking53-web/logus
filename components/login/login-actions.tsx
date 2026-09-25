@@ -36,8 +36,6 @@ export function LoginActions() {
       </Link>
 
       <p className="mt-1 text-center text-xs leading-relaxed text-muted-foreground">
-        실습 버전이라 어느 버튼을 눌러도 앱 전용 아이디로 가입해요.
-        <br />
         계속하면 이용약관과 개인정보 처리방침에 동의하는 절차로 넘어가요.
       </p>
       <p className="py-2 text-center text-sm text-muted-foreground">
