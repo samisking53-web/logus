@@ -11,21 +11,18 @@ const MENUS = [
     title: "기록 시작하기",
     description: "새로운 여정 기록하기",
     href: undefined, // 연결할 화면이 정해지면 주소를 넣는다
-    borderClass: "border-fuchsia-200 dark:border-fuchsia-900",
   },
   {
     number: "②",
     title: "탐색",
     description: "다른 여행자의 순간 발견",
     href: "/explore",
-    borderClass: "border-fuchsia-200 dark:border-fuchsia-900",
   },
   {
     number: "③",
     title: "마이로그",
     description: "여정별 기록과 추억 다시 보기",
     href: "/mylog",
-    borderClass: "border-yellow-200 dark:border-yellow-900",
   },
 ];
 
@@ -37,10 +34,8 @@ export default function HomePage() {
         <h2 className="text-2xl font-bold">어떤 순간을 남길까요?</h2>
         <ul className="flex flex-col gap-4">
           {MENUS.map((menu) => {
-            const cardClass = cn(
-              "block rounded-3xl border-2 bg-brand-soft px-5 py-5",
-              menu.borderClass,
-            );
+            const cardClass =
+              "block rounded-3xl border-2 border-fuchsia-200 bg-brand-soft px-5 py-5 dark:border-fuchsia-900";
             const content = (
               <>
                 <p className="text-xl font-bold">
