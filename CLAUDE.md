@@ -57,6 +57,7 @@
 - 실습 단계: `profiles`·`user_agreements`의 migration(0001)은 아직 실행하지 않는다. 같은 내용(아이디, 비밀번호 해시, 닉네임, 약관 동의 기록)을 브라우저 localStorage에 저장한다(`lib/local-auth.ts`)
 - `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
+- 실습 단계: `journeys`·`journey_members`도 같은 모양으로 브라우저 localStorage에 저장한다(`lib/local-journeys.ts`). 날짜는 "2026-09-24" 같은 현지 날짜 글자로 다룬다(`lib/dates.ts`)
 - `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, is_public(기본 false), created_at
 - `log_tags`: log_id, user_id
 - `comments`: id, log_id, author_id, body, created_at
@@ -74,6 +75,7 @@
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
+- 여정의 도시 추천은 `public/data/cities.json`(Natural Earth, public domain)에서 찾는다. 이 목록의 도시 이름은 저장해도 된다. 목록을 다시 만들 때는 `node scripts/build-cities.mjs`
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 UTC로 저장하고 촬영지 시간대(captured_tz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
 - 사진은 업로드 전에 브라우저에서 줄이고 HEIC는 JPEG/WebP로 바꾼다. 영상은 15초 이하, 파일 하나 50MB 미만(Supabase 무료 플랜 한도)

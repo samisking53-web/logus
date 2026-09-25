@@ -2,6 +2,7 @@
 // 폴더 이름의 괄호 (tabs)는 주소에 나타나지 않는다. 예: app/(tabs)/explore → /explore
 import { BottomTabBar } from "@/components/bottom-tab-bar";
 import { AccountCheck } from "@/components/account-check";
+import { StartDayCamera } from "@/components/journey/start-day-camera";
 
 export default function TabsLayout({
   children,
@@ -16,6 +17,8 @@ export default function TabsLayout({
       <BottomTabBar />
       {/* 이 기기에 로그인한 계정이 실제로 있는지 확인한다 */}
       <AccountCheck />
+      {/* 미리 등록한 여정의 시작일이면 카메라를 바로 연다 (시작일에 처음 열 때 한 번) */}
+      <StartDayCamera />
     </div>
   );
 }
