@@ -51,7 +51,8 @@
 - I01 초대 확인 / I02 참여 완료·내 알림 설정 / I03 참여한 여정 / I04 공동 피드의 첫 기록
 
 ## 데이터 모델 (초안. 바꾸면 이 파일도 함께 고친다)
-- `profiles`: id(= auth.users.id), nickname, avatar_url
+- `profiles`: id(= auth.users.id), nickname(앞뒤 공백 없이 1~12자), avatar_url(https만), created_at. 이 줄이 있으면 가입을 마친 사람이다
+- `user_agreements`: user_id, agreement(age_14|service_terms|location_terms|new_log_notice), version, agreed, agreed_at(서버 시간). PK (user_id, agreement, agreed_at). 약관 동의 기록이라 추가만 하고 고치거나 지우지 않는다. 필수 3개(age_14·service_terms·location_terms)에 동의해야 profiles를 만들 수 있다
 - `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
 - `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, is_public(기본 false), created_at
