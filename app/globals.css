@@ -29,6 +29,10 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+    /* LOG US 브랜드 색. 흰 배경 대비 7.4:1, brand-soft 배경 대비 6.3:1 (WCAG AA 4.5:1 이상) */
+    --brand: 262 52% 47%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 262 100% 96%;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -55,6 +59,10 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    /* 다크 모드 브랜드 색. 어두운 배경 대비 9.0:1, brand-soft 배경 대비 7.3:1 */
+    --brand: 262 90% 80%;
+    --brand-foreground: 0 0% 3.9%;
+    --brand-soft: 262 30% 16%;
   }
 }
 
