@@ -39,7 +39,7 @@ export function BottomTabBar() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex h-16 flex-col items-center justify-center gap-1 text-xs font-medium",
-                  active ? "text-brand" : "text-muted-foreground",
+                  active ? "text-brand-strong" : "text-muted-foreground",
                 )}
               >
                 <Icon className="size-6" aria-hidden="true" />

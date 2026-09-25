@@ -31,10 +31,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   // 아이폰 노치·홈 바 영역까지 화면을 쓰고, 안쪽 여백은 env(safe-area-inset-*)로 맞춘다
   viewportFit: "cover",
-  // 폰 브라우저 상단 막대 색. 화면 배경색(globals.css의 --background)과 맞춘다
+  // 폰 브라우저 상단 막대 색. 화면 바탕색(globals.css의 --background)과 맞춘다
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#F7F5FB" },
+    { media: "(prefers-color-scheme: dark)", color: "#141220" },
   ],
 };
 

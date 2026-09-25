@@ -26,7 +26,7 @@ export function SplashScreen() {
       aria-hidden="true"
       className="splash-screen fixed inset-0 z-50 flex items-center justify-center bg-brand-soft"
     >
-      <p className="text-4xl font-extrabold tracking-tight text-brand">
+      <p className="text-4xl font-extrabold tracking-tight text-brand-strong">
         LOG EARTH
       </p>
     </div>

@@ -1,6 +1,9 @@
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
 
+// app/globals.css의 색 변수(R G B 숫자)를 Tailwind 색으로 바꾼다. bg-brand/50처럼 투명도도 붙일 수 있다.
+const color = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   darkMode: ["class"],
   content: [
@@ -11,51 +14,63 @@ export default {
   ],
   theme: {
     extend: {
+      // 색 이름과 값은 app/globals.css의 팔레트에서 가져온다. 새 색이 필요하면 거기에 먼저 추가한다.
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        background: color("background"),
+        foreground: color("foreground"),
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: color("card"),
+          foreground: color("card-foreground"),
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: color("popover"),
+          foreground: color("popover-foreground"),
         },
+        // 템플릿 버튼이 쓰는 primary는 브랜드 프라이머리와 같은 색이다
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: color("brand"),
+          foreground: color("brand-foreground"),
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: color("secondary"),
+          foreground: color("secondary-foreground"),
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: color("muted"),
+          foreground: color("muted-foreground"),
         },
+        weak: color("weak-foreground"),
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: color("accent"),
+          foreground: color("accent-foreground"),
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: color("destructive"),
+          foreground: color("destructive-foreground"),
         },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        success: color("success"),
+        warning: color("warning"),
+        border: color("border"),
+        input: color("input"),
+        ring: color("ring"),
         brand: {
-          DEFAULT: "hsl(var(--brand))",
-          foreground: "hsl(var(--brand-foreground))",
-          soft: "hsl(var(--brand-soft))",
+          DEFAULT: color("brand"),
+          pressed: color("brand-pressed"),
+          strong: color("brand-strong"),
+          soft: color("brand-soft"),
+          line: color("brand-line"),
+          foreground: color("brand-foreground"),
         },
-        chart: {
-          "1": "hsl(var(--chart-1))",
-          "2": "hsl(var(--chart-2))",
-          "3": "hsl(var(--chart-3))",
-          "4": "hsl(var(--chart-4))",
-          "5": "hsl(var(--chart-5))",
+        reward: {
+          DEFAULT: color("reward"),
+          strong: color("reward-strong"),
+          soft: color("reward-soft"),
+        },
+        member: {
+          "1": color("member-1"),
+          "2": color("member-2"),
+          "3": color("member-3"),
+          "4": color("member-4"),
         },
       },
       borderRadius: {

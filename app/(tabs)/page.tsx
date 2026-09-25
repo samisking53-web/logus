@@ -35,7 +35,7 @@ export default function HomePage() {
         <ul className="flex flex-col gap-4">
           {MENUS.map((menu) => {
             const cardClass =
-              "block rounded-3xl border-2 border-fuchsia-200 bg-brand-soft px-5 py-5 dark:border-fuchsia-900";
+              "block rounded-3xl border-2 border-brand-line bg-brand-soft px-5 py-5";
             const content = (
               <>
                 <p className="text-xl font-bold">
@@ -43,8 +43,7 @@ export default function HomePage() {
                   <span aria-hidden="true">{menu.number} </span>
                   {menu.title}
                 </p>
-                {/* 연보라 배경 위에서도 명도 대비 4.5:1이 넘도록 글자색을 조금 흐리게만 한다 */}
-                <p className="mt-1 text-base text-foreground/70">
+                <p className="mt-1 text-base text-muted-foreground">
                   {menu.description}
                 </p>
               </>

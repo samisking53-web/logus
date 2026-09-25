@@ -2,67 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
+/* LOG US 색상 팔레트
+   - 색은 이 파일에서만 정하고, 화면 코드에서는 Tailwind 이름(bg-brand, text-muted-foreground 등)으로 쓴다.
+   - 숫자는 R G B 값이고, 옆 주석의 # 코드가 팔레트 색 코드다.
+   - [팔레트에 없음] 표시는 팔레트에 정해진 값이 없어 다른 팔레트 색을 빌려 쓴 자리다. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    /* 브랜드 */
+    --brand: 91 61 214; /* #5B3DD6 프라이머리: 버튼 채움, 아이콘, 포커스 테두리 */
+    --brand-pressed: 74 47 184; /* #4A2FB8 눌림: 버튼을 누르고 있을 때 */
+    --brand-strong: 74 47 184; /* #4A2FB8 강조 텍스트: 보라색 글자 */
+    --brand-soft: 238 234 251; /* #EEEAFB 선택 카드 배경 */
+    --brand-line: 216 207 245; /* #D8CFF5 테두리 */
+    --brand-foreground: 255 255 255; /* 흰색: 프라이머리 채움 위의 글자 */
+
+    /* 강조 · 기록과 보상 (코인·하이라이트). 앰버 채움 위에 흰 글자는 쓰지 않고 앰버 글자를 쓴다 */
+    --reward: 224 147 15; /* #E0930F 앰버 채움 */
+    --reward-strong: 138 86 6; /* #8A5606 앰버 글자 */
+    --reward-soft: 253 240 220; /* #FDF0DC 앰버 배경 */
+
+    /* 멤버 구분색. 색만으로 구분되지 않도록 핀에 이름 첫 글자를 함께 넣는다 */
+    --member-1: 91 61 214; /* #5B3DD6 */
+    --member-2: 198 63 51; /* #C63F33 */
+    --member-3: 11 122 107; /* #0B7A6B */
+    --member-4: 156 100 8; /* #9C6408 */
+
+    /* 뉴트럴 */
+    --foreground: 26 23 37; /* #1A1725 본문 */
+    --muted-foreground: 90 85 112; /* #5A5570 보조 */
+    --weak-foreground: 110 106 133; /* #6E6A85 약함. 바탕 위에서만 쓴다(선택 카드 배경 위에서는 4.38:1로 미달) */
+    --border: 227 224 236; /* #E3E0EC 선 */
+    --background: 247 245 251; /* #F7F5FB 바탕 */
+    --card: 255 255 255; /* 흰색: 입력 폼 등 카드 면 */
+
+    /* 시맨틱 */
+    --success: 23 121 90; /* #17795A 성공(저장 완료) */
+    --warning: 168 98 10; /* #A8620A 주의. 바탕 위 작은 글자로는 4.39:1로 미달이라 큰 글자·아이콘에 쓴다 */
+    --destructive: 192 57 43; /* #C0392B 오류 */
+    --destructive-foreground: 255 255 255; /* 흰색: 오류 채움 위의 글자 */
+
+    /* 템플릿 부품(버튼·입력칸·메뉴)이 쓰는 이름. 새 색을 만들지 않고 위 팔레트 색을 가리킨다 */
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --secondary: var(--brand-soft);
+    --secondary-foreground: var(--foreground);
+    --muted: var(--brand-soft);
+    --accent: var(--brand-soft);
+    --accent-foreground: var(--foreground);
+    --input: var(--border);
+    --ring: var(--brand);
+
     --radius: 0.5rem;
-    /* LOG US 브랜드 색. 흰 배경 대비 7.4:1, brand-soft 배경 대비 6.3:1 (WCAG AA 4.5:1 이상) */
-    --brand: 262 52% 47%;
-    --brand-foreground: 0 0% 100%;
-    --brand-soft: 262 100% 96%;
   }
+
+  /* 다크 모드. 여기 없는 색(앰버·멤버·시맨틱·약함)은 아직 다크 값이 없어 라이트 값을 그대로 쓴다 */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    /* 다크 모드 브랜드 색. 어두운 배경 대비 9.0:1, brand-soft 배경 대비 7.3:1 */
-    --brand: 262 90% 80%;
-    --brand-foreground: 0 0% 3.9%;
-    --brand-soft: 262 30% 16%;
+    --brand: 107 79 224; /* #6B4FE0 다크 프라이머리 */
+    --brand-pressed: 91 61 214; /* #5B3DD6 [팔레트에 없음] 라이트 프라이머리 */
+    --brand-strong: 179 160 255; /* #B3A0FF 다크 강조 글자 */
+    --brand-soft: 30 27 46; /* #1E1B2E 다크 카드 */
+    --brand-line: 90 85 112; /* #5A5570 [팔레트에 없음] 라이트 보조 */
+
+    --foreground: 247 245 251; /* #F7F5FB [팔레트에 없음] 라이트 바탕 */
+    --muted-foreground: 227 224 236; /* #E3E0EC [팔레트에 없음] 라이트 선 */
+    --border: 90 85 112; /* #5A5570 [팔레트에 없음] 라이트 보조 */
+    --background: 20 18 32; /* #141220 다크 바탕 */
+    --card: 30 27 46; /* #1E1B2E 다크 카드 */
   }
 }
 
