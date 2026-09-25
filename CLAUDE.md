@@ -15,6 +15,7 @@
 ## 기술 스택 (임의로 바꾸지 않는다)
 - Next.js App Router + TypeScript + Tailwind CSS. Supabase 공식 `with-supabase` 템플릿 기반
 - Supabase: Auth(카카오 로그인 기본, 구글 보조), Postgres, Storage
+  - 지금(실습 단계)은 서버 없이 앱 전용 아이디·비밀번호 계정을 브라우저에 저장한다(`lib/local-auth.ts`). 구글·카카오 버튼도 모양만 브랜드 버튼이고 이 가입으로 간다. 서버를 붙이면 Supabase Auth로 바꾼다(`docs/login-setup.md`)
 - 지도: MapLibre GL JS + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
 - 추억 영상: Remotion Player로 앱 안에서 재생. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 서버 코드(`app/api/`)에서만 호출한다
@@ -30,7 +31,7 @@
 - 화면은 `app/` 라우트, 공통 UI는 `components/`, Supabase 클라이언트는 `lib/supabase/`
 - 화면 파일 맨 위에 스토리보드 번호를 주석으로 적는다 (예: `// S02 새 여정 만들기`)
 - DB 변경은 `supabase/migrations/NNNN_이름.sql` 파일로만 한다. 팀원이 Supabase 대시보드 SQL Editor에서 직접 실행하므로 파일 맨 위에 실행 순서와 한 줄 설명을 주석으로 단다
-- 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Supabase를 붙일 때 필요. 실습 단계에서는 없어도 된다)
 - 비밀 키(Supabase secret·service_role 키, AI API 키)는 코드·커밋·브라우저 코드에 넣지 않는다. `.env*` 파일은 커밋하지 않는다
 
 ## UI 규칙
@@ -53,6 +54,7 @@
 ## 데이터 모델 (초안. 바꾸면 이 파일도 함께 고친다)
 - `profiles`: id(= auth.users.id), nickname(앞뒤 공백 없이 1~12자), avatar_url(https만), created_at. 이 줄이 있으면 가입을 마친 사람이다
 - `user_agreements`: user_id, agreement(age_14|service_terms|location_terms|new_log_notice), version, agreed, agreed_at(서버 시간). PK (user_id, agreement, agreed_at). 약관 동의 기록이라 추가만 하고 고치거나 지우지 않는다. 필수 3개(age_14·service_terms·location_terms)에 동의해야 profiles를 만들 수 있다
+- 실습 단계: `profiles`·`user_agreements`의 migration(0001)은 아직 실행하지 않는다. 같은 내용(아이디, 비밀번호 해시, 닉네임, 약관 동의 기록)을 브라우저 localStorage에 저장한다(`lib/local-auth.ts`)
 - `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
 - `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, is_public(기본 false), created_at
@@ -80,6 +82,8 @@
 - 구글 로그인은 카카오톡·인스타그램 인앱 브라우저에서 막힌다. 인앱 브라우저를 감지하면 '브라우저로 열기' 안내를 보여준다
 - 위치·푸시 같은 기능은 HTTPS에서만 동작한다. 폰 테스트는 Vercel 미리보기 주소로 한다
 - 아이폰 웹 푸시는 홈 화면에 추가한 PWA에서만 동작한다
+- 실습 단계의 앱 전용 계정은 가입한 기기·브라우저에만 있다. 다른 폰이나 다른 브라우저(Safari↔Chrome, 카카오톡 안 브라우저)에서는 그 계정으로 로그인할 수 없다
+- 아이폰 Safari는 7일 동안 열지 않은 사이트의 저장 데이터를 지울 수 있다(계정도 사라짐). 홈 화면에 추가한 앱은 영향을 덜 받는다
 
 ## 지금 범위 밖 (요청이 있을 때만 만든다)
 - 촬영 알림 웹 푸시, mp4 렌더링·저장, 월별·연도별 타임라인, '1년 전 오늘'

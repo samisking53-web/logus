@@ -1,5 +1,9 @@
 # 로그인 설정 안내 (Supabase · 카카오 · 구글)
 
+> **지금은 쓰지 않는 문서입니다.** 실습 단계에서는 서버 없이 이 기기(브라우저)에 저장하는 앱 전용 아이디·비밀번호로 가입합니다(`lib/local-auth.ts`).
+> 나중에 서버(Supabase)를 붙여 실제 구글·카카오 로그인으로 바꿀 때 이 문서를 따릅니다.
+> 그때는 앱 코드도 다시 바꿔야 합니다. 이 문서를 썼을 때의 Supabase 로그인 코드는 git 기록(커밋 `b10f6de`)에 남아 있습니다.
+
 카카오·구글 로그인이 실제로 동작하려면 아래 설정을 **한 번만** 해 두면 됩니다. 위에서부터 순서대로 진행하세요.
 비밀 값(DB 비밀번호, secret·service_role 키, 카카오·구글 Client Secret)은 코드나 채팅에 붙여 넣지 않습니다. 각 서비스의 설정 화면에만 입력합니다.
 
@@ -115,6 +119,5 @@ Supabase → **Authentication → URL Configuration**
 
 ## 참고
 
-- 템플릿에 있던 이메일·비밀번호 로그인 화면(`/auth/login` 등)은 아직 남아 있지만 앱에서는 쓰지 않습니다.
-- 로그인·가입 흐름 코드: `app/login`, `app/auth/callback`, `app/onboarding`, `lib/supabase/proxy.ts`
+- 이 문서를 쓸 때의 로그인·가입 흐름 코드는 `app/login`, `app/auth/callback`, `app/onboarding`, `lib/supabase/proxy.ts`였습니다. 지금은 지워져 있으니 커밋 `b10f6de`에서 꺼내 봅니다.
 - 약관 본문이 확정되면 `app/terms/[slug]/page.tsx`에 넣고 `lib/terms.ts`의 `TERMS_VERSION`을 올립니다.

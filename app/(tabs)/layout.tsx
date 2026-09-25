@@ -1,6 +1,7 @@
 // 하단 탭(홈/탐색/마이로그)이 있는 화면들의 공통 레이아웃
 // 폴더 이름의 괄호 (tabs)는 주소에 나타나지 않는다. 예: app/(tabs)/explore → /explore
 import { BottomTabBar } from "@/components/bottom-tab-bar";
+import { AccountCheck } from "@/components/account-check";
 
 export default function TabsLayout({
   children,
@@ -13,6 +14,8 @@ export default function TabsLayout({
     <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col sm:border-x">
       <main className="flex flex-1 flex-col">{children}</main>
       <BottomTabBar />
+      {/* 이 기기에 로그인한 계정이 실제로 있는지 확인한다 */}
+      <AccountCheck />
     </div>
   );
 }

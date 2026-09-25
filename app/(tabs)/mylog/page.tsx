@@ -1,5 +1,6 @@
 // S10 마이로그
 import type { Metadata } from "next";
+import { AccountBox } from "@/components/account-box";
 import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
@@ -17,6 +18,8 @@ export default function MyLogPage() {
           내가 만들거나 초대받은 여정이 여기에 모여요.
         </p>
       </section>
+      {/* 로그인한 계정과 로그아웃 버튼 */}
+      <AccountBox />
     </>
   );
 }

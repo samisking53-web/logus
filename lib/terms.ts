@@ -1,11 +1,11 @@
 // 가입 1단계에서 동의받는 항목과 약관 정보.
-// 약관 내용이 바뀌면 TERMS_VERSION을 올린다. 동의할 때 이 버전이 DB(user_agreements)에 함께 저장된다.
+// 약관 내용이 바뀌면 TERMS_VERSION을 올린다. 동의할 때 이 버전이 계정 정보(lib/local-auth.ts)에 함께 저장된다.
 export const TERMS_VERSION = "2026-09-25";
 
 export type AgreementKey = "age_14" | "service_terms" | "location_terms" | "new_log_notice";
 export type TermsSlug = "service" | "location" | "privacy";
 
-// 항목을 바꾸면 supabase/migrations의 user_agreements 검사 조건(check)도 함께 바꾼다
+// 나중에 서버(Supabase)를 붙일 때는 supabase/migrations의 user_agreements 검사 조건(check)도 함께 맞춘다
 export const AGREEMENTS: {
   key: AgreementKey;
   label: string;

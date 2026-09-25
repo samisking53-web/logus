@@ -1,3 +1,4 @@
+-- ※ 지금(실습 단계)은 쓰지 않는다. 계정은 브라우저에 저장한다(lib/local-auth.ts). 나중에 Supabase를 붙일 때 실행한다
 -- 실행 순서: 0001 (가장 먼저 실행)
 -- 설명: 회원 프로필(profiles)과 약관 동의 기록(user_agreements) 표를 만들고, 각자 자기 것만 읽고 쓰도록 권한(RLS)을 건다
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query에 이 파일 전체를 붙여 넣고 Run. 한 번만 실행한다

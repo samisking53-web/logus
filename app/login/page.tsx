@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-[calc(env(safe-area-inset-top)+1.5rem)]">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col break-keep px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-[calc(env(safe-area-inset-top)+1.5rem)]">
       <h1 className="sr-only">LOG EARTH 로그인</h1>
       <p className="flex items-center justify-center gap-2 text-sm font-bold tracking-widest text-brand-strong">
         <Globe className="size-4" aria-hidden="true" />
