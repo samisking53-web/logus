@@ -3,6 +3,7 @@
 // S04 앱 안 카메라: 여정 이름, "여정 진행 중 · 14:30", 카메라 화면, ● 촬영
 // - 화면에 들어오면 폰의 뒤쪽 카메라가 영상 촬영 준비 상태로 바로 켜진다
 //   (처음 한 번은 브라우저가 카메라·마이크 권한을 묻는다. 마이크를 거절하면 소리 없이 찍는다)
+// - 카메라 화면 오른쪽 아래 전환 버튼으로 후면·전면 카메라를 바꾼다 (찍는 중에는 바꿀 수 없다)
 // - ● 촬영을 누르면 최대 10초까지 영상을 찍는다. 10초가 되면 저절로 멈춘다
 // - 찍는 동안 1초마다 장면을 한 장씩 남겨 둔다 (대표 화면 후보)
 // - 멈추면 찍은 영상을 들고 바로 S05 기록 올리기 화면(/journeys/여정번호/record)으로 간다
@@ -10,18 +11,20 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Circle, Square } from "lucide-react";
+import { Circle, Square, SwitchCamera } from "lucide-react";
 import { JourneyHeader } from "@/components/journey/journey-header";
 import { NextButton } from "@/components/signup/next-button";
 import { formatKorean, todayKey } from "@/lib/dates";
 import { getCurrentAccount } from "@/lib/local-auth";
 import { getMyJourney, journeyStatus, type Journey } from "@/lib/local-journeys";
 import { setPendingRecording } from "@/lib/pending-recording";
+import { cn } from "@/lib/utils";
 
 export const MAX_VIDEO_SECONDS = 10;
 const FRAME_WIDTH = 720; // 대표 화면 후보 이미지의 가로 크기(px)
 
 type CameraState = "starting" | "live" | "denied" | "unavailable" | "insecure" | "unsupported" | "error";
+type Facing = "environment" | "user"; // environment: 후면(뒤쪽) 카메라, user: 전면(셀카) 카메라
 
 const CAMERA_MESSAGES: Record<Exclude<CameraState, "starting" | "live">, string> = {
   denied: "카메라 권한이 꺼져 있어요. 브라우저 설정에서 이 사이트의 카메라를 허용한 뒤 다시 시도해 주세요.",
@@ -56,8 +59,13 @@ function grabFrame(video: HTMLVideoElement) {
   return canvas.toDataURL("image/jpeg", 0.8);
 }
 
-async function openCamera() {
-  const video = { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } };
+const VIDEO_SIZE = { width: { ideal: 1280 }, height: { ideal: 720 } };
+
+function deviceIdOf(stream: MediaStream) {
+  return stream.getVideoTracks()[0]?.getSettings().deviceId ?? null;
+}
+
+async function openCamera(video: MediaTrackConstraints) {
   try {
     return await navigator.mediaDevices.getUserMedia({ video, audio: true });
   } catch (err) {
@@ -78,6 +86,9 @@ export function JourneyCamera() {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [retry, setRetry] = useState(0);
+  const [facing, setFacing] = useState<Facing>("environment");
+  const [mirrored, setMirrored] = useState(false); // 전면 카메라면 화면을 거울처럼 좌우로 뒤집어 보여준다
+  const [canSwitch, setCanSwitch] = useState(false); // 카메라가 2개 이상인 기기에서만 전환 버튼을 보여준다
   const [now, setNow] = useState<Date | null>(null);
 
   const liveRef = useRef<HTMLVideoElement>(null);
@@ -85,6 +96,8 @@ export function JourneyCamera() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const discardRef = useRef(false); // 찍는 도중 화면을 떠나면 찍던 영상은 버린다
+  const deviceRef = useRef<string | null>(null); // 지금(마지막으로) 쓴 카메라. 다시 찍기로 돌아와도 같은 카메라를 켠다
+  const switchFromRef = useRef<string | null>(null); // 전환 버튼을 누르기 직전의 카메라
 
   useEffect(() => {
     const account = getCurrentAccount();
@@ -99,6 +112,7 @@ export function JourneyCamera() {
   }, []);
 
   // 카메라 켜기. 화면을 떠나면(기록 올리기로 넘어갈 때 포함) 카메라를 끈다(배터리·개인정보 보호)
+  // 전환 버튼을 누르면 facing이 바뀌어 지금 카메라를 끄고 다른 쪽 카메라를 다시 켠다
   useEffect(() => {
     if (!journey) return;
     let cancelled = false;
@@ -110,15 +124,37 @@ export function JourneyCamera() {
       if (typeof MediaRecorder === "undefined") return setCamera("unsupported");
       setCamera("starting");
       try {
-        const stream = await openCamera();
+        const from = switchFromRef.current;
+        switchFromRef.current = null;
+        // 전환할 때는 앞·뒤(facing)로 고르고, 그 밖에는 마지막으로 쓴 카메라를 다시 켠다(없어졌으면 앞·뒤로 고른다)
+        const byFacing = { facingMode: { ideal: facing }, ...VIDEO_SIZE };
+        const last = from ? null : deviceRef.current;
+        let stream = last
+          ? await openCamera({ deviceId: { exact: last }, ...VIDEO_SIZE }).catch(() => openCamera(byFacing))
+          : await openCamera(byFacing);
+        if (from && deviceIdOf(stream) === from) {
+          // 앞·뒤를 알려 주지 않는 카메라라서 같은 카메라가 다시 켜졌다. 다른 카메라를 직접 고른다
+          const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+          const other = devices.find((d) => d.kind === "videoinput" && d.deviceId && d.deviceId !== from);
+          if (other) {
+            stream.getTracks().forEach((t) => t.stop());
+            stream = await openCamera({ deviceId: { exact: other.deviceId }, ...VIDEO_SIZE });
+          }
+        }
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
         streamRef.current = stream;
+        deviceRef.current = deviceIdOf(stream);
+        // 실제로 켜진 카메라가 앞쪽인지 본다. 컴퓨터 카메라처럼 알려 주지 않으면 요청한 쪽으로 본다
+        setMirrored((stream.getVideoTracks()[0]?.getSettings().facingMode || facing) === "user");
         const el = liveRef.current;
         if (el) {
           el.srcObject = stream;
           await el.play().catch(() => {});
         }
         setCamera("live");
+        // 권한을 받은 뒤라야 카메라 개수를 정확히 알 수 있다
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+        if (!cancelled) setCanSwitch(devices.filter((d) => d.kind === "videoinput").length > 1);
       } catch (err) {
         if (cancelled) return;
         const name = err instanceof DOMException ? err.name : "";
@@ -140,7 +176,14 @@ export function JourneyCamera() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
-  }, [journey, retry]);
+  }, [journey, retry, facing]);
+
+  function switchCamera() {
+    if (recording) return; // 찍는 중에 카메라를 바꾸면 영상이 끊기므로 막는다
+    switchFromRef.current = deviceRef.current;
+    deviceRef.current = null;
+    setFacing((f) => (f === "environment" ? "user" : "environment"));
+  }
 
   function stopRecording() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -232,7 +275,7 @@ export function JourneyCamera() {
           playsInline
           muted
           aria-label="카메라 화면"
-          className="size-full object-cover"
+          className={cn("size-full object-cover", mirrored && "-scale-x-100")}
         />
 
         {/* 찍는 중: 빨간 점과 시간, 아래쪽 진행 막대 */}
@@ -273,6 +316,19 @@ export function JourneyCamera() {
               </button>
             )}
           </div>
+        )}
+
+        {/* 카메라 전환: 후면 ↔ 전면. 찍는 중에는 숨긴다 */}
+        {canSwitch && !recording && (
+          <button
+            type="button"
+            onClick={switchCamera}
+            disabled={camera === "starting"}
+            aria-label={facing === "user" ? "후면 카메라로 전환" : "전면 카메라로 전환"}
+            className="absolute bottom-3 right-3 flex size-12 items-center justify-center rounded-full bg-background/90 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <SwitchCamera className="size-6" aria-hidden="true" />
+          </button>
         )}
       </div>
 

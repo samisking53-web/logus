@@ -21,11 +21,13 @@ export const REVIEW_MAX_BYTES = 100;
 const FIELD = "h-12 w-full rounded-2xl border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 // 방문 일시의 날짜·시간 칸. 아이폰 Safari는 날짜 글자 길이보다 칸을 줄이지 않아 옆 칸·박스 밖으로 밀려나므로
-// appearance-none·min-w-0으로 자기 자리 폭에 맞추고, 글자는 왼쪽에 붙인다.
+// appearance-none·min-w-0으로 자기 자리 폭에 맞춘다.
+// 글자는 칸의 가로·세로 가운데에 둔다. 칸을 flex로 두어야 아이폰에서도 글자가 위로 붙지 않는다
+// (아이폰 날짜 칸의 기본값이 flex + 세로 가운데라서, block으로 바꾸면 글자가 왼쪽 위로 간다).
 // 안드로이드 Chrome의 달력·시계 아이콘 주변 여백도 줄여 한국어 날짜("2026. 10. 14.")가 잘리지 않게 한다.
 // 글자 크기는 16px(text-base) 그대로 둔다. 더 작으면 아이폰이 칸을 누를 때 화면을 확대한다
 const DATE_TIME_FIELD =
-  "block h-11 w-full min-w-0 appearance-none rounded-xl border bg-background px-3 text-left text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-date-and-time-value]:text-left [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:p-0";
+  "flex h-11 w-full min-w-0 appearance-none items-center justify-center rounded-xl border bg-background px-3 text-center text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-center [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:p-0";
 
 function timeOf(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
