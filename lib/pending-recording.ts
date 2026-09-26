@@ -3,6 +3,7 @@
 // 그래서 기록 올리기 화면에서 새로고침하면 영상이 사라지고 카메라로 돌아간다.
 
 export type PendingRecording = {
+  id: string; // 찍을 때마다 새로 만드는 번호. 기록 올리기 화면이 새 영상인지 알아보는 데 쓴다
   journeyId: string;
   video: Blob; // 찍은 영상 파일
   frames: string[]; // 1초마다 남긴 장면(JPEG 이미지 글자). 대표 화면 후보

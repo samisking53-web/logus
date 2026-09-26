@@ -212,6 +212,7 @@ export function JourneyCamera() {
       if (discardRef.current) return;
       // 찍은 영상을 기록 올리기 화면에 넘기고 이동한다
       setPendingRecording({
+        id: crypto.randomUUID(),
         journeyId: journey.id,
         video: new Blob(chunks, { type: recorder.mimeType || type || "video/webm" }),
         frames,

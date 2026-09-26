@@ -58,8 +58,10 @@
 - `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), cover_path(대표 화면: 여정 영상에서 고른 한 장면의 이미지, 없으면 null), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
 - 실습 단계: `journeys`·`journey_members`도 같은 모양으로 브라우저 localStorage에 저장한다(`lib/local-journeys.ts`). 대표 화면은 cover_path 대신 이미지 글자(coverImage)로 저장한다. 날짜는 "2026-09-24" 같은 현지 날짜 글자로 다룬다(`lib/dates.ts`)
-- `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, rating(0.5~5, 0.5 단위, 없으면 null), review(한줄평, 100byte 이하: 한글 등은 2byte, 영문·숫자는 1byte), is_public(기본 false), created_at
-- S05 기록 올리기의 '방문 일시'가 captured_at이다. 처음 값은 영상을 찍은 시각이고 사용자가 고칠 수 있다. 실습 단계에서는 게시 버튼이 아직 동작하지 않아 기록을 저장하지 않는다(찍은 영상은 `lib/pending-recording.ts`로 메모리에서만 넘긴다)
+- `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, poster_path(영상의 첫 장면 이미지, 재생 전 미리보기), body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, rating(0.5~5, 0.5 단위, 없으면 null), review(한줄평, 100byte 이하: 한글 등은 2byte, 영문·숫자는 1byte), is_public(기본 false), created_at
+- S05 기록 올리기의 '방문 일시'가 captured_at이다. 처음 값은 영상을 찍은 시각이고 사용자가 고칠 수 있다. 찍은 영상은 카메라에서 기록 올리기로 `lib/pending-recording.ts`(메모리)로 넘긴다
+- 실습 단계: 게시하면 기록을 브라우저 IndexedDB에 저장한다(`lib/local-logs.ts`). 영상은 파일 내용 그대로(media_path 대신), 첫 장면은 이미지 글자(poster)로 둔다. 영상이 커서 localStorage에는 넣지 않는다
+- S11 여정 상세의 기록 탭: 방문 일시(captured_at, 찍은 곳 시간대로 표시)가 이른 것부터 보여준다. '함께한 사람'은 기록한 사람 + log_tags인데, 태그를 고르는 칸이 아직 없어 지금은 기록한 사람만 나온다. 구성원 이름은 닉네임으로, 4명 이상이면 '내 닉네임 외 N명'
 - `log_tags`: log_id, user_id
 - `comments`: id, log_id, author_id, body, created_at
 - `reactions`: log_id, user_id, emoji. unique (log_id, user_id, emoji)

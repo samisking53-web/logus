@@ -5,15 +5,18 @@
 // - 머문 장소: GPS + 장소 추천 (place-field.tsx)
 // - 방문 일시: 날짜·시간 직접 입력 (처음엔 영상을 찍은 시각)
 // - 별점(0.5점 단위, 끌어서 매기기)과 한줄평(100byte 이하)
-// - 게시: 지금은 버튼만 있다. 서버에 영상을 올릴 수 있게 되면 연결한다
+// - 게시: 기록을 이 기기에 저장하고(lib/local-logs.ts) 여정 상세(S11)의 기록 탭으로 간다
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CalendarDays, Globe, RotateCcw, Star, Video } from "lucide-react";
 import { CoverPicker } from "@/components/journey/cover-picker";
+import { FormError } from "@/components/form-error";
 import { PlaceField, type SelectedPlace } from "@/components/journey/place-field";
 import { StarRating } from "@/components/journey/star-rating";
 import { countBytes, cutToBytes } from "@/lib/bytes";
 import { toDateKey } from "@/lib/dates";
+import { getCurrentAccount } from "@/lib/local-auth";
+import { addLog } from "@/lib/local-logs";
 import { clearPendingRecording, getPendingRecording, type PendingRecording } from "@/lib/pending-recording";
 
 export const REVIEW_MAX_BYTES = 100;
@@ -37,13 +40,6 @@ export function NewLogForm() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [recording, setRecording] = useState<PendingRecording | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [place, setPlace] = useState<SelectedPlace | null>(null);
-  const [visitDate, setVisitDate] = useState("");
-  const [visitTime, setVisitTime] = useState("");
-  const [rating, setRating] = useState(0);
-  const [review, setReview] = useState("");
-  const composing = useRef(false); // 한글을 조합하는 중에는 자르지 않는다 (글자가 깨지지 않게)
 
   // 카메라가 넘겨준 영상을 받는다. 없으면(새로고침 등) 카메라로 돌아간다
   useEffect(() => {
@@ -53,14 +49,33 @@ export function NewLogForm() {
       return;
     }
     setRecording(pending);
-    const url = URL.createObjectURL(pending.video);
-    setVideoUrl(url);
-    // 방문 일시의 처음 값은 영상을 찍은 시각. 이미 고쳤으면 그대로 둔다
-    const at = new Date(pending.recordedAt);
-    setVisitDate((d) => d || toDateKey(at));
-    setVisitTime((t) => t || timeOf(at));
-    return () => URL.revokeObjectURL(url);
   }, [id, router]);
+
+  if (!recording) return null;
+  // key: 새로 찍은 영상이면 입력 칸(장소·별점·한줄평 등)을 모두 처음 상태로 새로 만든다.
+  // 같은 영상으로 돌아온 경우(다른 화면에 잠깐 다녀옴)에는 입력한 내용이 그대로 남는다
+  return <LogFormBody key={recording.id} journeyId={id} recording={recording} />;
+}
+
+function LogFormBody({ journeyId: id, recording }: { journeyId: string; recording: PendingRecording }) {
+  const router = useRouter();
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [place, setPlace] = useState<SelectedPlace | null>(null);
+  // 방문 일시의 처음 값은 영상을 찍은 시각
+  const [visitDate, setVisitDate] = useState(() => toDateKey(new Date(recording.recordedAt)));
+  const [visitTime, setVisitTime] = useState(() => timeOf(new Date(recording.recordedAt)));
+  const [rating, setRating] = useState(0);
+  const [review, setReview] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const composing = useRef(false); // 한글을 조합하는 중에는 자르지 않는다 (글자가 깨지지 않게)
+
+  // 영상 파일을 <video>가 재생할 수 있는 임시 주소로 만든다. 화면을 떠나면 지운다
+  useEffect(() => {
+    const url = URL.createObjectURL(recording.video);
+    setVideoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recording]);
 
   function retake() {
     clearPendingRecording();
@@ -74,12 +89,51 @@ export function NewLogForm() {
     router.replace("/");
   }
 
+  // 게시: 이 기기에 기록을 저장하고 여정 상세의 기록 탭으로 간다
+  async function post() {
+    if (posting) return;
+    // 날짜·시간 칸은 이 폰의 현지 시각이다. UTC로 바꿔 저장하고 시간대를 함께 남긴다(CLAUDE.md 데이터 원칙)
+    const capturedAt = new Date(`${visitDate}T${visitTime}`);
+    if (!visitDate || !visitTime || Number.isNaN(capturedAt.getTime())) {
+      setError("방문 일시의 날짜와 시간을 입력해 주세요.");
+      return;
+    }
+    const account = getCurrentAccount();
+    if (!account) {
+      router.replace("/login");
+      return;
+    }
+    setPosting(true);
+    setError(null);
+    const result = await addLog({
+      journeyId: id,
+      authorId: account.id,
+      video: recording.video,
+      poster: recording.frames[0] ?? null,
+      capturedAt: capturedAt.toISOString(),
+      capturedTz: recording.timezone,
+      placeName: place?.name || null,
+      lat: place?.lat ?? null,
+      lng: place?.lng ?? null,
+      rating: rating > 0 ? rating : null,
+      review: review.trim() || null,
+      taggedUserIds: [], // 함께한 사람을 고르는 칸은 아직 없다
+    });
+    if (!result.ok) {
+      setPosting(false);
+      setError(result.message);
+      return;
+    }
+    clearPendingRecording();
+    router.replace(`/journeys/${id}`);
+  }
+
   function changeReview(value: string) {
     setReview(composing.current ? value : cutToBytes(value, REVIEW_MAX_BYTES));
   }
 
   const reviewBytes = countBytes(review);
-  const seconds = recording ? Math.max(1, Math.round(recording.durationMs / 1000)) : 0;
+  const seconds = Math.max(1, Math.round(recording.durationMs / 1000));
 
   return (
     <>
@@ -97,15 +151,21 @@ export function NewLogForm() {
             취소
           </button>
           <h1 className="text-lg font-bold">새 기록 남기기</h1>
-          {/* 서버에 올릴 수 있게 되면 연결한다. 지금은 눌러도 아무 일도 없다 */}
           <button
             type="button"
-            className="flex h-10 items-center gap-1 rounded-full bg-foreground px-4 text-sm font-bold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={post}
+            disabled={posting}
+            className="flex h-10 items-center gap-1 rounded-full bg-foreground px-4 text-sm font-bold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           >
-            게시
-            <ArrowRight className="size-4" aria-hidden="true" />
+            {posting ? "올리는 중…" : "게시"}
+            {!posting && <ArrowRight className="size-4" aria-hidden="true" />}
           </button>
         </div>
+        {error && (
+          <div className="mt-3">
+            <FormError alert>{error}</FormError>
+          </div>
+        )}
       </header>
 
       <div className="mt-4 flex flex-col gap-3 pb-4">
@@ -128,12 +188,10 @@ export function NewLogForm() {
                 className="size-full object-cover"
               />
             )}
-            {recording && (
-              <p className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-foreground/70 px-3 py-1 text-xs font-semibold text-background">
-                <Video className="size-3.5" aria-hidden="true" />
-                0:{String(seconds).padStart(2, "0")} 영상 (최대 10초)
-              </p>
-            )}
+            <p className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-foreground/70 px-3 py-1 text-xs font-semibold text-background">
+              <Video className="size-3.5" aria-hidden="true" />
+              0:{String(seconds).padStart(2, "0")} 영상 (최대 10초)
+            </p>
             <button
               type="button"
               onClick={retake}
@@ -143,7 +201,7 @@ export function NewLogForm() {
               다시 찍기
             </button>
           </div>
-          {recording && <CoverPicker journeyId={id} frames={recording.frames} />}
+          <CoverPicker journeyId={id} frames={recording.frames} />
         </section>
 
         <PlaceField value={place} onChange={setPlace} />

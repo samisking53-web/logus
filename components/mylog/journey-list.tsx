@@ -3,7 +3,7 @@
 // S10 마이로그의 여정 목록: 필터(전체·진행 중·예정·지난 여정)와 여정 카드
 // - 여정은 이 기기(브라우저)에 저장되어 있어서, 화면을 연 뒤에 읽는다
 // - 기간이 끝난 여정도 지우지 않고 여기에 '지난 여정'으로 남는다 (홈은 기본 홈으로 돌아간다)
-// - 카드: 대표 사진, 여정 제목, 기간·인원, 진행 상태. 누르면 아직 아무 일도 없다(S11 여정 상세를 만들 때 연결)
+// - 카드: 대표 사진, 여정 제목, 기간·인원, 진행 상태. 누르면 S11 여정 상세(/journeys/여정번호)로 간다
 // - 테두리 색: 진행 중=보라(brand), 예정=연보라(brand-line), 지난 여정=앰버(reward)
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -106,7 +106,13 @@ export function JourneyList() {
 function JourneyCard({ journey, status }: Item) {
   const { label, border } = STATUS[status];
   return (
-    <div className={cn("flex items-center gap-4 rounded-3xl border-2 bg-brand-soft p-3", border)}>
+    <Link
+      href={`/journeys/${journey.id}`}
+      className={cn(
+        "flex items-center gap-4 rounded-3xl border-2 bg-brand-soft p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-80",
+        border,
+      )}
+    >
       <div className="aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-2xl bg-card">
         {journey.coverImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- 이 기기에 저장한 이미지 글자라 next/image를 쓸 수 없다
@@ -128,6 +134,6 @@ function JourneyCard({ journey, status }: Item) {
           <ChevronRight className="size-4" aria-hidden="true" />
         </p>
       </div>
-    </div>
+    </Link>
   );
 }

@@ -225,6 +225,11 @@ export function getCurrentAccount() {
   return loadAccounts().find((a) => a.id === id) ?? null;
 }
 
+// 이 기기에 있는 계정의 닉네임 (없으면 null). 여정 구성원·기록한 사람의 이름을 보여줄 때 쓴다
+export function findNickname(accountId: string) {
+  return loadAccounts().find((a) => a.id === accountId)?.nickname ?? null;
+}
+
 // 로그인 유지 기간(1년)을 오늘부터 다시 센다. 앱을 열 때마다 부른다 (components/account-check.tsx).
 // 아이폰 Safari는 화면 코드가 만든 쿠키를 최대 7일만 남겨 두므로, 이렇게 다시 써 두어야
 // 일주일에 한 번 이상 앱을 여는 사람이 로그인 화면을 다시 보지 않는다
