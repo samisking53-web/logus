@@ -32,6 +32,9 @@ export type Journey = {
   inviteCode: string; // 초대 링크 /invite/[code]에 쓸 값. 초대 화면은 아직 없다
   createdAt: string; // UTC 시각
   members: JourneyMember[];
+  // 대표 화면: 여정에서 찍은 영상 중 한 장면(JPEG 이미지 글자). 여행 중 홈에 크게 보인다.
+  // 나중에 서버를 붙이면 이미지는 Storage에 올리고 journeys.cover_path에 경로만 저장한다
+  coverImage?: string;
 };
 
 export type JourneyStatus = "upcoming" | "ongoing" | "past";
@@ -123,6 +126,20 @@ export function createJourney(ownerId: string, input: NewJourneyInput): CreateJo
     return { ok: false, message: JOURNEY_STORAGE_ERROR };
   }
   return { ok: true, journey };
+}
+
+// 대표 화면 바꾸기
+export function setJourneyCover(userId: string, journeyId: string, coverImage: string) {
+  const all = loadAll();
+  const journey = all.find((j) => j.id === journeyId && j.members?.some((m) => m.userId === userId));
+  if (!journey) return { ok: false as const, message: "여정을 찾을 수 없어요." };
+  journey.coverImage = coverImage;
+  try {
+    localStorage.setItem(JOURNEYS_KEY, JSON.stringify(all));
+  } catch {
+    return { ok: false as const, message: JOURNEY_STORAGE_ERROR };
+  }
+  return { ok: true as const };
 }
 
 // ─────────────────────────────────────────────

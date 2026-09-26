@@ -55,9 +55,9 @@
 - `profiles`: id(= auth.users.id), nickname(앞뒤 공백 없이 1~12자), avatar_url(https만), created_at. 이 줄이 있으면 가입을 마친 사람이다
 - `user_agreements`: user_id, agreement(age_14|service_terms|location_terms|new_log_notice), version, agreed, agreed_at(서버 시간). PK (user_id, agreement, agreed_at). 약관 동의 기록이라 추가만 하고 고치거나 지우지 않는다. 필수 3개(age_14·service_terms·location_terms)에 동의해야 profiles를 만들 수 있다
 - 실습 단계: `profiles`·`user_agreements`의 migration(0001)은 아직 실행하지 않는다. 같은 내용(아이디, 비밀번호 해시, 닉네임, 약관 동의 기록)을 브라우저 localStorage에 저장한다(`lib/local-auth.ts`)
-- `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), created_at
+- `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), cover_path(대표 화면: 여정 영상에서 고른 한 장면의 이미지, 없으면 null), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
-- 실습 단계: `journeys`·`journey_members`도 같은 모양으로 브라우저 localStorage에 저장한다(`lib/local-journeys.ts`). 날짜는 "2026-09-24" 같은 현지 날짜 글자로 다룬다(`lib/dates.ts`)
+- 실습 단계: `journeys`·`journey_members`도 같은 모양으로 브라우저 localStorage에 저장한다(`lib/local-journeys.ts`). 대표 화면은 cover_path 대신 이미지 글자(coverImage)로 저장한다. 날짜는 "2026-09-24" 같은 현지 날짜 글자로 다룬다(`lib/dates.ts`)
 - `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, is_public(기본 false), created_at
 - `log_tags`: log_id, user_id
 - `comments`: id, log_id, author_id, body, created_at
@@ -78,7 +78,7 @@
 - 여정의 도시 추천은 `public/data/cities.json`(Natural Earth, public domain)에서 찾는다. 이 목록의 도시 이름은 저장해도 된다. 목록을 다시 만들 때는 `node scripts/build-cities.mjs`
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 UTC로 저장하고 촬영지 시간대(captured_tz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
-- 사진은 업로드 전에 브라우저에서 줄이고 HEIC는 JPEG/WebP로 바꾼다. 영상은 15초 이하, 파일 하나 50MB 미만(Supabase 무료 플랜 한도)
+- 사진은 업로드 전에 브라우저에서 줄이고 HEIC는 JPEG/WebP로 바꾼다. 영상은 10초 이하(앱 카메라가 10초에 저절로 멈춘다), 파일 하나 50MB 미만(Supabase 무료 플랜 한도)
 
 ## 알려진 함정
 - 구글 로그인은 카카오톡·인스타그램 인앱 브라우저에서 막힌다. 인앱 브라우저를 감지하면 '브라우저로 열기' 안내를 보여준다
