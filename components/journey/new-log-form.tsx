@@ -20,6 +20,13 @@ export const REVIEW_MAX_BYTES = 100;
 
 const FIELD = "h-12 w-full rounded-2xl border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+// 방문 일시의 날짜·시간 칸. 아이폰 Safari는 날짜 글자 길이보다 칸을 줄이지 않아 옆 칸·박스 밖으로 밀려나므로
+// appearance-none·min-w-0으로 자기 자리 폭에 맞추고, 글자는 왼쪽에 붙인다.
+// 안드로이드 Chrome의 달력·시계 아이콘 주변 여백도 줄여 한국어 날짜("2026. 10. 14.")가 잘리지 않게 한다.
+// 글자 크기는 16px(text-base) 그대로 둔다. 더 작으면 아이폰이 칸을 누를 때 화면을 확대한다
+const DATE_TIME_FIELD =
+  "block h-11 w-full min-w-0 appearance-none rounded-xl border bg-background px-3 text-left text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-date-and-time-value]:text-left [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:p-0";
+
 function timeOf(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
@@ -144,23 +151,24 @@ export function NewLogForm() {
             <CalendarDays className="size-5 text-brand-strong" aria-hidden="true" />
             방문 일시
           </h2>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              날짜
+          {/* 두 칸을 나란히 두고 가운데를 띄운다. 날짜 글자가 더 길어서 날짜 칸을 조금 넓게 준다. 폭이 아주 좁은 폰(360px 미만)에서는 위아래로 쌓는다 */}
+          <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] min-[360px]:gap-4">
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">날짜</span>
               <input
                 type="date"
                 value={visitDate}
                 onChange={(e) => setVisitDate(e.target.value)}
-                className={`${FIELD} text-foreground`}
+                className={DATE_TIME_FIELD}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              시간
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">시간</span>
               <input
                 type="time"
                 value={visitTime}
                 onChange={(e) => setVisitTime(e.target.value)}
-                className={`${FIELD} text-foreground`}
+                className={DATE_TIME_FIELD}
               />
             </label>
           </div>
