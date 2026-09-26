@@ -4,25 +4,24 @@
 // - 화면에 들어오면 폰의 뒤쪽 카메라가 영상 촬영 준비 상태로 바로 켜진다
 //   (처음 한 번은 브라우저가 카메라·마이크 권한을 묻는다. 마이크를 거절하면 소리 없이 찍는다)
 // - ● 촬영을 누르면 최대 10초까지 영상을 찍는다. 10초가 되면 저절로 멈춘다
-// - 찍는 동안 1초마다 장면을 한 장씩 남겨 두고, 찍은 뒤 그중 하나를 여정의 '대표 화면'으로 고를 수 있다
-// - "기록 올리기"(S05)는 다음 작업에서 연결한다. 지금은 눌러도 아무 일도 없다
+// - 찍는 동안 1초마다 장면을 한 장씩 남겨 둔다 (대표 화면 후보)
+// - 멈추면 찍은 영상을 들고 바로 S05 기록 올리기 화면(/journeys/여정번호/record)으로 간다
 // - 카메라는 https 주소(또는 내 컴퓨터의 localhost)에서만 켤 수 있다
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Check, Circle, RotateCcw, Square } from "lucide-react";
+import { Circle, Square } from "lucide-react";
 import { JourneyHeader } from "@/components/journey/journey-header";
 import { NextButton } from "@/components/signup/next-button";
 import { formatKorean, todayKey } from "@/lib/dates";
 import { getCurrentAccount } from "@/lib/local-auth";
-import { getMyJourney, journeyStatus, setJourneyCover, type Journey } from "@/lib/local-journeys";
-import { cn } from "@/lib/utils";
+import { getMyJourney, journeyStatus, type Journey } from "@/lib/local-journeys";
+import { setPendingRecording } from "@/lib/pending-recording";
 
 export const MAX_VIDEO_SECONDS = 10;
 const FRAME_WIDTH = 720; // 대표 화면 후보 이미지의 가로 크기(px)
 
 type CameraState = "starting" | "live" | "denied" | "unavailable" | "insecure" | "unsupported" | "error";
-type Phase = "ready" | "recording" | "review";
 
 const CAMERA_MESSAGES: Record<Exclude<CameraState, "starting" | "live">, string> = {
   denied: "카메라 권한이 꺼져 있어요. 브라우저 설정에서 이 사이트의 카메라를 허용한 뒤 다시 시도해 주세요.",
@@ -73,13 +72,11 @@ async function openCamera() {
 
 export function JourneyCamera() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [journey, setJourney] = useState<Journey | null | undefined>(undefined); // undefined: 불러오는 중
   const [camera, setCamera] = useState<CameraState>("starting");
-  const [phase, setPhase] = useState<Phase>("ready");
+  const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [video, setVideo] = useState<{ url: string } | null>(null);
-  const [frames, setFrames] = useState<string[]>([]);
-  const [cover, setCover] = useState<{ index: number | null; message: string | null }>({ index: null, message: null });
   const [retry, setRetry] = useState(0);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -87,6 +84,7 @@ export function JourneyCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const discardRef = useRef(false); // 찍는 도중 화면을 떠나면 찍던 영상은 버린다
 
   useEffect(() => {
     const account = getCurrentAccount();
@@ -100,11 +98,11 @@ export function JourneyCamera() {
     return () => clearInterval(timer);
   }, []);
 
-  // 카메라 켜기. 찍은 영상을 보는 동안이나 화면을 떠나면 카메라를 끈다(배터리·개인정보 보호)
-  const reviewing = phase === "review";
+  // 카메라 켜기. 화면을 떠나면(기록 올리기로 넘어갈 때 포함) 카메라를 끈다(배터리·개인정보 보호)
   useEffect(() => {
-    if (!journey || reviewing) return;
+    if (!journey) return;
     let cancelled = false;
+    discardRef.current = false;
 
     async function start() {
       if (!window.isSecureContext) return setCamera("insecure");
@@ -133,19 +131,16 @@ export function JourneyCamera() {
     start();
     return () => {
       cancelled = true;
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      if (recorderRef.current?.state === "recording") {
+        discardRef.current = true;
+        recorderRef.current.stop();
+      }
       if (timerRef.current) clearInterval(timerRef.current);
+      setRecording(false);
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
-  }, [journey, reviewing, retry]);
-
-  // 찍은 영상을 다시 찍거나 화면을 떠나면 영상이 차지하던 메모리를 돌려준다
-  useEffect(() => {
-    return () => {
-      if (video) URL.revokeObjectURL(video.url);
-    };
-  }, [video]);
+  }, [journey, retry]);
 
   function stopRecording() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -156,54 +151,51 @@ export function JourneyCamera() {
   function startRecording() {
     const stream = streamRef.current;
     const live = liveRef.current;
-    if (!stream || !live || camera !== "live" || phase !== "ready") return;
+    if (!stream || !live || camera !== "live" || recording || !journey) return;
 
     const type = pickVideoType();
     const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
     const chunks: Blob[] = [];
-    const captured: string[] = [];
+    const frames: string[] = [];
+    const recordedAt = new Date().toISOString();
+    const startedAt = performance.now();
+    let durationMs = 0;
+
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
     };
     recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: recorder.mimeType || type || "video/webm" });
-      setVideo({ url: URL.createObjectURL(blob) });
-      setFrames([...captured]);
-      setCover({ index: null, message: null });
-      setPhase("review");
+      setRecording(false);
+      if (discardRef.current) return;
+      // 찍은 영상을 기록 올리기 화면에 넘기고 이동한다
+      setPendingRecording({
+        journeyId: journey.id,
+        video: new Blob(chunks, { type: recorder.mimeType || type || "video/webm" }),
+        frames,
+        recordedAt,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        durationMs,
+      });
+      router.push(`/journeys/${journey.id}/record`);
     };
     recorderRef.current = recorder;
     recorder.start(1000);
 
     // 0초·1초·2초…마다 장면을 한 장씩 남긴다 (대표 화면 후보)
-    const startedAt = performance.now();
     const first = grabFrame(live);
-    if (first) captured.push(first);
+    if (first) frames.push(first);
     setElapsed(0);
-    setPhase("recording");
+    setRecording(true);
     timerRef.current = setInterval(() => {
       const ms = performance.now() - startedAt;
+      durationMs = Math.min(ms, MAX_VIDEO_SECONDS * 1000);
       setElapsed(ms);
-      if (ms >= captured.length * 1000 && captured.length < MAX_VIDEO_SECONDS) {
+      if (ms >= frames.length * 1000 && frames.length < MAX_VIDEO_SECONDS) {
         const frame = grabFrame(live);
-        if (frame) captured.push(frame);
+        if (frame) frames.push(frame);
       }
       if (ms >= MAX_VIDEO_SECONDS * 1000) stopRecording();
     }, 100);
-  }
-
-  function retake() {
-    setVideo(null);
-    setFrames([]);
-    setElapsed(0);
-    setPhase("ready");
-  }
-
-  function chooseCover(index: number) {
-    const account = getCurrentAccount();
-    if (!account || !journey) return;
-    const result = setJourneyCover(account.id, journey.id, frames[index]);
-    setCover(result.ok ? { index, message: "대표 화면으로 정했어요. 홈에서 보여요." } : { index: null, message: result.message });
   }
 
   if (journey === null) {
@@ -222,7 +214,6 @@ export function JourneyCamera() {
 
   const status = journey && now ? journeyStatus(journey, todayKey()) : null;
   const errorMessage = camera === "starting" || camera === "live" ? null : CAMERA_MESSAGES[camera];
-  const recording = phase === "recording";
 
   return (
     <>
@@ -234,30 +225,15 @@ export function JourneyCamera() {
         {journey && status === "past" && "지난 여정이에요"}
       </p>
 
-      <div className="relative mt-4 aspect-[3/4] max-h-[46dvh] w-full overflow-hidden rounded-3xl bg-foreground">
-        {reviewing && video ? (
-          <video
-            key={video.url}
-            src={video.url}
-            // 찍은 영상을 소리 없이 반복해서 보여준다. 아래 조절 막대로 소리를 켤 수 있다
-            autoPlay
-            muted
-            loop
-            playsInline
-            controls
-            aria-label="방금 찍은 영상"
-            className="size-full object-cover"
-          />
-        ) : (
-          <video
-            ref={liveRef}
-            // playsInline: 아이폰에서 전체 화면으로 바뀌지 않고 이 칸 안에서 보이게 한다
-            playsInline
-            muted
-            aria-label="카메라 화면"
-            className="size-full object-cover"
-          />
-        )}
+      <div className="relative mt-4 aspect-[3/4] max-h-[60dvh] w-full overflow-hidden rounded-3xl bg-foreground">
+        <video
+          ref={liveRef}
+          // playsInline: 아이폰에서 전체 화면으로 바뀌지 않고 이 칸 안에서 보이게 한다
+          playsInline
+          muted
+          aria-label="카메라 화면"
+          className="size-full object-cover"
+        />
 
         {/* 찍는 중: 빨간 점과 시간, 아래쪽 진행 막대 */}
         {recording && (
@@ -279,10 +255,10 @@ export function JourneyCamera() {
           </>
         )}
 
-        {!reviewing && camera === "starting" && (
+        {camera === "starting" && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-background">카메라를 켜는 중…</p>
         )}
-        {!reviewing && errorMessage && (
+        {errorMessage && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center text-background">
             <p role="alert" className="text-base leading-relaxed">
               {errorMessage}
@@ -300,65 +276,8 @@ export function JourneyCamera() {
         )}
       </div>
 
-      {/* 찍은 뒤: 1초마다 남긴 장면 중 하나를 대표 화면으로 고른다 */}
-      {reviewing && frames.length > 0 && (
-        <section className="mt-4" aria-labelledby="cover-picker-title">
-          <h2 id="cover-picker-title" className="text-sm font-semibold">
-            대표 화면 고르기
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">여행 중 홈에 크게 보일 장면을 눌러 주세요.</p>
-          <ul className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
-            {frames.map((frame, i) => {
-              const chosen = cover.index === i;
-              return (
-                <li key={i} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => chooseCover(i)}
-                    aria-pressed={chosen}
-                    aria-label={`${i}초 장면`}
-                    className={cn(
-                      "relative block h-20 w-14 overflow-hidden rounded-xl border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      chosen ? "border-brand" : "border-transparent",
-                    )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- 방금 찍은 장면(이미지 글자)이라 next/image를 쓸 수 없다 */}
-                    <img src={frame} alt="" className="size-full object-cover" />
-                    {chosen && (
-                      <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-brand text-brand-foreground">
-                        <Check className="size-3.5" aria-hidden="true" />
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {cover.message && (
-            <p role="status" className="mt-1 text-sm text-brand-strong">
-              {cover.message}
-            </p>
-          )}
-        </section>
-      )}
-
       <div className="min-h-6 flex-1" />
-      {reviewing ? (
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={retake}
-            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl border border-brand-line bg-brand-soft text-base font-semibold text-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <RotateCcw className="size-5" aria-hidden="true" />
-            다시 찍기
-          </button>
-          {/* 기록 올리기(S05) 화면을 만들 때 연결한다 */}
-          <NextButton type="button" className="flex-1">
-            기록 올리기
-          </NextButton>
-        </div>
-      ) : recording ? (
+      {recording ? (
         <NextButton
           type="button"
           onClick={stopRecording}

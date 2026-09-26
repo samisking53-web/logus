@@ -58,7 +58,8 @@
 - `journeys`: id, name, city, country, start_date, end_date, owner_id, invite_code(unique), cover_path(대표 화면: 여정 영상에서 고른 한 장면의 이미지, 없으면 null), created_at
 - `journey_members`: journey_id, user_id, role(owner|member), notify_interval_hours(1|2|3|null), joined_at. PK (journey_id, user_id)
 - 실습 단계: `journeys`·`journey_members`도 같은 모양으로 브라우저 localStorage에 저장한다(`lib/local-journeys.ts`). 대표 화면은 cover_path 대신 이미지 글자(coverImage)로 저장한다. 날짜는 "2026-09-24" 같은 현지 날짜 글자로 다룬다(`lib/dates.ts`)
-- `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, is_public(기본 false), created_at
+- `logs`: id, journey_id, author_id, media_type(photo|video|text), media_path, body, theme, captured_at(UTC), captured_tz, lat, lng, place_name, rating(0.5~5, 0.5 단위, 없으면 null), review(한줄평, 100byte 이하: 한글 등은 2byte, 영문·숫자는 1byte), is_public(기본 false), created_at
+- S05 기록 올리기의 '방문 일시'가 captured_at이다. 처음 값은 영상을 찍은 시각이고 사용자가 고칠 수 있다. 실습 단계에서는 게시 버튼이 아직 동작하지 않아 기록을 저장하지 않는다(찍은 영상은 `lib/pending-recording.ts`로 메모리에서만 넘긴다)
 - `log_tags`: log_id, user_id
 - `comments`: id, log_id, author_id, body, created_at
 - `reactions`: log_id, user_id, emoji. unique (log_id, user_id, emoji)
@@ -75,6 +76,7 @@
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
+- 머문 장소 추천은 OpenStreetMap 기반 Photon(photon.komoot.io, `lib/places.ts`)에서 찾는다. OpenStreetMap 데이터(ODbL)라 고른 장소의 이름·좌표는 저장해도 되고, 추천 목록 아래에 'OpenStreetMap 기여자' 출처를 표시한다. 공용 서버라 입력을 멈춘 뒤에만 부른다
 - 여정의 도시 추천은 `public/data/cities.json`(Natural Earth, public domain)에서 찾는다. 이 목록의 도시 이름은 저장해도 된다. 목록을 다시 만들 때는 `node scripts/build-cities.mjs`
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 UTC로 저장하고 촬영지 시간대(captured_tz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
