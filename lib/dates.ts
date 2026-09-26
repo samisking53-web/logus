@@ -50,6 +50,20 @@ export function formatRangeDot(start: string, end: string) {
   return start === end ? formatDot(start) : `${formatDot(start)} ~ ${formatDot(end)}`;
 }
 
+// 마이로그 카드의 짧은 기간: "9.24~26", 달이 바뀌면 "9.28~10.2", 하루짜리면 "9.24"
+// 올해가 아닌 여정은 연도를 붙인다: "2025.8.10~12", "2025.12.30~2026.1.2"
+export function formatRangeShort(start: string, end: string, thisYear = new Date().getFullYear()) {
+  if (start === end) return formatDot(start, thisYear);
+  const s = fromDateKey(start);
+  const e = fromDateKey(end);
+  const inThisYear = s.getFullYear() === thisYear && e.getFullYear() === thisYear;
+  const head = `${inThisYear ? "" : `${s.getFullYear()}.`}${s.getMonth() + 1}.${s.getDate()}`;
+  let tail = `${e.getDate()}`;
+  if (s.getFullYear() !== e.getFullYear()) tail = `${e.getFullYear()}.${e.getMonth() + 1}.${e.getDate()}`;
+  else if (s.getMonth() !== e.getMonth()) tail = `${e.getMonth() + 1}.${e.getDate()}`;
+  return `${head}~${tail}`;
+}
+
 // "2박 3일", 하루짜리면 "당일"
 export function formatNights(start: string, end: string) {
   const nights = daysBetween(start, end);
