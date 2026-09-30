@@ -1,11 +1,231 @@
 rules_version = '2';
 
-// 기본 거부: 아직 허용한 경로가 없다.
-// 화면·기능을 만들 때 필요한 경로만 하나씩 열고, tests/rules/에 테스트를 함께 추가한다.
+// ===============================================================
+// LOG US Firestore 보안 규칙 (기본 거부)
+// ===============================================================
+// 데이터 모델은 CLAUDE.md "데이터 모델"을 따른다. 여기에 없는 경로는 모두 거부된다.
+// 규칙을 바꾸면 tests/rules/firestore.test.ts도 함께 고치고 `npm run test:rules`로 확인한다.
+//
+// 서버 함수(Admin SDK)는 이 규칙을 거치지 않는다. 그래서 아래 쓰기는 클라이언트에게 막혀 있고
+// 서버 함수로만 일어난다.
+//   - journeys 문서와 members 문서 생성·참여 → createJourney, joinJourney
+//   - 기록의 location·placeName·isPublic → saveLogLocation
+//   - users.coins, coinLedger → saveLogLocation
+//   - invites, publicLogs, sharedRecaps, recaps → 서버 함수
+//
+// 클라이언트가 쓰는 문서 요약 (필드: 타입, 제한)
+//   users/{uid}: nickname 1~20자, photoURL(https 주소 500자 이하 또는 null), createdAt(서버 시각)
+//   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정
+//   journeys/{journeyId}/logs/{logId}:
+//     authorId(본인 uid, 변경 불가), mediaType(photo|video|text), mediaPath(본인 폴더 경로 또는 null),
+//     body 0~500자, theme(20자 이하 또는 null), taggedUids(구성원 uid 20개 이하),
+//     capturedAt(Timestamp), capturedTz 1~64자, location(생성 시 null), placeName(생성 시 null),
+//     isPublic(생성 시 false), createdAt(서버 시각)
+//   .../comments/{commentId}: authorId(본인), body 1~500자, createdAt(서버 시각)
+//   .../reactions/{uid}: emoji 1~16자, createdAt(서버 시각). 문서 ID가 본인 uid → 1인 1반응
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    // ---------- 공통 도우미 ----------
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function journeyData(journeyId) {
+      return get(/databases/$(database)/documents/journeys/$(journeyId)).data;
+    }
+
+    // 여정 문서의 memberIds에 내가 있는지 확인한다. 여정이 없으면 거부된다.
+    function isMember(journeyId) {
+      return isAuthenticated() && request.auth.uid in journeyData(journeyId).memberIds;
+    }
+
+    function isServerTime(value) {
+      return value == request.time;
+    }
+
+    function isStringBetween(value, minLen, maxLen) {
+      return value is string && value.size() >= minLen && value.size() <= maxLen;
+    }
+
+    function isNullOrStringBetween(value, minLen, maxLen) {
+      return value == null || isStringBetween(value, minLen, maxLen);
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ---------- 도메인 검증 ----------
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['nickname', 'photoURL', 'createdAt', 'coins'])
+        && data.keys().hasAll(['nickname', 'createdAt'])
+        && isStringBetween(data.nickname, 1, 20)
+        && (!('photoURL' in data) || data.photoURL == null
+            || (isStringBetween(data.photoURL, 9, 500) && data.photoURL.matches('^https://.*')))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotifyInterval(value) {
+      return value == null || value in [1, 2, 3];
+    }
+
+    // 기록에서 클라이언트가 정하는 필드를 검증한다. 생성과 수정 모두 이 함수를 거친다.
+    function isValidLog(data, journeyId) {
+      return data.keys().hasOnly([
+          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
+        && data.keys().hasAll([
+          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
+        && data.mediaType in ['photo', 'video', 'text']
+        // 글 기록은 미디어가 없고, 사진·영상은 작성자 본인 폴더의 파일만 가리킨다.
+        && (data.mediaType == 'text'
+              ? data.mediaPath == null
+              : (data.mediaPath is string && data.mediaPath.size() <= 300
+                 && data.mediaPath.matches('^journeys/' + journeyId + '/' + data.authorId + '/[^/]+$')))
+        && isStringBetween(data.body, 0, 500)
+        && isNullOrStringBetween(data.theme, 1, 20)
+        // 태그는 20명 이하, 모두 이 여정의 구성원이어야 한다.
+        && data.taggedUids is list && data.taggedUids.size() <= 20
+        && data.taggedUids.toSet().difference(journeyData(journeyId).memberIds.toSet()).size() == 0
+        && data.capturedAt is timestamp
+        && isStringBetween(data.capturedTz, 1, 64)
+        && data.isPublic is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasOnly(['authorId', 'body', 'createdAt'])
+        && data.keys().hasAll(['authorId', 'body', 'createdAt'])
+        && isStringBetween(data.body, 1, 500)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidReaction(data) {
+      return data.keys().hasOnly(['emoji', 'createdAt'])
+        && data.keys().hasAll(['emoji', 'createdAt'])
+        && isStringBetween(data.emoji, 1, 16)
+        && isServerTime(data.createdAt);
+    }
+
+    // ---------- 사용자 ----------
+
+    match /users/{uid} {
+      // 로그인한 사용자는 다른 사람의 닉네임·사진을 볼 수 있다. (이메일 등 개인정보는 넣지 않는다)
+      allow read: if isAuthenticated();
+      // 본인 문서만 만든다. coins는 넣을 수 없다.
+      allow create: if isOwner(uid)
+        && isValidUser(request.resource.data)
+        && !('coins' in request.resource.data)
+        && isServerTime(request.resource.data.createdAt);
+      // 본인은 nickname·photoURL만 고친다.
+      allow update: if isOwner(uid)
+        && changedKeys().hasOnly(['nickname', 'photoURL'])
+        && isValidUser(request.resource.data);
+      allow delete: if false;
+
+      // 코인 내역은 본인만 읽고, 쓰기는 서버만 한다.
+      match /coinLedger/{logId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // ---------- 여정 ----------
+
+    match /journeys/{journeyId} {
+      // 목록은 where('memberIds', 'array-contains', 내 uid) 조건으로 조회해야 한다.
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.memberIds;
+      // 생성·참여·수정·삭제는 서버 함수로만 한다.
+      allow write: if false;
+
+      match /members/{memberId} {
+        allow read: if isMember(journeyId);
+        // 본인 알림 주기만 바꾼다. role·joinedAt은 바꿀 수 없다.
+        allow update: if isOwner(memberId)
+          && isMember(journeyId)
+          && changedKeys().hasOnly(['notifyIntervalHours'])
+          && isValidNotifyInterval(request.resource.data.notifyIntervalHours);
+        allow create, delete: if false;
+      }
+
+      match /logs/{logId} {
+        allow read: if isMember(journeyId);
+
+        // 위치·공개 여부는 비워서 만들고, saveLogLocation 함수로만 채운다.
+        allow create: if isMember(journeyId)
+          && request.resource.data.authorId == request.auth.uid
+          && isValidLog(request.resource.data, journeyId)
+          && request.resource.data.location == null
+          && request.resource.data.placeName == null
+          && request.resource.data.isPublic == false
+          && isServerTime(request.resource.data.createdAt);
+
+        // 작성자는 글·테마·태그만 고친다.
+        allow update: if isMember(journeyId)
+          && resource.data.authorId == request.auth.uid
+          && changedKeys().hasOnly(['body', 'theme', 'taggedUids'])
+          && isValidLog(request.resource.data, journeyId);
+
+        allow delete: if isMember(journeyId) && resource.data.authorId == request.auth.uid;
+
+        match /comments/{commentId} {
+          allow read: if isMember(journeyId);
+          allow create: if isMember(journeyId)
+            && request.resource.data.authorId == request.auth.uid
+            && isValidComment(request.resource.data)
+            && isServerTime(request.resource.data.createdAt);
+          allow update: if isMember(journeyId)
+            && resource.data.authorId == request.auth.uid
+            && changedKeys().hasOnly(['body'])
+            && isValidComment(request.resource.data);
+          allow delete: if isMember(journeyId) && resource.data.authorId == request.auth.uid;
+        }
+
+        // 문서 ID가 반응한 사람의 uid라서 1인 1반응이 된다.
+        match /reactions/{reactorId} {
+          allow read: if isMember(journeyId);
+          allow create, update: if isOwner(reactorId)
+            && isMember(journeyId)
+            && isValidReaction(request.resource.data);
+          allow delete: if isOwner(reactorId) && isMember(journeyId);
+        }
+      }
+
+      // 추억 영상 정보는 서버 함수(generateRecapCaptions)가 만든다.
+      match /recaps/{recapId} {
+        allow read: if isMember(journeyId);
+        allow write: if false;
+      }
+    }
+
+    // ---------- 공개 읽기 (서버만 쓴다) ----------
+
+    // 초대 화면용 요약. 코드를 아는 사람만 단건으로 읽는다(목록 조회 불가).
+    match /invites/{inviteCode} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // 탐색 화면용 공개 기록 사본
+    match /publicLogs/{logId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 공유한 추억 영상. slug를 아는 사람만 단건으로 읽는다.
+    match /sharedRecaps/{slug} {
+      allow get: if true;
+      allow list, write: if false;
     }
   }
 }

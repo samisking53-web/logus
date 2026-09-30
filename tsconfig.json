@@ -38,6 +38,8 @@
   ],
   "exclude": [
     "node_modules",
-    "functions"
+    "functions",
+    "tests",
+    "vitest.config.mts"
   ]
 }

@@ -27,6 +27,7 @@
 - `npm run dev` 개발 서버 / `npm run build` 빌드 / `npm run lint` 린트
 - `npm --prefix functions run build` 함수 빌드
 - `firebase emulators:start` 로컬 에뮬레이터(Auth·Firestore·Functions·Storage)
+- `npm run test:rules` 에뮬레이터를 띄워 `tests/rules/`의 보안 규칙·함수 테스트를 실행한다(처음 한 번 `npm --prefix functions install` 필요)
 - `firebase deploy`는 사람이 승인한 뒤 로컬 세션에서만 실행하고, 대상은 `--only`로 지정한다. 클라우드 세션에서는 배포하지 않는다
 
 ## 폴더·설정 규칙
@@ -57,16 +58,16 @@
 
 ## 데이터 모델 (Firestore 초안. 바꾸면 이 파일도 함께 고친다)
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
-- `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt
+- `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
 - `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), joinedAt
-- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt
+- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
 - `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName. 로그인 전 초대 화면용 요약만 담는다
 - `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, theme, mediaPath, placeName, location, createdAt)
 - `sharedRecaps/{slug}`: 공유를 누른 리캡의 공개 사본
-- `users/{uid}/coinLedger/{logId}`: reason, amount, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
+- `users/{uid}/coinLedger/{logId}`: reason, amount, journeyId, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
 
 ## 보안 규칙 (기본 거부)
 - 모든 경로는 거부에서 시작해 필요한 것만 허용한다
@@ -77,7 +78,7 @@
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`는 클라이언트가 쓰지 못한다
 - 비로그인 읽기는 `invites`·`sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
 - 초대 코드와 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
-- Storage: `journeys/{journeyId}/...`는 여정 구성원만 읽고 쓴다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
+- Storage: `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
 
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
