@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 기본 거부: 아직 허용한 경로가 없다.
+// 화면·기능을 만들 때 필요한 경로만 하나씩 열고, tests/rules/에 테스트를 함께 추가한다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

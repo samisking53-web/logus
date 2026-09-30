@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 기본 거부: 아직 허용한 경로가 없다.
+// 업로드 기능을 만들 때 journeys/{journeyId}/... 규칙과 테스트를 함께 추가한다.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

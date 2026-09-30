@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* 스토리보드의 보라색 톤. 글자색은 흰 배경 기준 대비 4.5:1 이상인 값만 쓴다. */
+:root {
+  --background: #ffffff;
+  --foreground: #1f1b2e; /* 본문 글자 */
+  --muted: #5b5670; /* 보조 글자 (흰 배경 대비 약 6.9:1) */
+  --brand: #5b21b6; /* 강조 글자·버튼 (흰 배경 대비 약 9.9:1) */
+  --brand-soft: #f3effd; /* 연보라 카드 배경 */
+  --line: #e4dcf7;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-line: var(--line);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR",
+    "Malgun Gothic", system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+}
