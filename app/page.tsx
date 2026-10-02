@@ -1,13 +1,12 @@
-// S01 홈
-import ScreenHeader from "@/components/ScreenHeader";
+// S01 홈 / S01-A 여행 기간 중 홈
+import { Suspense } from "react";
+import HomeScreen from "@/components/home/HomeScreen";
 
 export default function HomePage() {
+  // 주소의 ?preview= 값을 읽기 때문에 Suspense로 감싼다(Next.js 규칙).
   return (
-    <>
-      <ScreenHeader title="어떤 순간을 남길까요?" />
-      <p className="rounded-2xl bg-brand-soft p-5 text-muted">
-        기록 시작하기 화면은 준비 중이에요.
-      </p>
-    </>
+    <Suspense>
+      <HomeScreen />
+    </Suspense>
   );
 }
