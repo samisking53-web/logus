@@ -18,13 +18,17 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover", // 아이폰 노치·홈 바 영역까지 화면을 쓰고, 여백은 safe-area로 맞춘다
-  themeColor: "#ffffff",
+  // 브라우저 주소창 색: 팔레트의 바탕색(라이트/다크)
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f5fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#141220" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full bg-brand-soft">
+      <body className="min-h-full bg-background">
         <SplashScreen />
         {/* 기준 폭 390px의 모바일 화면. 넓은 화면에서는 가운데에 놓인다. */}
         <div className="mx-auto flex min-h-dvh w-full max-w-[390px] flex-col bg-background shadow-sm">

@@ -8,7 +8,7 @@ export default function MyLogPage() {
   return (
     <>
       <ScreenHeader title="마이로그" description="여정별 기록과 추억을 다시 봐요." />
-      <p className="rounded-2xl bg-brand-soft p-5 text-muted">
+      <p className="rounded-2xl bg-surface p-5 text-text-secondary">
         내가 만들거나 초대받은 여정이 여기에 모일 예정이에요.
       </p>
     </>

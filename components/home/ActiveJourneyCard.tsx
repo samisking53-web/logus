@@ -19,17 +19,17 @@ export default function ActiveJourneyCard({ journey, myNickname }: Props) {
 
   return (
     <section aria-label="진행 중인 여정" className="flex flex-col gap-4">
-      <p className="rounded-full bg-brand-soft px-5 py-3 text-lg font-bold text-brand">
+      <p className="rounded-full bg-surface px-5 py-3 text-lg font-bold text-primary-strong">
         진행 중 · {journey.name}
       </p>
 
       {/* 여정 대표 사진. 지금은 자리만 잡아 두고, 나중에 기록 중 대표로 고른 장면이 들어간다. */}
-      <div className="aspect-[16/9] overflow-hidden rounded-2xl bg-brand-soft">
+      <div className="aspect-[16/9] overflow-hidden rounded-2xl bg-surface">
         {journey.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={journey.coverUrl} alt={`${journey.name} 대표 사진`} className="size-full object-cover" />
         ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-2 border-2 border-dashed border-line text-muted">
+          <div className="flex size-full flex-col items-center justify-center gap-2 border-2 border-dashed border-border text-text-secondary">
             <svg viewBox="0 0 24 24" className="size-9" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
               <rect x="3" y="5" width="18" height="14" rx="2" />
               <circle cx="9" cy="10" r="1.8" />
@@ -40,7 +40,7 @@ export default function ActiveJourneyCard({ journey, myNickname }: Props) {
         )}
       </div>
 
-      <p className="text-lg font-bold text-ink">
+      <p className="text-lg font-bold text-text">
         {shortDate(journey.startDate)} ~ {shortDate(journey.endDate)} · {members}
       </p>
 
@@ -48,11 +48,11 @@ export default function ActiveJourneyCard({ journey, myNickname }: Props) {
         {/* S04 앱 내 카메라로 이동 (화면은 다음 작업에서 만든다) */}
         <Link
           href={`/journeys/${journey.id}/camera`}
-          className="block rounded-full bg-accent px-6 py-4 text-xl font-bold text-ink"
+          className="block rounded-full bg-primary px-6 py-4 text-xl font-bold text-on-primary active:bg-primary-strong"
         >
           지금 기록하기
         </Link>
-        <p className="mt-3 px-2 font-semibold text-brand">누르면 {journey.city} 여정 카메라가 열려요</p>
+        <p className="mt-3 px-2 font-semibold text-primary-strong">누르면 {journey.city} 여정 카메라가 열려요</p>
       </div>
     </section>
   );

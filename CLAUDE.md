@@ -44,6 +44,14 @@
 - 모바일 우선, 기준 폭 390px. 하단 탭: 홈 / 탐색 / 마이로그
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
+- 색은 `app/globals.css`의 팔레트 토큰만 쓴다. Tailwind 기본 색과 임의 HEX는 쓰지 않는다(기본 색은 꺼 둠). 새 색이 필요하면 팔레트에서 골라 토큰으로 추가하고 이 목록도 고친다
+  - 브랜드: primary `#5B3DD6`(버튼·핀·활성 탭 채움, 위 글자는 흰색), primary-strong `#4A2FB8`(눌림·강조 글자), surface `#EEEAFB`(카드), border `#D8CFF5`(테두리)
+  - 기록·보상(코인·하이라이트): amber `#E0930F`(채움, 위 글자는 본문색. 흰 글자 금지), amber-text `#8A5606`, amber-soft `#FDF0DC`
+  - 멤버 구분: `#5B3DD6` `#C63F33` `#0B7A6B` `#9C6408`. 색만으로 구분하지 않게 이름 첫 글자를 함께 넣는다
+  - 뉴트럴: text `#1A1725`, text-secondary `#5A5570`, text-weak `#6E6A85`(바탕 위에서만, 카드 위에서는 대비 부족), line `#E3E0EC`, background `#F7F5FB`
+  - 시맨틱: success `#17795A`, warning `#A8620A`, error `#C0392B`
+  - 다크 모드(폰 설정을 따름): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
+  - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)

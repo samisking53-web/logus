@@ -7,9 +7,9 @@ type Props = {
 export default function ScreenHeader({ title, description }: Props) {
   return (
     <header className="mb-6">
-      <p className="text-sm font-bold tracking-wide text-brand">LOG US</p>
+      <p className="text-sm font-bold tracking-wide text-primary-strong">LOG US</p>
       <h1 className="mt-1 text-2xl font-bold">{title}</h1>
-      {description && <p className="mt-2 text-muted">{description}</p>}
+      {description && <p className="mt-2 text-text-secondary">{description}</p>}
     </header>
   );
 }

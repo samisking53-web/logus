@@ -8,7 +8,7 @@ export default function ExplorePage() {
   return (
     <>
       <ScreenHeader title="탐색" description="다른 여행자의 순간을 발견해요." />
-      <p className="rounded-2xl bg-brand-soft p-5 text-muted">
+      <p className="rounded-2xl bg-surface p-5 text-text-secondary">
         공개된 추억 영상이 여기에 나올 예정이에요.
       </p>
     </>

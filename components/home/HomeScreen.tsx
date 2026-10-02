@@ -18,10 +18,10 @@ export default function HomeScreen() {
 
   return (
     <>
-      <p className="mb-5 text-center text-2xl font-bold tracking-wide text-brand">LOG EARTH</p>
+      <p className="mb-5 text-center text-2xl font-bold tracking-wide text-primary-strong">LOG EARTH</p>
 
       {data.status === "loading" ? (
-        <p className="py-20 text-center text-muted" role="status">
+        <p className="py-20 text-center text-text-secondary" role="status">
           불러오는 중이에요…
         </p>
       ) : data.activeJourney ? (
@@ -33,16 +33,16 @@ export default function HomeScreen() {
       ) : (
         // S01 기본 홈
         <div className="flex flex-col gap-6">
-          <h1 className="text-3xl font-bold text-ink">어떤 순간을 남길까요?</h1>
+          <h1 className="text-3xl font-bold text-text">어떤 순간을 남길까요?</h1>
           <ProfileCard profile={data.profile} variant="large" />
-          <p className="px-2 text-xl font-bold text-brand">현재 진행중인 여정이 없어요!</p>
+          <p className="px-2 text-xl font-bold text-primary-strong">현재 진행중인 여정이 없어요!</p>
           {/* S02 새 여정 만들기로 이동 (화면은 다음 작업에서 만든다) */}
           <Link
             href="/journeys/new"
-            className="flex flex-col items-center gap-2 rounded-3xl border border-line bg-brand-soft px-6 py-8"
+            className="flex flex-col items-center gap-2 rounded-3xl border border-border bg-surface px-6 py-8"
           >
-            <span className="text-2xl font-bold text-ink">기록 시작하기</span>
-            <span className="text-muted">새로운 여정 기록하기</span>
+            <span className="text-2xl font-bold text-text">기록 시작하기</span>
+            <span className="text-text-secondary">새로운 여정 기록하기</span>
           </Link>
         </div>
       )}

@@ -1,0 +1,117 @@
+LOG US 로그인(카카오·구글) 서버 연결 설정 순서
+==============================================
+
+이 문서는 카카오·구글 로그인을 붙이기 전에 사람이 직접 콘솔에서 해야 하는 설정을 순서대로 정리한 것이다.
+콘솔은 계정 권한이 필요해서 Claude가 대신할 수 없다.
+메뉴 이름은 콘솔이 개편되면 조금 다를 수 있다.
+
+Firebase 프로젝트 ID: logus-80f21
+아래에서 <앱주소> 라고 쓴 곳에는 0단계에서 정한 주소(예: logus.vercel.app)를 넣는다. https:// 는 빼고 쓴다.
+
+
+0. 먼저 정할 것: 로그인 테스트용 고정 주소
+----------------------------------------------
+- Vercel 미리보기 주소는 PR마다 바뀌어서 로그인 설정에 등록할 수 없다.
+- 실서비스 주소(예: logus.vercel.app)를 정하고, 필요하면 staging 주소도 하나 정한다.
+- 로그인 테스트는 이 고정 주소에서만 한다.
+- 정한 주소는 Claude에게 알려 준다.
+
+
+1. Firebase에 웹 앱 등록과 환경변수
+----------------------------------------------
+1) Firebase 콘솔(console.firebase.google.com) → logus-80f21 → 프로젝트 설정(톱니바퀴) → 일반 → 내 앱
+2) 웹 앱(</> 아이콘)을 추가한다. 앱 이름은 LOG US. Firebase Hosting 설정은 체크하지 않는다.
+3) 화면에 나오는 firebaseConfig 값 6개를 확인한다.
+4) Vercel → logus 프로젝트 → Settings → Environment Variables에 아래 6개를 넣는다.
+     NEXT_PUBLIC_FIREBASE_API_KEY             = apiKey
+     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN         = <앱주소>   ← firebaseapp.com 주소가 아니라 앱 주소를 넣는다
+     NEXT_PUBLIC_FIREBASE_PROJECT_ID          = logus-80f21
+     NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET      = storageBucket
+     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = messagingSenderId
+     NEXT_PUBLIC_FIREBASE_APP_ID              = appId
+   - AUTH_DOMAIN을 앱 주소로 두는 이유: 폰에서는 로그인 창 대신 페이지 이동(redirect)으로 로그인하는데,
+     요즘 브라우저(사파리 등)는 다른 도메인의 로그인 정보를 막는다. 그래서 앱 주소의 /__/auth/ 를
+     Firebase로 대신 연결해 두었다(next.config.ts의 rewrites).
+   - 이 값들은 공개돼도 괜찮다(권한은 보안 규칙이 지킨다). 그래도 코드에는 넣지 않고 환경변수로만 넣는다.
+5) 넣은 뒤 Vercel에서 다시 배포(Redeploy)해야 반영된다.
+
+
+2. Firebase 승인된 도메인 등록
+----------------------------------------------
+1) Firebase 콘솔 → Authentication → 설정 → 승인된 도메인
+2) <앱주소>를 추가한다. staging 주소가 있으면 그것도 추가한다.
+   (localhost와 logus-80f21.firebaseapp.com은 기본으로 들어 있다)
+
+
+3. 구글 로그인
+----------------------------------------------
+1) Firebase 콘솔 → Authentication → 로그인 방법 → 새 제공업체 추가 → Google → 사용 설정
+   - 프로젝트 지원 이메일을 고르고 저장한다.
+2) Google Cloud 콘솔(console.cloud.google.com, 프로젝트 logus-80f21) → API 및 서비스 → 사용자 인증 정보
+3) OAuth 2.0 클라이언트 ID 목록에서 Firebase가 자동으로 만든 "Web client (auto created by Google Service)"를 연다.
+4) 승인된 리디렉션 URI에 아래를 추가하고 저장한다.
+     https://<앱주소>/__/auth/handler
+   - staging 주소가 있으면 그것도 같은 형식으로 추가한다.
+5) 승인된 자바스크립트 원본에 https://<앱주소> 도 추가한다.
+6) 참고: 구글 로그인은 카카오톡·인스타그램 앱 안의 브라우저에서 막힌다. 앱에서는 '브라우저로 열기' 안내를 보여 줄 예정이다.
+
+
+4. 카카오 로그인 (Kakao Developers)
+----------------------------------------------
+1) developers.kakao.com 로그인 → 내 애플리케이션 → 애플리케이션 추가하기
+   - 앱 이름: LOG US (또는 LOG EARTH), 회사명은 팀 이름
+2) 앱 설정 → 플랫폼 → Web 플랫폼 등록 → 사이트 도메인에 https://<앱주소> 를 등록한다.
+   - 로컬 개발도 할 거면 http://localhost:3000 도 추가한다.
+3) 제품 설정 → 카카오 로그인
+   - 활성화 설정: ON
+   - OpenID Connect 활성화 설정: ON   ← Firebase 연결에 꼭 필요
+4) Redirect URI 등록
+     https://<앱주소>/__/auth/handler
+   - staging 주소가 있으면 그것도 추가한다.
+5) 카카오 로그인 → 동의항목
+   - 닉네임: 필수 동의
+   - 프로필 사진: 선택 동의
+   - 이메일 등 다른 항목은 저장하지 않으므로 켜지 않는다.
+6) 앱 키 확인
+   - REST API 키를 복사해 둔다(Firebase의 "클라이언트 ID"로 쓴다).
+7) 보안 → Client Secret
+   - 코드 생성 → 활성화 상태를 "사용함"으로 바꾼다.
+   - 생성된 코드를 복사해 둔다(Firebase의 "클라이언트 보안 비밀번호"로 쓴다).
+   - 이 값은 비밀이다. 단톡방·코드·커밋에 올리지 않고 Firebase 콘솔에만 넣는다.
+
+
+5. Firebase에 카카오 연결 (OpenID Connect)
+----------------------------------------------
+1) Firebase 콘솔 → Authentication → 로그인 방법 → 새 제공업체 추가 → OpenID Connect
+2) "Identity Platform으로 업그레이드" 안내가 나오면 업그레이드한다.
+   - 카카오 같은 OpenID Connect 로그인은 이 업그레이드가 있어야 쓸 수 있다.
+   - 요금: OpenID Connect 로그인 사용자는 한 달에 일정 인원(약 50명으로 알고 있음)까지 무료이고,
+     넘으면 사용자 수만큼 과금된다. 정확한 금액은 업그레이드 화면의 요금 안내로 꼭 확인한다.
+3) 아래 값을 넣는다.
+     부여 유형(Grant type)          : 코드 흐름 (Code flow)
+     이름                           : kakao        → 제공업체 ID가 oidc.kakao 가 된다(앱 코드와 맞춰야 함)
+     클라이언트 ID                  : 카카오 REST API 키
+     발급자(Issuer)                 : https://kauth.kakao.com
+     클라이언트 보안 비밀번호       : 카카오 Client Secret
+4) 저장한다.
+
+
+6. 끝나면 Claude에게 알려 줄 것
+----------------------------------------------
+- 0단계에서 정한 고정 주소(실서비스, staging)
+- 1~5단계를 마쳤는지 여부
+- 키 값(REST API 키, Client Secret, apiKey 등)은 보내지 않아도 된다.
+  모두 콘솔과 Vercel에만 저장되고 코드에는 들어가지 않는다.
+
+이것만 알려 주면 회원가입·로그인 화면을 만들어 홈 화면 앞에 연결한다.
+
+
+자주 막히는 곳
+----------------------------------------------
+- "redirect_uri_mismatch"(구글) 또는 "KOE006"(카카오) 오류
+  → 리디렉션 URI를 https://<앱주소>/__/auth/handler 형식으로 정확히 등록했는지 확인한다(끝 / 없음).
+- "auth/unauthorized-domain" 오류
+  → 2단계 승인된 도메인에 지금 접속한 주소가 있는지 확인한다.
+  Vercel 미리보기 주소에서는 로그인이 안 되는 게 정상이다.
+- 환경변수를 바꿨는데 그대로임
+  → Vercel에서 다시 배포해야 반영된다.

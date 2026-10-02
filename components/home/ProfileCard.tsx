@@ -19,7 +19,7 @@ export default function ProfileCard({ profile, variant }: Props) {
     return (
       <section
         aria-label="내 프로필"
-        className="flex items-center gap-4 rounded-3xl border border-line bg-brand-soft px-4 py-3"
+        className="flex items-center gap-4 rounded-3xl border border-border bg-surface px-4 py-3"
       >
         <div className="relative">
           <Avatar photoURL={profile.photoURL} size={56} />
@@ -28,7 +28,7 @@ export default function ProfileCard({ profile, variant }: Props) {
             disabled
             title={EDIT_PHOTO_HINT}
             aria-label="사진 수정 (준비 중)"
-            className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-background text-brand"
+            className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-background text-primary-strong"
           >
             <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
               <path d="M4 20h4L19 9l-4-4L4 16zM16.5 3.5l4 4 1-1a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0z" />
@@ -36,27 +36,27 @@ export default function ProfileCard({ profile, variant }: Props) {
           </button>
         </div>
         <div>
-          <p className="text-xl font-bold text-ink">{profile.nickname}</p>
-          <p className="font-semibold text-brand">보유 {coins} 코인</p>
+          <p className="text-xl font-bold text-text">{profile.nickname}</p>
+          <p className="font-semibold text-amber-text">보유 {coins} 코인</p>
         </div>
       </section>
     );
   }
 
   return (
-    <section aria-label="내 프로필" className="rounded-3xl border border-line bg-brand-soft p-5">
+    <section aria-label="내 프로필" className="rounded-3xl border border-border bg-surface p-5">
       <div className="flex items-center gap-5">
         <Avatar photoURL={profile.photoURL} size={88} />
         <div>
-          <p className="text-2xl font-bold text-ink">{profile.nickname}</p>
-          <p className="mt-1 text-lg font-semibold text-brand">보유 {coins} 코인</p>
+          <p className="text-2xl font-bold text-text">{profile.nickname}</p>
+          <p className="mt-1 text-lg font-semibold text-amber-text">보유 {coins} 코인</p>
         </div>
       </div>
       <button
         type="button"
         disabled
         title={EDIT_PHOTO_HINT}
-        className="mt-3 text-sm font-semibold text-brand"
+        className="mt-3 text-sm font-semibold text-primary-strong"
       >
         사진 수정 ›
       </button>

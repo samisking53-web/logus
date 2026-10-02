@@ -39,7 +39,7 @@ export default function BottomTabBar() {
       aria-label="주요 메뉴"
       className="fixed inset-x-0 bottom-0 z-10 mx-auto w-full max-w-[390px] px-5 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]"
     >
-      <ul className="flex h-16 items-center rounded-full bg-brand-soft">
+      <ul className="flex h-16 items-center rounded-full bg-surface">
         {TABS.map((tab) => {
           // 홈은 정확히 "/"일 때만, 나머지는 하위 주소까지 같은 탭으로 본다.
           const active =
@@ -51,7 +51,7 @@ export default function BottomTabBar() {
                 aria-label={tab.label}
                 aria-current={active ? "page" : undefined}
                 className={`flex size-12 items-center justify-center rounded-full ${
-                  active ? "bg-brand-strong text-brand" : "text-ink"
+                  active ? "bg-primary text-on-primary" : "text-text"
                 }`}
               >
                 <svg

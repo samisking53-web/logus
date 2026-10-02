@@ -25,11 +25,11 @@ export default function SplashScreen() {
     <div
       role="status"
       aria-label="LOG EARTH 앱을 여는 중"
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-brand-soft transition-opacity duration-[400ms] motion-reduce:transition-none ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-surface transition-opacity duration-[400ms] motion-reduce:transition-none ${
         phase === "fade" ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
-      <p className="text-3xl font-bold tracking-wide text-brand">LOG EARTH</p>
+      <p className="text-3xl font-bold tracking-wide text-primary-strong">LOG EARTH</p>
     </div>
   );
 }
