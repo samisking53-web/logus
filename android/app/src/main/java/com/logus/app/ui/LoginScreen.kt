@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -27,22 +27,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.logus.app.auth.AuthUiState
 import com.logus.app.ui.theme.GoogleButton
 import com.logus.app.ui.theme.GoogleLabel
 import com.logus.app.ui.theme.GoogleOutline
+import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 
-/**
- * 로그인 화면 (임시)
- * 구글 로그인 연동을 확인하는 용도다. 처음 로그인하면 구글 이름으로 프로필이 자동으로 만들어진다.
- * 로그인하면 이름과 로그아웃 버튼을 보여 준다.
- */
+/** 로그인 화면: 구글 계정으로 시작한다. 처음이면 로그인 뒤 회원가입 화면으로 이어진다. */
 @Composable
 fun LoginScreen(
-    state: AuthUiState,
+    busy: Boolean,
+    error: String?,
     onGoogleClick: () -> Unit,
-    onSignOutClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -52,69 +48,72 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Text("LOG EARTH", color = LogUsColors.primaryStrong, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
         Text(
-            text = "LOG EARTH",
-            color = MaterialTheme.colorScheme.secondary, // 강조 글자(primary-strong)
-            fontSize = 32.sp,
+            "함께한 여정을 함께 기록해요",
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(48.dp))
 
-        when (state) {
-            is AuthUiState.SignedIn -> {
-                Text(
-                    text = "${state.displayName}님, 환영해요!",
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = onSignOutClick,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                ) { Text("로그아웃", fontSize = 16.sp) }
-            }
-
-            AuthUiState.Loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-
-            AuthUiState.SignedOut, is AuthUiState.Error -> {
-                // 구글 로그인 버튼: 구글 브랜드 가이드(흰 배경, 회색 테두리)
-                OutlinedButton(
-                    onClick = onGoogleClick,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, GoogleOutline),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = GoogleButton, contentColor = GoogleLabel),
-                ) { Text("Google로 로그인", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-
-                if (state is AuthUiState.Error) {
-                    Spacer(Modifier.height(16.dp))
-                    // 오류 빨강(#C0392B)은 다크 바탕에서 글자 대비가 3.4라 부족하다.
-                    // 그래서 빨강은 테두리에만 쓰고 글자는 본문색으로 쓴다.
-                    Text(
-                        text = state.message,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.5.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                            // 화면 읽기 프로그램이 오류 문구를 바로 읽어 준다
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
+        // 구글 로그인 버튼: 구글 브랜드 가이드(흰 배경, 회색 테두리) — 팔레트 예외
+        OutlinedButton(
+            onClick = onGoogleClick,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(28.dp),
+            border = BorderStroke(1.dp, GoogleOutline),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = GoogleButton,
+                contentColor = GoogleLabel,
+                disabledContainerColor = GoogleButton,
+                disabledContentColor = GoogleLabel,
+            ),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = GoogleLabel, strokeWidth = 2.dp)
+                Spacer(Modifier.size(12.dp))
+                Text("로그인하는 중…", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            } else {
+                Text("Google로 시작하기", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+
+        if (error != null) {
+            Spacer(Modifier.height(16.dp))
+            ErrorMessage(error)
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "처음이면 로그인 후 닉네임만 정하면 가입이 끝나요.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+        )
     }
+}
+
+/**
+ * 오류 문구. 오류 빨강은 다크 바탕에서 글자 대비가 부족해(3.4) 테두리에만 쓰고 글자는 본문색으로 쓴다.
+ */
+@Composable
+fun ErrorMessage(message: String, modifier: Modifier = Modifier) {
+    Text(
+        text = message,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.5.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp))
+            .padding(12.dp)
+            // 화면 읽기 프로그램이 오류 문구를 바로 읽어 준다
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun LoginScreenPreview() {
-    LogUsTheme {
-        LoginScreen(AuthUiState.SignedOut, {}, {})
-    }
+    LogUsTheme { LoginScreen(busy = false, error = null, onGoogleClick = {}) }
 }

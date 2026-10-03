@@ -40,3 +40,13 @@ fun LogUsTheme(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+/** Material 색 체계에 없는 팔레트 색(코인·카드 테두리 등). 다크 모드에 맞춰 골라 준다. */
+object LogUsColors {
+    val amberText: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) AmberTextDark else AmberText
+    val border: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) BorderDark else Border
+    val primaryStrong: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) PrimaryStrongDark else PrimaryStrong
+}

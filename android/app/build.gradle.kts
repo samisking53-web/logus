@@ -60,4 +60,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+
+    // 구글 프로필 사진 같은 인터넷 이미지 표시
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }
