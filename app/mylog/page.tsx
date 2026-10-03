@@ -1,6 +1,7 @@
 // S10 마이로그
 import type { Metadata } from "next";
 import ScreenHeader from "@/components/ScreenHeader";
+import SignOutButton from "@/components/auth/SignOutButton";
 
 export const metadata: Metadata = { title: "마이로그 | LOG US" };
 
@@ -11,6 +12,7 @@ export default function MyLogPage() {
       <p className="rounded-2xl bg-surface p-5 text-text-secondary">
         내가 만들거나 초대받은 여정이 여기에 모일 예정이에요.
       </p>
+      <SignOutButton />
     </>
   );
 }

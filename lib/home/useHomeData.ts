@@ -1,15 +1,12 @@
 "use client";
 
-// 홈(S01·S01-A)에 필요한 데이터를 불러온다.
-// - 로그인한 사용자의 프로필: users/{uid} (nickname, photoURL, coins)
+// 홈(S01·S01-A)에 필요한 데이터
+// - 프로필(이름·사진·코인)은 AuthProvider가 이미 읽어 둔 것을 쓴다.
 // - 진행 중인 여정: 내가 구성원이고 startDate ≤ 오늘 ≤ endDate 인 여정 1개
 import { useEffect, useState } from "react";
+import type { Profile } from "@/lib/auth/AuthProvider";
 
-export type HomeProfile = {
-  nickname: string;
-  photoURL: string | null;
-  coins: number;
-};
+export type HomeProfile = Profile;
 
 export type ActiveJourney = {
   id: string;
@@ -22,17 +19,14 @@ export type ActiveJourney = {
   coverUrl: string | null;
 };
 
-export type HomeData =
-  | { status: "loading" }
-  | { status: "ready"; profile: HomeProfile; activeJourney: ActiveJourney | null };
+/** undefined = 불러오는 중, null = 진행 중인 여정 없음 */
+export type ActiveJourneyResult = ActiveJourney | null | undefined;
 
-/** 화면 확인용 미리보기. 주소 끝에 ?preview=idle 또는 ?preview=active 를 붙인다. */
+/** 화면 확인용 미리보기. 주소 끝에 ?preview=idle 또는 ?preview=active 를 붙인다(로그인 없이 볼 수 있음). */
 export type HomePreview = "idle" | "active";
 
-const GUEST_PROFILE: HomeProfile = { nickname: "게스트", photoURL: null, coins: 0 };
-
-const SAMPLE_PROFILE: HomeProfile = { nickname: "성연", photoURL: null, coins: 100 };
-const SAMPLE_JOURNEY: ActiveJourney = {
+export const SAMPLE_PROFILE: HomeProfile = { nickname: "성연", photoURL: null, coins: 100 };
+export const SAMPLE_JOURNEY: ActiveJourney = {
   id: "sample",
   name: "우리의 포르투",
   city: "포르투",
@@ -42,9 +36,6 @@ const SAMPLE_JOURNEY: ActiveJourney = {
   coverUrl: null,
 };
 
-// Firebase 설정값(.env.local / Vercel 환경변수)이 없으면 Firebase를 부르지 않고 게스트로 보여 준다.
-const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-
 /** 이 기기의 오늘 날짜를 "YYYY-MM-DD"로 만든다. 여행 중인 사람의 폰 날짜가 곧 현지 날짜다. */
 export function todayLocal(now = new Date()): string {
   const y = now.getFullYear();
@@ -53,90 +44,53 @@ export function todayLocal(now = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
-export function useHomeData(preview: HomePreview | null): HomeData {
-  const [data, setData] = useState<HomeData>({ status: "loading" });
-  const skipFirebase = preview !== null || !firebaseConfigured;
+/** 로그인한 사용자(uid)의 진행 중 여정을 찾는다. */
+export function useActiveJourney(uid: string): ActiveJourneyResult {
+  const [result, setResult] = useState<{ uid: string; journey: ActiveJourney | null } | null>(null);
 
   useEffect(() => {
-    if (skipFirebase) return;
-
     let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-
     (async () => {
-      // Firebase 코드는 필요할 때만 불러온다(첫 화면을 가볍게).
-      const [{ auth, db }, { onAuthStateChanged }, firestore] = await Promise.all([
+      const [{ db }, { collection, getDocs, limit, orderBy, query, where }] = await Promise.all([
         import("@/lib/firebase/client"),
-        import("firebase/auth"),
         import("firebase/firestore"),
       ]);
-      const { collection, doc, getDoc, getDocs, limit, orderBy, query, where } = firestore;
-
-      unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          // 회원가입·로그인 화면은 나중에 이 화면 앞에 붙인다. 그때까지는 게스트로 보여 준다.
-          if (!cancelled) setData({ status: "ready", profile: GUEST_PROFILE, activeJourney: null });
-          return;
-        }
-        try {
-          const today = todayLocal();
-          const [userSnap, journeySnap] = await Promise.all([
-            getDoc(doc(db, "users", user.uid)),
-            // 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 몇 개만 가져와, 끝나지 않은 것을 고른다.
-            // (색인: memberIds + startDate 내림차순, firestore.indexes.json)
-            getDocs(
-              query(
-                collection(db, "journeys"),
-                where("memberIds", "array-contains", user.uid),
-                where("startDate", "<=", today),
-                orderBy("startDate", "desc"),
-                limit(5),
-              ),
-            ),
-          ]);
-
-          const u = userSnap.data();
-          const profile: HomeProfile = {
-            nickname: (u?.nickname as string | undefined) ?? user.displayName ?? "여행자",
-            photoURL: (u?.photoURL as string | null | undefined) ?? user.photoURL ?? null,
-            coins: (u?.coins as number | undefined) ?? 0,
-          };
-
-          const active = journeySnap.docs.find((d) => (d.get("endDate") as string) >= today);
-          const activeJourney: ActiveJourney | null = active
-            ? {
-                id: active.id,
-                name: active.get("name") as string,
-                city: active.get("city") as string,
-                startDate: active.get("startDate") as string,
-                endDate: active.get("endDate") as string,
-                memberCount: active.get("memberCount") as number,
-                coverUrl: null,
-              }
-            : null;
-
-          if (!cancelled) setData({ status: "ready", profile, activeJourney });
-        } catch (error) {
-          console.error("홈 데이터를 불러오지 못했어요", error);
-          if (!cancelled) setData({ status: "ready", profile: GUEST_PROFILE, activeJourney: null });
-        }
-      });
+      const today = todayLocal();
+      try {
+        // 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 몇 개만 가져와, 끝나지 않은 것을 고른다.
+        // (색인: memberIds + startDate 내림차순, firestore.indexes.json)
+        const snap = await getDocs(
+          query(
+            collection(db, "journeys"),
+            where("memberIds", "array-contains", uid),
+            where("startDate", "<=", today),
+            orderBy("startDate", "desc"),
+            limit(5),
+          ),
+        );
+        const active = snap.docs.find((d) => (d.get("endDate") as string) >= today);
+        const journey: ActiveJourney | null = active
+          ? {
+              id: active.id,
+              name: active.get("name") as string,
+              city: active.get("city") as string,
+              startDate: active.get("startDate") as string,
+              endDate: active.get("endDate") as string,
+              memberCount: active.get("memberCount") as number,
+              coverUrl: null,
+            }
+          : null;
+        if (!cancelled) setResult({ uid, journey });
+      } catch (error) {
+        // 색인을 아직 배포하지 않았거나 네트워크 문제: 진행 중 여정이 없는 것으로 보여 준다.
+        console.error("진행 중인 여정을 불러오지 못했어요", error);
+        if (!cancelled) setResult({ uid, journey: null });
+      }
     })();
-
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
-  }, [skipFirebase]);
+  }, [uid]);
 
-  if (preview === "active") {
-    return { status: "ready", profile: SAMPLE_PROFILE, activeJourney: SAMPLE_JOURNEY };
-  }
-  if (preview === "idle") {
-    return { status: "ready", profile: SAMPLE_PROFILE, activeJourney: null };
-  }
-  if (!firebaseConfigured) {
-    return { status: "ready", profile: GUEST_PROFILE, activeJourney: null };
-  }
-  return data;
+  return result && result.uid === uid ? result.journey : undefined;
 }

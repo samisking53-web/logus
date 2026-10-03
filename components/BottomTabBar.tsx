@@ -31,8 +31,12 @@ const TABS: { href: string; label: string; icon: ReactNode }[] = [
   { href: "/mylog", label: "마이로그", icon: <FolderIcon /> },
 ];
 
+// 로그인·회원가입 화면에서는 하단 탭을 숨긴다.
+const HIDDEN_ON = ["/login", "/signup"];
+
 export default function BottomTabBar() {
   const pathname = usePathname();
+  if (HIDDEN_ON.includes(pathname)) return null;
 
   return (
     <nav

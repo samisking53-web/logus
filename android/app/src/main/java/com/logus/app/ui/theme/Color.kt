@@ -27,9 +27,7 @@ val AmberTextDark = Color(0xFFE0930F)
 
 val OnPrimary = Color(0xFFFFFFFF)
 
-// 로그인 버튼은 카카오·구글 디자인 가이드에 정해진 색을 그대로 써야 해서 팔레트의 예외로 둔다.
-val KakaoYellow = Color(0xFFFEE500)
-val KakaoLabel = Color(0xD9000000) // 검정 85%
+// 구글 로그인 버튼은 구글 디자인 가이드에 정해진 색을 그대로 써야 해서 팔레트의 예외로 둔다.
 val GoogleButton = Color(0xFFFFFFFF)
 val GoogleLabel = Color(0xFF1F1F1F)
 val GoogleOutline = Color(0xFF747775)

@@ -11,7 +11,6 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.OAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
@@ -19,10 +18,9 @@ import com.logus.app.R
 import kotlinx.coroutines.tasks.await
 
 /**
- * 로그인 담당.
- * - 카카오: Firebase가 직접 카카오 로그인 화면(브라우저)을 열고 결과를 받는다. 제공업체 ID는 웹과 같은 oidc.kakao
- *   → 같은 사람이 웹·안드로이드 어디서 로그인해도 같은 계정(uid)이 된다.
- * - 구글: 안드로이드 표준 로그인 창(Credential Manager)으로 구글 ID 토큰을 받아 Firebase에 넘긴다.
+ * 로그인 담당 (구글 계정만 쓴다).
+ * - 안드로이드 표준 로그인 창(Credential Manager)으로 구글 ID 토큰을 받아 Firebase에 넘긴다.
+ *   제공업체가 웹과 같은 google.com 이라 같은 사람은 웹·안드로이드에서 같은 계정(uid)이 된다.
  * - 처음 로그인하면 Firestore users/{uid} 프로필 문서를 만든다(보안 규칙에 맞는 필드만).
  */
 class AuthRepository {
@@ -30,23 +28,6 @@ class AuthRepository {
     private val db = Firebase.firestore
 
     val currentUser: FirebaseUser? get() = auth.currentUser
-
-    /** 카카오 로그인. 앱이 백그라운드에서 꺼졌다가 돌아온 경우 남아 있는 로그인 결과를 먼저 이어받는다. */
-    suspend fun signInWithKakao(activity: Activity): FirebaseUser {
-        val pending = auth.pendingAuthResult
-        val result = if (pending != null) {
-            pending.await()
-        } else {
-            val provider = OAuthProvider.newBuilder(KAKAO_PROVIDER_ID)
-                // 카카오 동의항목: 닉네임(필수)·프로필 사진(선택). openid 는 OpenID Connect 에 꼭 필요
-                .setScopes(listOf("openid", "profile_nickname", "profile_image"))
-                .build()
-            auth.startActivityForSignInWithProvider(activity, provider).await()
-        }
-        val user = requireNotNull(result.user) { "카카오 로그인 결과에 사용자가 없어요." }
-        ensureProfile(user)
-        return user
-    }
 
     /** 구글 로그인. 기기에 있는 구글 계정 중 하나를 고르는 창이 뜬다. */
     suspend fun signInWithGoogle(activity: Activity): FirebaseUser {
@@ -109,7 +90,6 @@ class AuthRepository {
     }
 
     private companion object {
-        const val KAKAO_PROVIDER_ID = "oidc.kakao" // Firebase 콘솔에 만든 OpenID Connect 제공업체 ID
         const val DEFAULT_NICKNAME = "여행자"
         const val TAG = "AuthRepository"
     }

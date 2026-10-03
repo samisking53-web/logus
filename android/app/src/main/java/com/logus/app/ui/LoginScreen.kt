@@ -31,19 +31,16 @@ import com.logus.app.auth.AuthUiState
 import com.logus.app.ui.theme.GoogleButton
 import com.logus.app.ui.theme.GoogleLabel
 import com.logus.app.ui.theme.GoogleOutline
-import com.logus.app.ui.theme.KakaoLabel
-import com.logus.app.ui.theme.KakaoYellow
 import com.logus.app.ui.theme.LogUsTheme
 
 /**
  * 로그인 화면 (임시)
- * 회원가입 화면(스토리보드 3쪽)을 만들기 전까지, 카카오·구글 로그인 연동을 확인하는 용도다.
+ * 구글 로그인 연동을 확인하는 용도다. 처음 로그인하면 구글 이름으로 프로필이 자동으로 만들어진다.
  * 로그인하면 이름과 로그아웃 버튼을 보여 준다.
  */
 @Composable
 fun LoginScreen(
     state: AuthUiState,
-    onKakaoClick: () -> Unit,
     onGoogleClick: () -> Unit,
     onSignOutClick: () -> Unit,
 ) {
@@ -85,16 +82,6 @@ fun LoginScreen(
             AuthUiState.Loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
 
             AuthUiState.SignedOut, is AuthUiState.Error -> {
-                // 카카오 로그인 버튼: 카카오 디자인 가이드(노란 배경 #FEE500, 검정 85% 글자)
-                Button(
-                    onClick = onKakaoClick,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = KakaoYellow, contentColor = KakaoLabel),
-                ) { Text("카카오 로그인", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-
-                Spacer(Modifier.height(12.dp))
-
                 // 구글 로그인 버튼: 구글 브랜드 가이드(흰 배경, 회색 테두리)
                 OutlinedButton(
                     onClick = onGoogleClick,
@@ -128,6 +115,6 @@ fun LoginScreen(
 @Composable
 private fun LoginScreenPreview() {
     LogUsTheme {
-        LoginScreen(AuthUiState.SignedOut, {}, {}, {})
+        LoginScreen(AuthUiState.SignedOut, {}, {})
     }
 }

@@ -28,7 +28,6 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     LoginScreen(
                         state = state,
-                        onKakaoClick = { authViewModel.signInWithKakao(this@MainActivity) },
                         onGoogleClick = { authViewModel.signInWithGoogle(this@MainActivity) },
                         onSignOutClick = { authViewModel.signOut(this@MainActivity) },
                     )

@@ -28,6 +28,7 @@
 - `npm run dev` 개발 서버 / `npm run build` 빌드 / `npm run lint` 린트
 - `npm --prefix functions run build` 함수 빌드
 - `firebase emulators:start` 로컬 에뮬레이터(Auth·Firestore·Functions·Storage)
+- 로컬 에뮬레이터로 앱을 돌릴 때는 `.env.local`에 `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`를 넣는다(가짜 구글 로그인 창이 뜬다). 배포 환경에는 넣지 않는다
 - `npm run test:rules` 에뮬레이터를 띄워 `tests/rules/`의 보안 규칙·함수 테스트를 실행한다(처음 한 번 `npm --prefix functions install` 필요)
 - `firebase deploy`는 사람이 승인한 뒤 로컬 세션에서만 실행하고, 대상은 `--only`로 지정한다. 클라우드 세션에서는 배포하지 않는다
 
@@ -55,7 +56,7 @@
   - 다크 모드(폰 설정을 따름): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
   - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
-  - 예외: 카카오·구글 로그인 버튼은 각 회사 디자인 가이드 색(카카오 `#FEE500`+검정 85% 글자, 구글 흰 배경+`#747775` 테두리)을 쓴다
+  - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다. 웹은 `google-*` 토큰으로 쓴다
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
@@ -102,9 +103,10 @@
 - `shareRecap`: sharedRecaps 사본과 공유 링크를 만든다
 
 ## 인증
-- 로그인 수단: 카카오(OpenID Connect, provider ID `oidc.kakao`, issuer `https://kauth.kakao.com`, 코드 흐름)가 기본, 구글이 보조
+- 로그인 수단: 구글 계정만 쓴다(카카오는 쓰지 않기로 함). 콘솔 설정 순서는 `docs/login-setup.txt`
+- 회원가입: 구글 로그인 후 `users/{uid}`가 없으면 `/signup`에서 닉네임(1~20자)과 사진(구글 사진 또는 기본)을 정해 만든다. 로그인·가입이 필요한 화면은 `components/AuthGate.tsx`로 감싸고, 상태는 `lib/auth/AuthProvider.tsx`의 `useAuth()`로 읽는다
 - 모바일은 `signInWithRedirect`를 쓴다. 앱이 Firebase Hosting이 아닌 Vercel에 있으므로, Next.js rewrites로 `/__/auth/:path*`를 `https://<프로젝트ID>.firebaseapp.com/__/auth/:path*`에 프록시하고 `authDomain`을 앱 도메인으로 둔다 (Firebase 문서 "redirect best practices"의 Option 3)
-- 안드로이드: 카카오는 카카오 SDK 대신 Firebase `OAuthProvider("oidc.kakao")`의 `startActivityForSignInWithProvider`로 웹과 같은 계정을 쓴다(카카오에 `https://logus-80f21.firebaseapp.com/__/auth/handler` 등록). 구글은 Credential Manager로 받은 ID 토큰을 `GoogleAuthProvider`로 넘긴다. 두 방식 모두 Firebase 콘솔에 SHA-1 등록이 필요하다
+- 안드로이드: Credential Manager로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 넘긴다(웹과 같은 계정). Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
 - 초대 링크 `/invite/[code]`는 로그인 전에도 `invites` 요약을 보여주고, 로그인 후 같은 주소로 돌아와 `joinJourney`로 참여를 끝낸다
 
 ## 데이터 원칙
@@ -119,8 +121,8 @@
 - Storage 기본 버킷은 무료 한도가 적용되는 US 리전에 있다. 미디어는 줄여서 올린다
 
 ## 알려진 함정
-- 구글 로그인은 카카오톡·인스타그램 인앱 브라우저에서 막힌다. 인앱 브라우저를 감지하면 '브라우저로 열기' 안내를 보여준다
-- Vercel 미리보기 주소는 PR마다 바뀐다. 로그인은 Firebase 승인 도메인과 카카오 리다이렉트 URI에 등록해 둔 고정 주소(실서비스·staging)에서만 테스트한다
+- 구글 로그인은 카카오톡·인스타그램 인앱 브라우저에서 막힌다. 인앱 브라우저를 감지하면 '브라우저로 열기' 안내를 보여준다(`lib/auth/inAppBrowser.ts`)
+- Vercel 미리보기 주소는 PR마다 바뀐다. 로그인은 Firebase 승인 도메인과 구글 리디렉션 URI에 등록해 둔 고정 주소(실서비스·staging)에서만 테스트한다
 - 위치·푸시는 HTTPS에서만 동작한다. 폰 테스트는 Vercel 주소로 한다
 - 아이폰 웹 푸시(FCM 포함)는 홈 화면에 추가한 PWA에서만 동작한다
 

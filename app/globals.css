@@ -40,6 +40,11 @@
   --warning: #a8620a;
   --error: #c0392b;
 
+  /* 예외: 구글 로그인 버튼은 구글 브랜드 가이드 색을 쓴다(다크 모드에서도 같음) */
+  --google-surface: #ffffff;
+  --google-outline: #747775;
+  --google-label: #1f1f1f;
+
   color-scheme: light;
 }
 
@@ -89,6 +94,10 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-error: var(--error);
+
+  --color-google-surface: var(--google-surface);
+  --color-google-outline: var(--google-outline);
+  --color-google-label: var(--google-label);
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR",
     "Malgun Gothic", system-ui, sans-serif;

@@ -33,8 +33,6 @@ class AuthViewModel(
     )
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
-    fun signInWithKakao(activity: Activity) = signIn { repository.signInWithKakao(activity) }
-
     fun signInWithGoogle(activity: Activity) = signIn { repository.signInWithGoogle(activity) }
 
     fun signOut(activity: Activity) {
@@ -53,13 +51,6 @@ class AuthViewModel(
                 AuthUiState.SignedIn(user.displayName ?: "여행자")
             } catch (e: GetCredentialCancellationException) {
                 AuthUiState.SignedOut // 구글 창을 닫음: 오류로 보지 않는다
-            } catch (e: FirebaseAuthException) {
-                if (e.errorCode == "ERROR_WEB_CONTEXT_CANCELED") {
-                    AuthUiState.SignedOut // 카카오 로그인 화면을 닫음
-                } else {
-                    Log.w(TAG, "로그인 실패", e)
-                    AuthUiState.Error(e.toKoreanMessage())
-                }
             } catch (e: Exception) {
                 Log.w(TAG, "로그인 실패", e)
                 AuthUiState.Error(e.toKoreanMessage())
