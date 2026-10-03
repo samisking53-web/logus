@@ -62,7 +62,7 @@ fun WelcomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), // 아래 여백을 줄여 버튼을 화면 아래쪽에 둔다
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // 로고
@@ -118,7 +118,7 @@ fun WelcomeScreen(
             ErrorMessage(error)
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             "계속하면 이용약관과 개인정보 처리방침에\n동의하는 절차로 넘어가요",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
