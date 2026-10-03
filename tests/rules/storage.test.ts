@@ -76,6 +76,28 @@ describe("여정 미디어", () => {
   });
 });
 
+describe("프로필 사진", () => {
+  const profile = (uid: string) => `users/${uid}/profile_1.jpg`;
+
+  it("본인은 이미지를 올리고, 로그인한 사람은 볼 수 있다", async () => {
+    await assertSucceeds(uploadBytes(ref(storageAs(BOB), profile(BOB)), bytes(1000), image));
+    await assertSucceeds(getBytes(ref(storageAs(CAROL), profile(BOB))));
+  });
+
+  it("다른 사람 폴더·이미지가 아닌 파일·5MB 이상은 거부", async () => {
+    await assertFails(uploadBytes(ref(storageAs(CAROL), profile(BOB)), bytes(1000), image));
+    await assertFails(uploadBytes(ref(storageAs(BOB), `users/${BOB}/a.txt`), bytes(10), { contentType: "text/plain" }));
+    await assertFails(uploadBytes(ref(storageAs(BOB), profile(BOB)), bytes(5 * MB), image));
+  });
+
+  it("로그인하지 않으면 볼 수 없다", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), profile(ALICE)), bytes(100), image);
+    });
+    await assertFails(getBytes(ref(testEnv.unauthenticatedContext().storage(), profile(ALICE))));
+  });
+});
+
 describe("공개 사본", () => {
   it("누구나 읽고, 아무도 쓰지 못한다", async () => {
     await assertSucceeds(getBytes(ref(testEnv.unauthenticatedContext().storage(), "public/p1.jpg")));

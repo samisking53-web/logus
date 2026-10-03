@@ -279,6 +279,32 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
     await assertFails(deleteDoc(doc(db, "users", ALICE, "coinLedger", "oldLog")));
   });
 
+  it("약관 동의 기록: 본인만 필수 항목을 모두 동의한 기록을 한 번 만든다", async () => {
+    const ok = { ageOver14: true, terms: true, location: true, notifyNewLogs: false, agreedAt: serverTimestamp() };
+    const ref = (uid: string, version = "2026-10-03") => doc(dbAs(uid), "users", uid, "agreements", version);
+    await assertSucceeds(setDoc(ref(CAROL), ok));
+    // 다시 쓰거나(수정) 지울 수 없다
+    await assertFails(setDoc(ref(CAROL), { ...ok, notifyNewLogs: true }));
+    await assertFails(deleteDoc(ref(CAROL)));
+    // 본인만 읽는다
+    await assertSucceeds(getDoc(ref(CAROL)));
+    await assertFails(getDoc(doc(dbAs(BOB), "users", CAROL, "agreements", "2026-10-03")));
+    // 다른 사람 이름으로 만들 수 없다
+    await assertFails(setDoc(doc(dbAs(BOB), "users", CAROL, "agreements", "2026-10-04"), ok));
+  });
+
+  it("약관 동의 기록: 필수 항목이 빠지거나 형식이 틀리면 거부", async () => {
+    const ok = { ageOver14: true, terms: true, location: true, notifyNewLogs: true, agreedAt: serverTimestamp() };
+    const ref = (version: string) => doc(dbAs(BOB), "users", BOB, "agreements", version);
+    await assertFails(setDoc(ref("2026-10-01"), { ...ok, location: false }));
+    await assertFails(setDoc(ref("2026-10-02"), { ...ok, ageOver14: false }));
+    await assertFails(setDoc(ref("2026-10-03"), { ...ok, terms: "yes" }));
+    await assertFails(setDoc(ref("2026-10-04"), { ...ok, extra: 1 }));
+    await assertFails(setDoc(ref("2026-10-05"), { ...ok, agreedAt: Timestamp.fromDate(new Date("2020-01-01")) }));
+    await assertFails(setDoc(ref("v1"), ok)); // 문서 ID는 YYYY-MM-DD 버전
+    await assertSucceeds(setDoc(ref("2026-10-06"), { ...ok, notifyNewLogs: false }));
+  });
+
   it("코인 내역은 본인만 읽는다", async () => {
     await assertSucceeds(getDoc(doc(dbAs(ALICE), "users", ALICE, "coinLedger", "oldLog")));
     await assertFails(getDoc(doc(dbAs(BOB), "users", ALICE, "coinLedger", "oldLog")));

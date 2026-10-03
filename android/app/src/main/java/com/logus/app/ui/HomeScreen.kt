@@ -67,7 +67,7 @@ fun HomeScreen(profile: Profile, onSignOut: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(photoUrl = profile.photoUrl, size = 88.dp)
+                Avatar(photo = profile.photoUrl, size = 88.dp)
                 Spacer(Modifier.width(20.dp))
                 Column {
                     Text(

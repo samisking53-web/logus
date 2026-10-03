@@ -13,6 +13,7 @@ coroutinesPlayServices = "1.9.0"
 credentials = "1.3.0"
 googleId = "1.1.1"
 coil = "3.0.4"
+exifinterface = "1.3.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -24,10 +25,13 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# 뒤로 가기·› ·+ 같은 기본 아이콘(버전은 compose-bom 이 맞춘다)
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
@@ -37,6 +41,9 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 # 프로필 사진(인터넷 주소)을 화면에 띄우는 라이브러리
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# 안드로이드 8(API 26·27)에서 사진 방향(EXIF)을 읽어 옆으로 눕지 않게 한다
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -72,6 +72,7 @@
 
 ## 데이터 모델 (Firestore 초안. 바꾸면 이 파일도 함께 고친다)
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
+- `users/{uid}/agreements/{termsVersion}`: ageOver14·terms·location(필수, true), notifyNewLogs, agreedAt. 문서 ID는 약관 버전 `YYYY-MM-DD`(`auth/Agreements.kt`의 `TERMS_VERSION`). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
 - `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
 - `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), joinedAt
 - `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
@@ -92,7 +93,7 @@
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`는 클라이언트가 쓰지 못한다
 - 비로그인 읽기는 `invites`·`sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
 - 초대 코드와 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
-- Storage: `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
+- Storage: 프로필 사진 `users/{uid}/{파일}`은 로그인한 사람이 읽고 본인만 올린다(이미지 5MB 미만). `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
 
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
@@ -106,7 +107,8 @@
 ## 인증
 - 로그인 수단: 구글 계정만 쓴다(카카오는 쓰지 않기로 함). 콘솔 설정 순서는 `docs/login-setup.txt`
 - 로그인: Credential Manager(`GetSignInWithGoogleOption`)로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 Firebase Auth에 넘긴다. `R.string.default_web_client_id`(구글 로그인을 켜면 자동으로 생기는 OAuth 클라이언트, 웹 앱 등록과 무관)가 필요하다. Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
-- 회원가입: 로그인 후 `users/{uid}`가 없으면 회원가입 화면(P01)에서 닉네임(1~20자)과 사진(구글 사진 또는 기본)을 정해 만든다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·NeedsProfile·Ready·Failed)
+- 회원가입 흐름: 첫 화면(`ui/WelcomeScreen.kt`, Google 계정으로 계속하기) → 로그인 후 `users/{uid}`가 없으면 약관 동의(1/2 단계) → P01 프로필 설정(2/2 단계, 닉네임 1~20자) ↔ P02 프로필 사진(앨범·구글 사진·기본) → 홈. 가입 완료 때 `users/{uid}`와 `users/{uid}/agreements/{약관 버전}`을 한 배치로 저장하고, 앨범 사진은 줄여서 Storage에 올린다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·Signup(step)·Ready·Failed)
+- 약관 문구는 `legal/LegalDocs.kt`(캡스톤용 예시, 출시 전 법률 검토 필요). 문구를 바꾸면 `TERMS_VERSION`도 바꾼다
 - 초대 링크(`invites/{inviteCode}`)는 로그인 전에도 요약을 보여주고, 로그인·가입 후 `joinJourney`로 참여를 끝낸다(안드로이드 앱 링크 방식은 그 기능을 만들 때 정한다)
 
 ## 데이터 원칙

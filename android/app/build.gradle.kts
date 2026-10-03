@@ -48,12 +48,14 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Firebase: 버전은 BoM 하나로 맞춘다
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage) // 프로필 사진 올리기
     implementation(libs.kotlinx.coroutines.play.services) // Firebase Task 를 await() 로 기다리기
 
     // 구글 로그인: 안드로이드 표준 로그인 창(Credential Manager)
@@ -64,4 +66,5 @@ dependencies {
     // 구글 프로필 사진 같은 인터넷 이미지 표시
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.androidx.exifinterface)
 }

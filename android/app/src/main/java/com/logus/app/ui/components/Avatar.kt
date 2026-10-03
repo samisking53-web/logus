@@ -25,11 +25,12 @@ import coil3.compose.AsyncImage
 
 /**
  * 동그란 프로필 사진. 사진이 없거나 불러오지 못하면 기본 프로필 그림을 그린다.
+ * photo: 사진 주소(String, 예: 구글·Storage 주소) 또는 폰 앨범 사진(Uri). null 이면 기본 그림.
  * (웹 components/home/Avatar.tsx 와 같은 그림·색)
  */
 @Composable
-fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier) {
-    var failed by remember(photoUrl) { mutableStateOf(false) }
+fun Avatar(photo: Any?, size: Dp, modifier: Modifier = Modifier) {
+    var failed by remember(photo) { mutableStateOf(false) }
 
     Box(
         modifier
@@ -38,9 +39,9 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.surface)
             .border(4.dp, MaterialTheme.colorScheme.background, CircleShape),
     ) {
-        if (photoUrl != null && !failed) {
+        if (photo != null && !failed) {
             AsyncImage(
-                model = photoUrl,
+                model = photo,
                 contentDescription = null, // 장식용(이름이 옆에 글자로 있음)
                 contentScale = ContentScale.Crop,
                 onError = { failed = true },
