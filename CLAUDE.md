@@ -21,6 +21,7 @@
 - 추억 영상: Remotion Player로 앱 안에서 재생. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 Cloud Functions에서만 호출한다
 - PWA(manifest)
+- 안드로이드 네이티브 앱: `android/`(Kotlin + Jetpack Compose, Firebase Android SDK, 패키지 `com.logus.app`). 웹과 같은 Firebase 프로젝트를 쓴다. 빌드는 Android Studio에서 한다
 - 새 라이브러리를 추가할 때는 계획에 이유를 적는다
 
 ## 명령어
@@ -34,6 +35,7 @@
 - 화면은 `app/`, 공통 UI는 `components/`, Firebase 초기화는 `lib/firebase/`(initializeApp은 한 곳에서만)
 - 서버 코드는 `functions/src/`에 기능별 파일로 나누고 `index.ts`에서 export 한다
 - `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`는 저장소 루트에 둔다
+- 안드로이드 코드는 `android/`에 둔다. `android/app/google-services.json`과 서명 키(`*.jks`)는 커밋하지 않는다
 - 화면 파일 맨 위에 스토리보드 번호를 주석으로 적는다 (예: `// S02 새 여정 만들기`)
 - 프론트 환경변수: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`. 이 값들은 공개돼도 되고, 권한은 보안 규칙으로 지킨다
 - 비밀 값(LLM API 키 등)은 `firebase functions:secrets:set`으로 저장하고 `defineSecret`으로 읽는다. 코드·커밋·`.env` 파일에 넣지 않는다
@@ -52,6 +54,8 @@
   - 시맨틱: success `#17795A`, warning `#A8620A`, error `#C0392B`
   - 다크 모드(폰 설정을 따름): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
+  - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
+  - 예외: 카카오·구글 로그인 버튼은 각 회사 디자인 가이드 색(카카오 `#FEE500`+검정 85% 글자, 구글 흰 배경+`#747775` 테두리)을 쓴다
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
@@ -100,6 +104,7 @@
 ## 인증
 - 로그인 수단: 카카오(OpenID Connect, provider ID `oidc.kakao`, issuer `https://kauth.kakao.com`, 코드 흐름)가 기본, 구글이 보조
 - 모바일은 `signInWithRedirect`를 쓴다. 앱이 Firebase Hosting이 아닌 Vercel에 있으므로, Next.js rewrites로 `/__/auth/:path*`를 `https://<프로젝트ID>.firebaseapp.com/__/auth/:path*`에 프록시하고 `authDomain`을 앱 도메인으로 둔다 (Firebase 문서 "redirect best practices"의 Option 3)
+- 안드로이드: 카카오는 카카오 SDK 대신 Firebase `OAuthProvider("oidc.kakao")`의 `startActivityForSignInWithProvider`로 웹과 같은 계정을 쓴다(카카오에 `https://logus-80f21.firebaseapp.com/__/auth/handler` 등록). 구글은 Credential Manager로 받은 ID 토큰을 `GoogleAuthProvider`로 넘긴다. 두 방식 모두 Firebase 콘솔에 SHA-1 등록이 필요하다
 - 초대 링크 `/invite/[code]`는 로그인 전에도 `invites` 요약을 보여주고, 로그인 후 같은 주소로 돌아와 `joinJourney`로 참여를 끝낸다
 
 ## 데이터 원칙

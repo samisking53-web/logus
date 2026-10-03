@@ -96,6 +96,22 @@ Firebase 프로젝트 ID: logus-80f21
 4) 저장한다.
 
 
+7. 안드로이드 앱(android/ 폴더)을 쓸 때 추가 설정
+----------------------------------------------
+안드로이드 앱은 웹과 같은 Firebase 프로젝트·같은 카카오/구글 설정을 쓴다. 아래만 더 한다.
+1) Firebase 콘솔 → 프로젝트 설정 → 일반 → 앱 추가 → Android
+   - 패키지 이름: com.logus.app
+2) SHA-1 지문 등록(팀원 각자): Android Studio에서 signingReport 실행 → debug 의 SHA1 값을
+   Firebase 콘솔 → 내 앱(Android) → 디지털 지문 추가. (자세한 방법은 android/README.md)
+3) google-services.json 을 내려받아 android/app/ 에 넣는다.
+   구글 로그인을 켜거나 SHA-1을 추가했다면 다시 내려받는다. 이 파일은 커밋하지 않는다.
+4) 카카오: 안드로이드 앱은 Firebase 기본 주소로 카카오 로그인 결과를 받는다. Kakao Developers에 아래를 추가한다.
+     Redirect URI   : https://logus-80f21.firebaseapp.com/__/auth/handler
+     Web 사이트 도메인: https://logus-80f21.firebaseapp.com
+   (카카오 SDK·네이티브 앱 키는 쓰지 않는다. 이유는 android/README.md "알아 둘 것")
+5) 구글: 따로 할 것 없음. 3단계에서 켠 구글 로그인과 SHA-1, 최신 google-services.json 이면 된다.
+
+
 6. 끝나면 Claude에게 알려 줄 것
 ----------------------------------------------
 - 0단계에서 정한 고정 주소(실서비스, staging)
