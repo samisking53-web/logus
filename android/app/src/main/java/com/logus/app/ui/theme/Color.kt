@@ -2,7 +2,7 @@ package com.logus.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 팔레트: CLAUDE.md "UI 규칙"과 웹의 app/globals.css 와 같은 값이다. 새 색은 팔레트에서만 고른다.
+// 팔레트: CLAUDE.md "UI 규칙"과 같은 값이다. 새 색은 팔레트에서만 고른다.
 
 // 라이트
 val Primary = Color(0xFF5B3DD6) // 채움 전용(버튼·활성 탭). 위 글자는 흰색

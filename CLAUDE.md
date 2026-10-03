@@ -4,7 +4,7 @@
 
 여정(여행·행사) 단위로 친구·연인·가족이 사진·영상·글을 함께 기록하고, 추억 지도와 DAY RECAP 영상으로 다시 보는 **안드로이드 앱**(`android/`, Kotlin). 대학 캡스톤 프로젝트이고 팀원 3명 모두 개발 초보다. 백엔드는 Firebase다.
 
-> 웹 앱(Next.js, 저장소 루트의 `app/`·`components/`·`lib/` 등) 개발은 **중지**했다. 코드는 참고용으로 남겨 두고 새 기능을 넣거나 고치지 않는다. 새 화면·기능은 모두 `android/`에 만든다.
+> 처음에 만들던 웹 앱(Next.js)은 그만두고 코드도 지웠다. 화면·기능은 모두 `android/`에 만든다. 저장소 루트에는 Firebase 백엔드(보안 규칙·서버 함수·규칙 테스트)만 있다.
 
 ## 작업 방식
 - 한 세션에서는 화면이나 기능 하나만 다룬다. 요청 범위 밖의 파일은 고치지 말고 제안만 한다.
@@ -17,20 +17,18 @@
 
 ## 기술 스택 (임의로 바꾸지 않는다)
 - 앱: 안드로이드 네이티브(`android/`, Kotlin + Jetpack Compose, Firebase Android SDK·BoM, 패키지 `com.logus.app`, minSdk 26). 빌드는 Android Studio에서 한다
-- (중지) 웹: Next.js App Router + TypeScript + Tailwind CSS, Vercel. 새 작업을 하지 않는다
 - 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript)
 - 지도: MapLibre(안드로이드는 MapLibre Native Android) + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
-- 추억 영상: 앱 안에서 재생. 안드로이드에서 쓸 방식(웹의 Remotion 대신)은 그 기능을 만들 때 정한다. mp4 렌더링은 나중에
+- 추억 영상: 앱 안에서 재생. 안드로이드에서 쓸 방식은 그 기능을 만들 때 정한다. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 Cloud Functions에서만 호출한다
 - Firebase에는 안드로이드 앱만 등록한다(웹 앱은 등록하지 않음)
 - 새 라이브러리를 추가할 때는 계획에 이유를 적는다
 
 ## 명령어
 - `cd android && ./gradlew assembleDebug` 안드로이드 빌드(`android/app/google-services.json` 필요) / Android Studio ▶ Run 으로 폰에 설치
-- (중지된 웹) `npm run dev` / `npm run build` / `npm run lint`
 - `npm --prefix functions run build` 함수 빌드
 - `firebase emulators:start` 로컬 에뮬레이터(Auth·Firestore·Functions·Storage)
-- `npm run test:rules` 에뮬레이터를 띄워 `tests/rules/`의 보안 규칙·함수 테스트를 실행한다(처음 한 번 `npm --prefix functions install` 필요)
+- `npm run test:rules` 에뮬레이터를 띄워 `tests/rules/`의 보안 규칙·함수 테스트를 실행한다(처음 한 번 저장소 루트에서 `npm install`, `npm --prefix functions install` 필요)
 - `firebase deploy`는 사람이 승인한 뒤 로컬 세션에서만 실행하고, 대상은 `--only`로 지정한다. 클라우드 세션에서는 배포하지 않는다
 
 ## 폴더·설정 규칙
