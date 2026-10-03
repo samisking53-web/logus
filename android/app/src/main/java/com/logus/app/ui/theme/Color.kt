@@ -26,6 +26,7 @@ val BackgroundDark = Color(0xFF141220)
 val AmberTextDark = Color(0xFFE0930F)
 
 val OnPrimary = Color(0xFFFFFFFF)
+val PhotoFrame = Color(0xFFFFFFFF) // 첫 화면 소개 사진의 흰 테두리(라이트·다크 같음)
 
 // 구글 로그인 버튼은 구글 디자인 가이드에 정해진 색을 그대로 써야 해서 팔레트의 예외로 둔다.
 val GoogleButton = Color(0xFFFFFFFF)
