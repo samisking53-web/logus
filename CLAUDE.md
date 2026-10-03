@@ -55,6 +55,7 @@
   - 다크 모드(폰 설정을 따름, `isSystemInDarkTheme()`): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
   - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
+  - 사진 테두리: `#FFFFFF`(첫 화면 소개 사진 카드의 흰 테두리, 라이트·다크 같음. Color.kt의 `PhotoFrame`). 글자색으로는 쓰지 않는다
   - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 
 ## 화면 번호 (스토리보드 v3)

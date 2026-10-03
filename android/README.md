@@ -13,6 +13,7 @@ LOG US는 **안드로이드 앱으로만** 만든다(웹 앱 개발은 중지).
 android/
 ├─ app/build.gradle.kts        앱 설정(패키지 이름 com.logus.app, 라이브러리)
 ├─ gradle/libs.versions.toml   라이브러리 버전 모음
+├─ app/src/main/res/drawable-nodpi/intro_*.webp  첫 화면 소개 사진
 └─ app/src/main/java/com/logus/app/
    ├─ MainActivity.kt           앱 시작 지점. 상태에 따라 로그인·회원가입·홈 화면을 고른다
    ├─ auth/AuthRepository.kt    Firebase와 이야기하는 곳(구글 로그인, users/{uid} 읽기·만들기)
@@ -21,7 +22,7 @@ android/
    ├─ auth/Agreements.kt        약관 동의 항목과 약관 버전(TERMS_VERSION)
    ├─ auth/ProfilePhoto.kt      앨범 사진을 줄여서 JPEG로 바꾸기
    ├─ legal/LegalDocs.kt        약관·개인정보 처리방침 문구(캡스톤용 예시)
-   ├─ ui/WelcomeScreen.kt       첫 화면(Google 계정으로 계속하기)
+   ├─ ui/WelcomeScreen.kt       첫 화면(겹친 소개 사진 3장 + Google 계정으로 계속하기)
    ├─ ui/signup/TermsScreen.kt  약관 동의(1/2 단계), LegalDocScreen.kt 약관 전문
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
