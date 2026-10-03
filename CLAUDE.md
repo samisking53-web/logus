@@ -121,6 +121,7 @@
 - Storage 기본 버킷은 무료 한도가 적용되는 US 리전에 있다. 미디어는 줄여서 올린다
 
 ## 알려진 함정
+- 빌드는 Java 21(Gradle JDK)로 한다. 최신 Android Studio 기본 Java 25로는 Gradle 8.11·Kotlin 2.1이 버전을 읽지 못해 `What went wrong: 25.0.3`처럼 실패한다. Java 25로 올리려면 Gradle·AGP·Kotlin을 함께 올려야 한다
 - 구글 로그인은 SHA-1이 등록된 컴퓨터에서 빌드한 앱에서만 된다. 팀원이 바뀌면 그 컴퓨터의 SHA-1을 추가하고 `google-services.json`을 다시 받는다
 - 구글 로그인은 Google Play 서비스가 있는 기기·에뮬레이터에서만 된다
 - 플레이스토어 배포 시 Play 앱 서명 키의 SHA-1도 Firebase에 추가해야 한다

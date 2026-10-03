@@ -26,6 +26,11 @@ android/
 ```
 
 ## 처음 실행하는 순서
+0. **Gradle용 Java를 21로 맞춘다(중요).** 최신 Android Studio에는 Java 25가 들어 있는데, 이 프로젝트의 빌드 도구(Gradle 8.11·Kotlin 2.1)는 Java 21까지만 지원한다.
+   Java 25로 빌드하면 `What went wrong: 25.0.3`처럼 버전 숫자만 나오고 실패한다.
+   - Android Studio: Settings(맥은 Android Studio → Settings) → Build, Execution, Deployment → Build Tools → Gradle
+     → **Gradle JDK** → Download JDK… → Version **21**, Vendor 아무거나(예: JetBrains Runtime 또는 Eclipse Temurin) → Download → 선택 → OK
+   - 터미널에서 `./gradlew`를 쓸 때(맥): `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` 를 먼저 실행한다
 `docs/login-setup.txt`를 처음부터 따라 한다. 요약은 다음과 같다.
 1. Firebase에 **안드로이드 앱** 등록(패키지 `com.logus.app`). 웹 앱은 등록하지 않는다
 2. 팀원마다 SHA-1 지문 등록

@@ -116,6 +116,13 @@ SHA-1 은 "이 컴퓨터에서 만든 앱이 진짜 우리 앱"이라는 표시�
 
 자주 막히는 곳
 ----------------------------------------------
+- "Unable to locate a Java Runtime" 또는 빌드 실패 메시지가 "What went wrong: 25.0.3" 처럼 숫자만 나옴
+  → Java 문제다. 이 프로젝트는 Java 21 로 빌드해야 한다(최신 Android Studio 기본값은 Java 25).
+     Android Studio → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK
+     → Download JDK… → Version 21 → Download → 선택 → OK.
+     터미널(맥)에서는 먼저:  export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+- SHA-1 만 빨리 구하고 싶을 때(Gradle 없이, Java 버전 상관없음):
+     keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
 - 빌드 오류 "File google-services.json is missing"
   → 4단계. 파일이 android/app/ 바로 아래에 있는지 확인(android/ 나 app/src/ 가 아님).
 - 빌드 오류 "No matching client found for package name 'com.logus.app'"
