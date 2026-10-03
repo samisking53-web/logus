@@ -1,6 +1,8 @@
 package com.logus.app.auth
 
 import android.app.Activity
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
@@ -10,24 +12,40 @@ import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.logus.app.legal.LegalDoc
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** 회원가입 안에서 지금 보여 줄 화면 */
+enum class SignupStep {
+    TERMS, // 1 / 2 단계: 약관 동의
+    LEGAL_DOC, // 약관 전문 보기(약관 동의 화면에서 › 를 눌렀을 때)
+    PROFILE, // 2 / 2 단계: P01 프로필 설정(사진·닉네임)
+    PHOTO, // P02 프로필 사진 고르기(P01 의 사진 원을 눌렀을 때)
+}
 
 /** 앱이 지금 보여 줄 화면 상태 */
 sealed interface AuthUiState {
     /** 앱을 켜고 로그인·가입 여부를 확인하는 중 */
     data object Checking : AuthUiState
 
-    /** 로그인 화면 (busy = 로그인 진행 중, error = 보여 줄 오류 문구) */
+    /** 첫 화면(구글 계정으로 계속하기). busy = 로그인 진행 중, error = 보여 줄 오류 문구 */
     data class SignedOut(val busy: Boolean = false, val error: String? = null) : AuthUiState
 
-    /** 구글 로그인은 했지만 회원가입(프로필) 전 → 회원가입 화면 */
-    data class NeedsProfile(
+    /** 구글 로그인은 했지만 가입 전 → 약관 동의 → 프로필 설정(P01·P02) */
+    data class Signup(
         val email: String?,
-        val suggestedNickname: String,
         val googlePhotoUrl: String?,
+        val step: SignupStep = SignupStep.TERMS,
+        val openedDoc: LegalDoc? = null,
+        val agreements: Agreements = Agreements(),
+        val nickname: String,
+        /** P01 에 보이는 확정된 사진 */
+        val photo: PhotoChoice,
+        /** P02 에서 고르는 중인 사진("이 사진 사용"을 누르면 photo 가 된다) */
+        val photoDraft: PhotoChoice = photo,
         val saving: Boolean = false,
         val error: String? = null,
     ) : AuthUiState
@@ -41,7 +59,7 @@ sealed interface AuthUiState {
 
 /**
  * 로그인·회원가입 흐름을 관리한다. 화면을 돌려도 상태가 유지된다.
- * 흐름: 앱 시작 → (로그인 기록 있음?) → 프로필 있음? → 홈 / 회원가입 / 로그인
+ * 흐름: 앱 시작 → (로그인 기록 있음?) → 프로필 있음? → 홈 / 약관 동의 → P01(↔P02) → 홈 / 첫 화면
  */
 class AuthViewModel(
     private val repository: AuthRepository = AuthRepository(),
@@ -55,6 +73,8 @@ class AuthViewModel(
         val user = repository.currentUser
         if (user == null) _state.value = AuthUiState.SignedOut() else checkProfile(user)
     }
+
+    // ---------- 첫 화면 ----------
 
     fun signInWithGoogle(activity: Activity) {
         val current = _state.value
@@ -73,28 +93,83 @@ class AuthViewModel(
         }
     }
 
-    /** 회원가입 화면의 "가입 완료" */
-    fun completeSignup(nickname: String, useGooglePhoto: Boolean) {
-        val current = _state.value as? AuthUiState.NeedsProfile ?: return
+    // ---------- 1 / 2 단계: 약관 동의 ----------
+
+    fun toggleAllAgreements() = updateSignup { it.copy(agreements = it.agreements.toggleAll()) }
+
+    fun toggleAgreement(item: AgreementItem) = updateSignup { it.copy(agreements = it.agreements.toggle(item)) }
+
+    fun openLegalDoc(doc: LegalDoc) = updateSignup { it.copy(step = SignupStep.LEGAL_DOC, openedDoc = doc) }
+
+    /** 필수 항목을 모두 동의했을 때만 다음(P01)으로 간다 */
+    fun agreeAndContinue() = updateSignup {
+        if (it.agreements.requiredDone) it.copy(step = SignupStep.PROFILE) else it
+    }
+
+    // ---------- 2 / 2 단계: P01 프로필 설정 · P02 사진 ----------
+
+    fun updateNickname(value: String) = updateSignup {
+        if (value.length <= 40) it.copy(nickname = value, error = null) else it
+    }
+
+    fun openPhotoPicker() = updateSignup { it.copy(step = SignupStep.PHOTO, photoDraft = it.photo) }
+
+    fun pickAlbumPhoto(uri: Uri) = updateSignup { it.copy(photoDraft = PhotoChoice.Album(uri)) }
+
+    fun pickGooglePhoto() = updateSignup { s ->
+        s.googlePhotoUrl?.let { s.copy(photoDraft = PhotoChoice.Google(it)) } ?: s
+    }
+
+    fun pickDefaultPhoto() = updateSignup { it.copy(photoDraft = PhotoChoice.Default) }
+
+    /** P02 "이 사진 사용" */
+    fun confirmPhoto() = updateSignup { it.copy(photo = it.photoDraft, step = SignupStep.PROFILE) }
+
+    /** P01 "가입 완료" */
+    fun completeSignup(context: Context) {
+        val current = _state.value as? AuthUiState.Signup ?: return
         if (current.saving) return
+        if (!current.agreements.requiredDone) { // 혹시라도 약관 동의 없이 오면 약관 화면으로 돌려보낸다
+            _state.value = current.copy(step = SignupStep.TERMS)
+            return
+        }
         val user = repository.currentUser ?: run {
             _state.value = AuthUiState.SignedOut()
             return
         }
-        when (val check = checkNickname(nickname)) {
+        when (val check = checkNickname(current.nickname)) {
             is NicknameCheck.Invalid -> _state.value = current.copy(error = check.message)
             is NicknameCheck.Ok -> {
                 _state.value = current.copy(saving = true, error = null)
+                val appContext = context.applicationContext
                 viewModelScope.launch {
                     _state.value = try {
-                        val photo = if (useGooglePhoto) current.googlePhotoUrl else null
-                        AuthUiState.Ready(repository.createProfile(user.uid, check.value, photo))
+                        AuthUiState.Ready(
+                            repository.createProfile(appContext, user.uid, check.value, current.photo, current.agreements)
+                        )
                     } catch (e: Exception) {
-                        Log.w(TAG, "회원가입 실패 (보안 규칙 배포·Firestore 생성 여부 확인)", e)
+                        Log.w(TAG, "회원가입 실패 (보안 규칙 배포·Firestore·Storage 설정 확인)", e)
                         current.copy(saving = false, error = "가입하지 못했어요. 잠시 후 다시 시도해 주세요.")
                     }
                 }
             }
+        }
+    }
+
+    // ---------- 뒤로 가기 · 로그아웃 ----------
+
+    /**
+     * 회원가입 화면의 뒤로 가기(화면 위 ‹ 와 폰의 뒤로 가기 버튼).
+     * 약관 전문 → 약관, P02 → P01, P01 → 약관, 약관 → 가입 취소(로그아웃하고 첫 화면).
+     */
+    fun back(activity: Activity) {
+        val current = _state.value as? AuthUiState.Signup ?: return
+        if (current.saving) return
+        when (current.step) {
+            SignupStep.LEGAL_DOC -> _state.value = current.copy(step = SignupStep.TERMS, openedDoc = null)
+            SignupStep.PHOTO -> _state.value = current.copy(step = SignupStep.PROFILE)
+            SignupStep.PROFILE -> _state.value = current.copy(step = SignupStep.TERMS, error = null)
+            SignupStep.TERMS -> signOut(activity)
         }
     }
 
@@ -105,8 +180,11 @@ class AuthViewModel(
         }
     }
 
-    /** 회원가입 화면의 "다른 구글 계정으로 하기", 오류 화면의 "다시 로그인" */
-    fun restart(activity: Activity) = signOut(activity)
+    private inline fun updateSignup(change: (AuthUiState.Signup) -> AuthUiState.Signup) {
+        val current = _state.value as? AuthUiState.Signup ?: return
+        if (current.saving) return
+        _state.value = change(current)
+    }
 
     private fun checkProfile(user: FirebaseUser) {
         _state.value = AuthUiState.Checking
@@ -116,10 +194,13 @@ class AuthViewModel(
                 if (profile != null) {
                     AuthUiState.Ready(profile)
                 } else {
-                    AuthUiState.NeedsProfile(
+                    // 처음 온 사람: 약관 동의부터. 구글 사진이 있으면 그 사진을 기본으로 보여 준다.
+                    val googlePhoto = safePhotoUrl(user.photoUrl?.toString())
+                    AuthUiState.Signup(
                         email = user.email,
-                        suggestedNickname = suggestNickname(user.displayName),
-                        googlePhotoUrl = safePhotoUrl(user.photoUrl?.toString()),
+                        googlePhotoUrl = googlePhoto,
+                        nickname = suggestNickname(user.displayName),
+                        photo = googlePhoto?.let { PhotoChoice.Google(it) } ?: PhotoChoice.Default,
                     )
                 }
             } catch (e: Exception) {

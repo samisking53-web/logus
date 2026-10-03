@@ -32,7 +32,7 @@ private val DarkColors = darkColorScheme(
     error = Error,
 )
 
-/** 폰이 다크 모드면 다크 팔레트를 쓴다(웹과 같은 규칙). */
+/** 폰이 다크 모드면 다크 팔레트를 쓴다. */
 @Composable
 fun LogUsTheme(content: @Composable () -> Unit) {
     MaterialTheme(

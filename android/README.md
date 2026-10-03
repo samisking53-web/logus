@@ -18,20 +18,30 @@ android/
    ├─ auth/AuthRepository.kt    Firebase와 이야기하는 곳(구글 로그인, users/{uid} 읽기·만들기)
    ├─ auth/AuthViewModel.kt     화면 상태(확인 중·로그인·회원가입·홈·오류) 관리
    ├─ auth/Nickname.kt          닉네임 검사(1~20자)
-   ├─ ui/LoginScreen.kt         로그인 화면
-   ├─ ui/SignupScreen.kt        회원가입 화면(P01)
+   ├─ auth/Agreements.kt        약관 동의 항목과 약관 버전(TERMS_VERSION)
+   ├─ auth/ProfilePhoto.kt      앨범 사진을 줄여서 JPEG로 바꾸기
+   ├─ legal/LegalDocs.kt        약관·개인정보 처리방침 문구(캡스톤용 예시)
+   ├─ ui/WelcomeScreen.kt       첫 화면(Google 계정으로 계속하기)
+   ├─ ui/signup/TermsScreen.kt  약관 동의(1/2 단계), LegalDocScreen.kt 약관 전문
+   ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
+   ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
    ├─ ui/HomeScreen.kt          홈(임시: 프로필 상자와 로그아웃)
    ├─ ui/components/Avatar.kt   동그란 프로필 사진
    └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
 ```
 
 ## 처음 실행하는 순서
+0. **Gradle용 Java를 21로 맞춘다(중요).** 최신 Android Studio에는 Java 25가 들어 있는데, 이 프로젝트의 빌드 도구(Gradle 8.11·Kotlin 2.1)는 Java 21까지만 지원한다.
+   Java 25로 빌드하면 `What went wrong: 25.0.3`처럼 버전 숫자만 나오고 실패한다.
+   - Android Studio: Settings(맥은 Android Studio → Settings) → Build, Execution, Deployment → Build Tools → Gradle
+     → **Gradle JDK** → Download JDK… → Version **21**, Vendor 아무거나(예: JetBrains Runtime 또는 Eclipse Temurin) → Download → 선택 → OK
+   - 터미널에서 `./gradlew`를 쓸 때(맥): `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` 를 먼저 실행한다
 `docs/login-setup.txt`를 처음부터 따라 한다. 요약은 다음과 같다.
 1. Firebase에 **안드로이드 앱** 등록(패키지 `com.logus.app`). 웹 앱은 등록하지 않는다
 2. 팀원마다 SHA-1 지문 등록
 3. Authentication에서 구글 로그인 켜기
 4. `google-services.json`을 받아 `android/app/`에 넣기(커밋하지 않음)
-5. Firestore 만들기(서울) + 보안 규칙 배포
+5. Firestore 만들기(서울) + Storage 시작하기 + 보안 규칙 배포(`firebase deploy --only firestore:rules,storage`)
 6. 폰을 USB로 연결하고 ▶ Run
 
 ## 확인할 것

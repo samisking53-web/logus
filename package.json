@@ -2,28 +2,14 @@
   "name": "logus",
   "version": "0.1.0",
   "private": true,
+  "description": "LOG US 백엔드 도구: Firebase 보안 규칙·서버 함수 테스트 (앱은 android/)",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-logus \"vitest run\""
-  },
-  "dependencies": {
-    "firebase": "^12.19.0",
-    "next": "16.3.7",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.4",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.7",
-    "tailwindcss": "^4",
+    "firebase": "^12.19.0",
     "typescript": "^5",
     "vitest": "^5.0.3"
   }
