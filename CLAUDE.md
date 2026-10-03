@@ -2,47 +2,62 @@
 
 # LOG US (로그어스)
 
-여정(여행·행사) 단위로 친구·연인·가족이 사진·영상·글을 함께 기록하고, 추억 지도와 DAY RECAP 영상으로 다시 보는 모바일 웹앱(PWA). 대학 캡스톤 프로젝트이고 팀원 3명 모두 개발 초보다. 백엔드는 Firebase다.
+여정(여행·행사) 단위로 친구·연인·가족이 사진·영상·글을 함께 기록하고, 추억 지도와 DAY RECAP 영상으로 다시 보는 **안드로이드 앱**(`android/`, Kotlin). 대학 캡스톤 프로젝트이고 팀원 3명 모두 개발 초보다. 백엔드는 Firebase다.
+
+> 웹 앱(Next.js, 저장소 루트의 `app/`·`components/`·`lib/` 등) 개발은 **중지**했다. 코드는 참고용으로 남겨 두고 새 기능을 넣거나 고치지 않는다. 새 화면·기능은 모두 `android/`에 만든다.
 
 ## 작업 방식
 - 한 세션에서는 화면이나 기능 하나만 다룬다. 요청 범위 밖의 파일은 고치지 말고 제안만 한다.
 - 화면 작업 전에 `docs-storyboard-v4.pdf`에서 해당 화면 번호(아래 목록)를 먼저 확인한다.
 - 코드를 쓰기 전에 만들거나 바꿀 파일, 사용할 컬렉션·함수, 완료 기준을 계획으로 보여준다.
-- 끝내기 전에 `npm run lint`와 `npm run build`를 통과시킨다. 함수를 고쳤다면 `npm --prefix functions run build`도 통과시킨다.
+- 끝내기 전에 안드로이드 빌드(`cd android && ./gradlew assembleDebug`)를 통과시킨다. 함수를 고쳤다면 `npm --prefix functions run build`도 통과시킨다. 빌드할 수 없는 환경이면 그 사실을 PR과 답변에 분명히 적는다.
 - 보안 규칙을 바꾸면 에뮬레이터 규칙 테스트(`tests/rules/`)도 함께 고치고 통과시킨다.
-- 커밋 메시지와 PR 설명은 한국어로 쓴다. PR 설명에는 (1) 바뀐 점 (2) 폰에서 확인하는 순서 (3) 개발 초보도 이해할 수 있는 코드 설명 (4) 따로 배포해야 하는 것(함수·규칙·색인)을 넣는다.
+- 커밋 메시지와 PR 설명은 한국어로 쓴다. PR 설명에는 (1) 바뀐 점 (2) 폰(안드로이드)에서 확인하는 순서 (3) 개발 초보도 이해할 수 있는 코드 설명 (4) 따로 배포해야 하는 것(함수·규칙·색인)을 넣는다.
 - 요구사항이 모호하면 추측하지 말고 질문한다.
 
 ## 기술 스택 (임의로 바꾸지 않는다)
-- 프론트엔드: Next.js App Router + TypeScript + Tailwind CSS. Vercel에 배포
-- Firebase JS SDK는 모듈식 API만 쓴다(`firebase/compat` 금지)
+- 앱: 안드로이드 네이티브(`android/`, Kotlin + Jetpack Compose, Firebase Android SDK·BoM, 패키지 `com.logus.app`, minSdk 26). 빌드는 Android Studio에서 한다
+- (중지) 웹: Next.js App Router + TypeScript + Tailwind CSS, Vercel. 새 작업을 하지 않는다
 - 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript)
-- 지도: MapLibre GL JS + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
-- 추억 영상: Remotion Player로 앱 안에서 재생. mp4 렌더링은 나중에
+- 지도: MapLibre(안드로이드는 MapLibre Native Android) + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
+- 추억 영상: 앱 안에서 재생. 안드로이드에서 쓸 방식(웹의 Remotion 대신)은 그 기능을 만들 때 정한다. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 Cloud Functions에서만 호출한다
-- PWA(manifest)
+- Firebase에는 안드로이드 앱만 등록한다(웹 앱은 등록하지 않음)
 - 새 라이브러리를 추가할 때는 계획에 이유를 적는다
 
 ## 명령어
-- `npm run dev` 개발 서버 / `npm run build` 빌드 / `npm run lint` 린트
+- `cd android && ./gradlew assembleDebug` 안드로이드 빌드(`android/app/google-services.json` 필요) / Android Studio ▶ Run 으로 폰에 설치
+- (중지된 웹) `npm run dev` / `npm run build` / `npm run lint`
 - `npm --prefix functions run build` 함수 빌드
 - `firebase emulators:start` 로컬 에뮬레이터(Auth·Firestore·Functions·Storage)
+- `npm run test:rules` 에뮬레이터를 띄워 `tests/rules/`의 보안 규칙·함수 테스트를 실행한다(처음 한 번 `npm --prefix functions install` 필요)
 - `firebase deploy`는 사람이 승인한 뒤 로컬 세션에서만 실행하고, 대상은 `--only`로 지정한다. 클라우드 세션에서는 배포하지 않는다
 
 ## 폴더·설정 규칙
-- 화면은 `app/`, 공통 UI는 `components/`, Firebase 초기화는 `lib/firebase/`(initializeApp은 한 곳에서만)
+- 안드로이드: 화면은 `android/app/src/main/java/com/logus/app/ui/`, 공통 UI는 `ui/components/`, Firebase와 이야기하는 코드는 기능별 `*Repository.kt`(예: `auth/AuthRepository.kt`), 화면 상태는 `*ViewModel.kt`
+- Firebase 안드로이드는 `google-services.json`으로 자동 초기화된다. `FirebaseApp.initializeApp`을 따로 부르지 않는다
 - 서버 코드는 `functions/src/`에 기능별 파일로 나누고 `index.ts`에서 export 한다
 - `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`는 저장소 루트에 둔다
-- 화면 파일 맨 위에 스토리보드 번호를 주석으로 적는다 (예: `// S02 새 여정 만들기`)
-- 프론트 환경변수: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`. 이 값들은 공개돼도 되고, 권한은 보안 규칙으로 지킨다
+- `android/app/google-services.json`과 서명 키(`*.jks`)는 커밋하지 않는다
+- 화면 파일(Composable) 위에 스토리보드 번호를 주석으로 적는다 (예: `// S02 새 여정 만들기`)
 - 비밀 값(LLM API 키 등)은 `firebase functions:secrets:set`으로 저장하고 `defineSecret`으로 읽는다. 코드·커밋·`.env` 파일에 넣지 않는다
 - 서비스 계정 키(JSON)는 만들지도, 커밋하지도 않는다
 - 함수 공통 옵션: 리전 `asia-northeast3`(서울, Firestore와 같은 위치), `maxInstances: 10`. `minInstances`는 설정하지 않는다(상시 과금)
 
 ## UI 규칙
-- 모바일 우선, 기준 폭 390px. 하단 탭: 홈 / 탐색 / 마이로그
+- 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(아이콘)
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
+- 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
+  - 브랜드: primary `#5B3DD6`(버튼·핀·활성 탭 채움, 위 글자는 흰색), primary-strong `#4A2FB8`(눌림·강조 글자), surface `#EEEAFB`(카드), border `#D8CFF5`(테두리)
+  - 기록·보상(코인·하이라이트): amber `#E0930F`(채움, 위 글자는 본문색. 흰 글자 금지), amber-text `#8A5606`, amber-soft `#FDF0DC`
+  - 멤버 구분: `#5B3DD6` `#C63F33` `#0B7A6B` `#9C6408`. 색만으로 구분하지 않게 이름 첫 글자를 함께 넣는다
+  - 뉴트럴: text `#1A1725`, text-secondary `#5A5570`, text-weak `#6E6A85`(바탕 위에서만, 카드 위에서는 대비 부족), line `#E3E0EC`, background `#F7F5FB`
+  - 시맨틱: success `#17795A`, warning `#A8620A`, error `#C0392B`
+  - 다크 모드(폰 설정을 따름, `isSystemInDarkTheme()`): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
+  - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
+  - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
+  - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
@@ -57,16 +72,16 @@
 
 ## 데이터 모델 (Firestore 초안. 바꾸면 이 파일도 함께 고친다)
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
-- `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt
+- `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
 - `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), joinedAt
-- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt
+- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
 - `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName. 로그인 전 초대 화면용 요약만 담는다
 - `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, theme, mediaPath, placeName, location, createdAt)
 - `sharedRecaps/{slug}`: 공유를 누른 리캡의 공개 사본
-- `users/{uid}/coinLedger/{logId}`: reason, amount, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
+- `users/{uid}/coinLedger/{logId}`: reason, amount, journeyId, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
 
 ## 보안 규칙 (기본 거부)
 - 모든 경로는 거부에서 시작해 필요한 것만 허용한다
@@ -77,7 +92,7 @@
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`는 클라이언트가 쓰지 못한다
 - 비로그인 읽기는 `invites`·`sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
 - 초대 코드와 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
-- Storage: `journeys/{journeyId}/...`는 여정 구성원만 읽고 쓴다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
+- Storage: `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
 
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
@@ -89,15 +104,16 @@
 - `shareRecap`: sharedRecaps 사본과 공유 링크를 만든다
 
 ## 인증
-- 로그인 수단: 카카오(OpenID Connect, provider ID `oidc.kakao`, issuer `https://kauth.kakao.com`, 코드 흐름)가 기본, 구글이 보조
-- 모바일은 `signInWithRedirect`를 쓴다. 앱이 Firebase Hosting이 아닌 Vercel에 있으므로, Next.js rewrites로 `/__/auth/:path*`를 `https://<프로젝트ID>.firebaseapp.com/__/auth/:path*`에 프록시하고 `authDomain`을 앱 도메인으로 둔다 (Firebase 문서 "redirect best practices"의 Option 3)
-- 초대 링크 `/invite/[code]`는 로그인 전에도 `invites` 요약을 보여주고, 로그인 후 같은 주소로 돌아와 `joinJourney`로 참여를 끝낸다
+- 로그인 수단: 구글 계정만 쓴다(카카오는 쓰지 않기로 함). 콘솔 설정 순서는 `docs/login-setup.txt`
+- 로그인: Credential Manager(`GetSignInWithGoogleOption`)로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 Firebase Auth에 넘긴다. `R.string.default_web_client_id`(구글 로그인을 켜면 자동으로 생기는 OAuth 클라이언트, 웹 앱 등록과 무관)가 필요하다. Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
+- 회원가입: 로그인 후 `users/{uid}`가 없으면 회원가입 화면(P01)에서 닉네임(1~20자)과 사진(구글 사진 또는 기본)을 정해 만든다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·NeedsProfile·Ready·Failed)
+- 초대 링크(`invites/{inviteCode}`)는 로그인 전에도 요약을 보여주고, 로그인·가입 후 `joinJourney`로 참여를 끝낸다(안드로이드 앱 링크 방식은 그 기능을 만들 때 정한다)
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 Timestamp(UTC)로 저장하고 촬영지 시간대(capturedTz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
-- 사진은 업로드 전에 브라우저에서 줄이고 HEIC는 JPEG/WebP로 바꾼다. 영상은 15초 이하
+- 사진은 업로드 전에 앱에서 줄이고 JPEG/WebP로 올린다. 영상은 15초 이하
 
 ## 비용 관리 (Blaze 요금제)
 - 목록 화면은 `limit()`과 페이지 나누기를 쓴다. 한 화면에 실시간 리스너(onSnapshot)를 여러 개 붙이지 않는다
@@ -105,10 +121,9 @@
 - Storage 기본 버킷은 무료 한도가 적용되는 US 리전에 있다. 미디어는 줄여서 올린다
 
 ## 알려진 함정
-- 구글 로그인은 카카오톡·인스타그램 인앱 브라우저에서 막힌다. 인앱 브라우저를 감지하면 '브라우저로 열기' 안내를 보여준다
-- Vercel 미리보기 주소는 PR마다 바뀐다. 로그인은 Firebase 승인 도메인과 카카오 리다이렉트 URI에 등록해 둔 고정 주소(실서비스·staging)에서만 테스트한다
-- 위치·푸시는 HTTPS에서만 동작한다. 폰 테스트는 Vercel 주소로 한다
-- 아이폰 웹 푸시(FCM 포함)는 홈 화면에 추가한 PWA에서만 동작한다
+- 구글 로그인은 SHA-1이 등록된 컴퓨터에서 빌드한 앱에서만 된다. 팀원이 바뀌면 그 컴퓨터의 SHA-1을 추가하고 `google-services.json`을 다시 받는다
+- 구글 로그인은 Google Play 서비스가 있는 기기·에뮬레이터에서만 된다
+- 플레이스토어 배포 시 Play 앱 서명 키의 SHA-1도 Firebase에 추가해야 한다
 
 ## 지금 범위 밖 (요청이 있을 때만 만든다)
 - 촬영 알림(FCM·예약 함수), mp4 렌더링·저장, 월별·연도별 타임라인, '1년 전 오늘'

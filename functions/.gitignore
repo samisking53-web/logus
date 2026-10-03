@@ -1,0 +1,4 @@
+# 컴파일 결과
+/lib/
+node_modules/
+*.local

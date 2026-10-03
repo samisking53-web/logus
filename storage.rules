@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// ===============================================================
+// LOG US Storage 보안 규칙 (기본 거부)
+// ===============================================================
+// 경로
+//   journeys/{journeyId}/{uid}/{fileName}  여정 미디어. 구성원만 읽고, 본인 폴더에만 올린다
+//   public/...                              탐색용 공개 사본. 읽기만 공개, 쓰기는 서버만
+// 구성원 여부는 Firestore의 journeys/{journeyId}.memberIds로 확인한다.
+// 규칙을 바꾸면 tests/rules/storage.test.ts도 함께 고친다.
+// ===============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isMember(journeyId) {
+      return request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/journeys/$(journeyId)).data.memberIds;
+    }
+
+    // 이미지 10MB 미만, 영상 50MB 미만. image/*, video/*만 허용
+    function isValidMedia() {
+      return (request.resource.contentType.matches('image/.*')
+              && request.resource.size < 10 * 1024 * 1024)
+        || (request.resource.contentType.matches('video/.*')
+              && request.resource.size < 50 * 1024 * 1024);
+    }
+
+    match /journeys/{journeyId}/{allPaths=**} {
+      allow read: if isMember(journeyId);
+    }
+
+    match /journeys/{journeyId}/{uid}/{fileName} {
+      allow create, update: if isMember(journeyId)
+        && request.auth.uid == uid
+        && isValidMedia();
+      allow delete: if isMember(journeyId) && request.auth.uid == uid;
+    }
+
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

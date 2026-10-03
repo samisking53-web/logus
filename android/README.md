@@ -1,0 +1,48 @@
+# LOG US 안드로이드 앱 (Kotlin)
+
+LOG US는 **안드로이드 앱으로만** 만든다(웹 앱 개발은 중지).
+지금 있는 기능은 **구글 로그인 → 회원가입(닉네임·프로필 사진) → 홈(임시)** 이다. 화면은 Jetpack Compose로 그린다.
+
+백엔드는 Firebase다(프로젝트 `logus-80f21`).
+- Firebase Authentication: 구글 계정으로 회원 만들기·로그인
+- Cloud Firestore: 회원 정보 `users/{uid}`
+- 보안 규칙·서버 함수는 저장소 루트(`firestore.rules`, `functions/`)에 있고 이 앱과 함께 쓴다
+
+## 폴더 구조
+```
+android/
+├─ app/build.gradle.kts        앱 설정(패키지 이름 com.logus.app, 라이브러리)
+├─ gradle/libs.versions.toml   라이브러리 버전 모음
+└─ app/src/main/java/com/logus/app/
+   ├─ MainActivity.kt           앱 시작 지점. 상태에 따라 로그인·회원가입·홈 화면을 고른다
+   ├─ auth/AuthRepository.kt    Firebase와 이야기하는 곳(구글 로그인, users/{uid} 읽기·만들기)
+   ├─ auth/AuthViewModel.kt     화면 상태(확인 중·로그인·회원가입·홈·오류) 관리
+   ├─ auth/Nickname.kt          닉네임 검사(1~20자)
+   ├─ ui/LoginScreen.kt         로그인 화면
+   ├─ ui/SignupScreen.kt        회원가입 화면(P01)
+   ├─ ui/HomeScreen.kt          홈(임시: 프로필 상자와 로그아웃)
+   ├─ ui/components/Avatar.kt   동그란 프로필 사진
+   └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
+```
+
+## 처음 실행하는 순서
+`docs/login-setup.txt`를 처음부터 따라 한다. 요약은 다음과 같다.
+1. Firebase에 **안드로이드 앱** 등록(패키지 `com.logus.app`). 웹 앱은 등록하지 않는다
+2. 팀원마다 SHA-1 지문 등록
+3. Authentication에서 구글 로그인 켜기
+4. `google-services.json`을 받아 `android/app/`에 넣기(커밋하지 않음)
+5. Firestore 만들기(서울) + 보안 규칙 배포
+6. 폰을 USB로 연결하고 ▶ Run
+
+## 확인할 것
+- "Google로 시작하기" → 계정 선택 → 회원가입 화면 → "가입 완료" → 홈에 닉네임과 "보유 0 코인"
+- Firebase 콘솔 Authentication(사용자)·Firestore(`users/{uid}`)에 생겼는지
+- 로그아웃 후 다시 로그인하면 회원가입 없이 바로 홈
+
+## 알아 둘 것
+- 로그인은 구글 계정만 쓴다(카카오는 쓰지 않기로 함).
+- 콘솔에 "Web client (auto created…)"가 보이는데 웹 앱 등록이 아니다.
+  구글 로그인을 켜면 Firebase가 자동으로 만드는 서버 확인용 ID이고, 안드로이드 구글 로그인에 꼭 필요하다.
+- 구글 로그인 버튼 색(흰 배경·회색 테두리)은 구글 디자인 가이드를 따라야 해서 팔레트의 예외다.
+- 프로필 사진(인터넷 주소)은 Coil 라이브러리로 띄운다. 못 불러오면 기본 프로필 그림을 보여 준다.
+- 라이브러리 버전은 2024년 말 기준 안정 버전이다. Android Studio가 업데이트를 제안하면 올려도 된다.

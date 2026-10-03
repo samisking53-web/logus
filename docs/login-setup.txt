@@ -1,0 +1,128 @@
+LOG US 안드로이드 앱: 구글 로그인·회원가입 서버(Firebase) 연결 설정 순서
+==========================================================================
+
+이 앱은 안드로이드 앱(android/ 폴더, Kotlin)으로만 만든다. 웹 앱 개발은 중지했다.
+그래서 Firebase 에는 "안드로이드 앱"만 등록한다. 웹 앱(</>)은 등록하지 않는다.
+
+앱 코드는 이미 연결돼 있다. 아래는 사람이 Firebase 콘솔과 Android Studio 에서 직접 해야 하는 설정이다.
+(콘솔은 계정 권한이 필요해서 Claude 가 대신할 수 없다. 메뉴 이름은 콘솔 개편에 따라 조금 다를 수 있다.)
+
+Firebase 프로젝트 ID : logus-80f21
+안드로이드 패키지 이름 : com.logus.app   ← 플레이스토어에 올린 뒤에는 바꿀 수 없다. 바꾸려면 1단계 전에 말할 것
+
+
+[로그인·회원가입이 동작하는 방식]
+1) 앱의 "Google로 시작하기"를 누르면 폰에 있는 구글 계정을 고르는 창이 뜬다.
+2) 고른 계정의 확인증(ID 토큰)을 Firebase Authentication 에 보낸다.
+   Firebase 가 회원(uid)을 새로 만들거나, 이미 있으면 그 회원으로 로그인시킨다.
+3) Firestore 의 users/{uid} 문서가 없으면 처음 온 사람이다 → 회원가입 화면에서 닉네임을 정하고
+   "가입 완료"를 누르면 users/{uid}(닉네임·프로필 사진·가입 시각)가 만들어진다.
+   보안 규칙(firestore.rules)이 "본인 문서만, 정해진 필드만" 쓸 수 있게 막아 준다.
+4) 다음부터는 앱을 켜면 로그인이 유지돼 바로 홈으로 간다.
+
+[콘솔에 "웹 클라이언트"가 보이는 이유 — 웹 앱 등록과는 다르다]
+- 2단계에서 구글 로그인을 켜면 Firebase 가 Google Cloud 에 "Web client (auto created by Google Service)"라는
+  OAuth 클라이언트를 자동으로 만든다. 이름에 Web 이 있지만 웹 앱을 등록한 게 아니다.
+- 안드로이드 구글 로그인은 이 클라이언트 ID 로 "이 토큰은 우리 Firebase 프로젝트용"이라는 걸 확인한다.
+  google-services.json 에 들어 있고 앱 코드에서는 default_web_client_id 라는 이름으로 자동으로 쓰인다.
+- 사람이 따로 만들거나 고칠 필요는 없다. 지우면 로그인이 안 되니 그대로 둔다.
+
+
+0. 준비물
+----------------------------------------------
+- Android Studio (최신 안정 버전) 설치
+- 구글 계정이 로그인된 안드로이드 폰(USB 케이블) 또는 "Google Play" 표시가 있는 에뮬레이터
+  (Google Play 가 없는 에뮬레이터에서는 구글 로그인이 안 된다)
+- 저장소를 받은 뒤 Android Studio 에서 android/ 폴더를 연다(저장소 루트가 아니라 android/)
+
+
+1. Firebase 에 안드로이드 앱 등록 (팀에서 한 번)
+----------------------------------------------
+1) Firebase 콘솔(console.firebase.google.com) → logus-80f21 → 프로젝트 개요 옆 톱니바퀴 → 프로젝트 설정
+   → 일반 → 내 앱 → "앱 추가" → Android 아이콘
+2) Android 패키지 이름: com.logus.app
+   앱 닉네임: LOG US (선택)
+   디버그 서명 인증서 SHA-1: 2단계에서 구한 값(지금 모르면 비워 두고 나중에 추가해도 된다)
+3) "앱 등록" → google-services.json 다운로드 화면이 나오면 일단 다음으로 넘어간다(4단계에서 받는다)
+   → "Firebase SDK 추가" 안내는 이미 코드에 들어 있으니 건너뛴다.
+- 웹 앱(</>)이 이미 등록돼 있다면: 프로젝트 설정 → 내 앱 → 웹 앱 → "앱 삭제"로 지워도 된다(안 지워도 동작에는 상관없음).
+
+
+2. SHA-1 지문 등록 (팀원 각자, 자기 컴퓨터마다)
+----------------------------------------------
+SHA-1 은 "이 컴퓨터에서 만든 앱이 진짜 우리 앱"이라는 표시다. 없으면 구글 로그인이 실패한다.
+1) Android Studio 오른쪽 Gradle 탭 → LogUs → app → Tasks → android → signingReport 더블클릭
+   (또는 Android Studio 아래 Terminal 에서: ./gradlew signingReport   윈도우는 gradlew signingReport)
+   - google-services.json 이 아직 없어서 빌드 오류가 나면, 터미널에서 아래 명령으로 구한다
+     맥/리눅스:  keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+     윈도우:     keytool -list -v -keystore "%USERPROFILE%\.android\debug.keystore" -alias androiddebugkey -storepass android
+     (debug.keystore 는 Android Studio 로 아무 앱이나 한 번 실행하면 생긴다)
+2) 결과에서 Variant: debug 아래의 "SHA1: AB:CD:..." 값을 복사한다
+3) Firebase 콘솔 → 프로젝트 설정 → 내 앱 → LOG US (Android) → "디지털 지문 추가" → 붙여 넣고 저장
+4) 팀원 3명이 각자 자기 값을 추가한다(컴퓨터마다 다르다)
+- 나중에 플레이스토어에 올릴 때는 Play Console → 앱 무결성 → "앱 서명 키 인증서"의 SHA-1 도 추가한다.
+
+
+3. 구글 로그인 켜기
+----------------------------------------------
+1) Firebase 콘솔 → 빌드 → Authentication → (처음이면 "시작하기") → 로그인 방법 탭
+2) "새 제공업체 추가" → Google → 사용 설정 ON
+3) 프로젝트 지원 이메일을 고르고 저장
+- (선택) Google Cloud 콘솔 → API 및 서비스 → OAuth 동의 화면 → 앱 이름을 "LOG US"로 바꾸면
+  계정 선택 창에 프로젝트 ID 대신 앱 이름이 보인다.
+
+
+4. google-services.json 받아서 넣기
+----------------------------------------------
+1) Firebase 콘솔 → 프로젝트 설정 → 내 앱 → LOG US (Android) → "google-services.json" 다운로드
+   ※ 2단계(SHA-1)와 3단계(구글 로그인 켜기)를 마친 뒤에 받아야 한다. 그 전에 받았다면 다시 받는다.
+2) 파일을 android/app/ 폴더에 넣는다 (android/app/google-services.json)
+3) 이 파일은 .gitignore 에 있어서 커밋되지 않는다. 팀원 각자 콘솔에서 받는다.
+4) Android Studio 상단의 "Sync Now"(코끼리 아이콘)를 누른다.
+
+
+5. Firestore 만들고 보안 규칙 배포 (회원가입 저장에 필요, 팀에서 한 번)
+----------------------------------------------
+1) Firebase 콘솔 → 빌드 → Firestore Database → "데이터베이스 만들기"
+   - 위치: asia-northeast3 (서울)   ← 나중에 바꿀 수 없다
+   - 보안 규칙: "프로덕션 모드"로 시작
+2) 저장소의 보안 규칙을 배포한다. 배포 담당이 자기 컴퓨터(클라우드 세션 말고)의 저장소 루트에서 실행:
+     npm install -g firebase-tools      (처음 한 번)
+     firebase login
+     firebase use logus-80f21
+     firebase deploy --only firestore:rules,firestore:indexes
+   - 규칙을 배포하지 않으면 구글 로그인은 되지만 회원가입에서 "가입하지 못했어요"가 나온다.
+
+
+6. 실행해서 확인
+----------------------------------------------
+1) 폰: 설정 → 휴대전화 정보 → 소프트웨어 정보 → "빌드 번호"를 7번 눌러 개발자 옵션을 켠다
+   → 설정 → 개발자 옵션 → USB 디버깅 ON → USB 로 컴퓨터에 연결 → 폰에 뜬 허용 창에서 "허용"
+2) Android Studio 위쪽에서 폰을 고르고 ▶ Run
+3) "Google로 시작하기" → 계정 선택 → 회원가입 화면(닉네임에 구글 이름이 들어 있음) → "가입 완료"
+4) 홈에 닉네임과 "보유 0 코인"이 보이면 성공
+5) Firebase 콘솔에서 확인
+   - Authentication → 사용자: 고른 구글 계정이 있는지
+   - Firestore → users → (uid): nickname · photoURL · createdAt 이 있는지
+6) 홈의 "로그아웃" → 다시 로그인하면 회원가입 없이 바로 홈으로 가는지
+
+
+7. 끝나면 Claude 에게 알려 줄 것
+----------------------------------------------
+- 1~6단계를 마쳤는지, 6단계 결과
+- 빌드나 로그인에서 오류가 나면: 화면에 나온 문구, 또는 Android Studio 아래 "Build" 창·"Logcat" 창의 빨간 글자를 그대로 복사
+- 키 값이나 google-services.json 내용은 보내지 않아도 된다.
+
+
+자주 막히는 곳
+----------------------------------------------
+- 빌드 오류 "File google-services.json is missing"
+  → 4단계. 파일이 android/app/ 바로 아래에 있는지 확인(android/ 나 app/src/ 가 아님).
+- 빌드 오류 "No matching client found for package name 'com.logus.app'"
+  → 1단계에서 등록한 패키지 이름이 com.logus.app 과 정확히 같은지 확인하고 json 을 다시 받는다.
+- 계정을 골랐는데 "로그인하지 못했어요" / Logcat 에 "[28444] Developer console is not set up correctly"
+  → 2단계 SHA-1 을 이 컴퓨터 값으로 추가했는지, 그 뒤에 json 을 다시 받았는지 확인한다.
+- "이 폰에 로그인된 구글 계정이 없어요"
+  → 폰 설정 → 계정에서 구글 계정을 추가한다. 에뮬레이터는 Google Play 가 있는 이미지를 쓴다.
+- 로그인은 되는데 "가입하지 못했어요" 또는 "회원 정보를 읽을 권한이 없어요"
+  → 5단계(Firestore 만들기, 보안 규칙 배포)를 확인한다.
