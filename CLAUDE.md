@@ -46,7 +46,7 @@
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`)
-- S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →"로 `createJourney` 함수를 부른다. 도시 추천은 앱에 내장한 목록(`journey/Cities.kt`)만 쓰고, 목록에 없으면 입력한 글자 그대로 저장한다
+- S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →"로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정 시작일에는 폰 카메라 앱을 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. `journey/StartDayCamera.kt`). 앱 안 카메라(S04)를 만들면 그쪽으로 바꾼다
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
@@ -117,6 +117,7 @@
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
+- 도시 이름은 오픈스트리트맵(OSM) 데이터만 쓴다(안드로이드 기본 Geocoder는 구글 데이터라 쓰지 않는다). Nominatim 규칙: 1초에 1번 이하, User-Agent에 앱 이름, 글자마다 자동 검색 금지(버튼을 누를 때만), 화면에 "© OpenStreetMap" 출처 표시. 위치 좌표는 소수 둘째 자리로 줄여 보내고 저장하지 않는다
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 Timestamp(UTC)로 저장하고 촬영지 시간대(capturedTz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
 - 사진은 업로드 전에 앱에서 줄이고 JPEG/WebP로 올린다. 영상은 15초 이하

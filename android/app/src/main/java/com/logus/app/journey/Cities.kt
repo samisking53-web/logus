@@ -2,8 +2,9 @@ package com.logus.app.journey
 
 /**
  * 도시 추천용 목록 (앱에 내장)
- * 카카오·구글 장소 검색 결과는 저장할 수 없어서(CLAUDE.md "데이터 원칙") 국내외 주요 여행 도시를 직접 넣어 둔다.
- * 인터넷 없이도 한글·영문으로 바로 찾을 수 있다. 목록에 없는 도시는 입력한 글자 그대로 저장한다.
+ * 글자를 칠 때마다 인터넷 없이 바로 추천하려고 국내외 주요 여행 도시를 넣어 둔다(한글·영문 검색).
+ * 목록에 없으면 "지도에서 찾기"(CityRepository, 오픈스트리트맵)로 세계 도시를 찾는다.
+ * 그래도 없으면 입력한 글자 그대로 저장한다.
  * 도시를 더 넣고 싶으면 아래 목록에 한 줄씩 추가하면 된다: c("한글 이름", "국가", "English name")
  */
 data class City(
@@ -11,8 +12,10 @@ data class City(
     val name: String,
     /** 국가(한글) */
     val country: String,
-    /** 영문 이름(검색용) */
+    /** 영문 이름(검색용). 지도에서 찾은 도시는 빈칸 */
     val english: String,
+    /** 지도 데이터(OSM)에서 찾은 도시인지(화면에 출처를 표시한다) */
+    val fromMap: Boolean = false,
 )
 
 object Cities {

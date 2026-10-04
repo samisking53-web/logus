@@ -1,5 +1,6 @@
 package com.logus.app.journey
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+
+/** 현재 위치로 도시 찾기 진행 상태 */
+enum class LocationStatus {
+    IDLE, // 아직 시도 안 함
+    LOCATING, // 위치·도시를 찾는 중
+    FOUND, // 찾음(currentCity)
+    DENIED, // 위치 권한을 허용하지 않음
+    FAILED, // 위치를 못 잡았거나 인터넷 문제
+}
 
 /** 새 여정 만들기 안에서 지금 보이는 화면 */
 enum class NewJourneyStep {
@@ -33,7 +43,21 @@ data class NewJourneyUiState(
     val notifyOff: Boolean = false,
     val saving: Boolean = false,
     val error: String? = null,
+    /** 현재 위치의 도시(GPS + 지도 데이터) */
+    val currentCity: City? = null,
+    val locationStatus: LocationStatus = LocationStatus.IDLE,
+    /** 이번에 화면을 열고 위치 권한을 이미 물어봤는지(달력에 다녀와도 다시 묻지 않게) */
+    val locationAsked: Boolean = false,
+    /** 지도에서 찾은 글자와 결과 */
+    val mapQuery: String? = null,
+    val mapResults: List<City> = emptyList(),
+    val mapSearching: Boolean = false,
+    val mapError: String? = null,
 ) {
+    /** 지도 검색 결과가 지금 입력한 글자에 대한 것인지 */
+    val showMapResults: Boolean
+        get() = mapQuery != null && mapQuery == cityQuery.trim()
+
     /** 도시 추천 목록(이미 고른 도시와 입력이 같으면 다시 보여 주지 않는다) */
     val suggestions: List<City>
         get() = if (selectedCity != null && selectedCity.name == cityQuery.trim()) emptyList() else Cities.search(cityQuery)
@@ -57,6 +81,7 @@ data class NewJourneyUiState(
  */
 class NewJourneyViewModel(
     private val repository: JourneyRepository = JourneyRepository(),
+    private val cityRepository: CityRepository = CityRepository(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NewJourneyUiState())
@@ -83,6 +108,51 @@ class NewJourneyViewModel(
     fun selectCity(city: City) = update { it.copy(cityQuery = city.name, selectedCity = city, error = null) }
 
     fun clearCity() = update { it.copy(cityQuery = "", selectedCity = null) }
+
+    // ---------- 현재 위치로 도시 찾기 ----------
+
+    fun markLocationAsked() = update { it.copy(locationAsked = true) }
+
+    fun onLocationDenied() = update { it.copy(locationAsked = true, locationStatus = LocationStatus.DENIED) }
+
+    /** 위치 권한을 받은 뒤 부른다: 현재 위치 → 지도 데이터에서 도시 이름 */
+    fun locate(context: Context) {
+        val current = _state.value
+        if (current.locationStatus == LocationStatus.LOCATING) return
+        _state.value = current.copy(locationAsked = true, locationStatus = LocationStatus.LOCATING)
+        val appContext = context.applicationContext
+        viewModelScope.launch {
+            val city = try {
+                cityRepository.currentCity(appContext)
+            } catch (e: Exception) {
+                Log.w(TAG, "현재 위치의 도시 찾기 실패", e)
+                null
+            }
+            _state.value = _state.value.copy(
+                currentCity = city,
+                locationStatus = if (city != null) LocationStatus.FOUND else LocationStatus.FAILED,
+            )
+        }
+    }
+
+    // ---------- 지도에서 찾기 ----------
+
+    /** "지도에서 찾기" 버튼: 입력한 글자로 OSM 지도 데이터에서 도시를 찾는다(버튼을 누를 때만 검색) */
+    fun searchMap() {
+        val current = _state.value
+        val query = current.cityQuery.trim()
+        if (query.isEmpty() || current.mapSearching) return
+        _state.value = current.copy(mapSearching = true, mapError = null)
+        viewModelScope.launch {
+            _state.value = try {
+                val results = cityRepository.searchMap(query)
+                _state.value.copy(mapQuery = query, mapResults = results, mapSearching = false)
+            } catch (e: Exception) {
+                Log.w(TAG, "지도에서 도시 찾기 실패", e)
+                _state.value.copy(mapSearching = false, mapError = "지도에서 찾지 못했어요. 인터넷 연결을 확인해 주세요.")
+            }
+        }
+    }
 
     fun openCalendar() = update { it.copy(step = NewJourneyStep.CALENDAR) }
 

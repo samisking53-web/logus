@@ -30,6 +30,7 @@ android/
    ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
    ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
    ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
+   ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
    ├─ journey/StartDayCamera.kt 여정 시작일에 폰 카메라 열기
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭

@@ -68,4 +68,5 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.play.services.location) // 현재 위치 → 도시 추천(S02)
 }

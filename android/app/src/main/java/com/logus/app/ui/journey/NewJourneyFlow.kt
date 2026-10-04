@@ -1,8 +1,15 @@
 package com.logus.app.ui.journey
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.logus.app.journey.NewJourneyStep
 import com.logus.app.journey.NewJourneyViewModel
@@ -19,6 +26,27 @@ fun NewJourneyFlow(
     onSaved: (startDate: LocalDate) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 위치 권한(대략적인 위치) 묻기 → 허용하면 현재 위치의 도시를 찾는다
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.locate(context) else viewModel.onLocationDenied()
+    }
+    fun requestLocation() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            viewModel.locate(context)
+        } else {
+            viewModel.markLocationAsked()
+            permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+    }
+
+    // 화면을 열면 먼저 현재 위치로 도시를 잡아 본다(한 번만. 달력에 다녀와도 다시 묻지 않는다)
+    LaunchedEffect(Unit) {
+        if (!state.locationAsked) requestLocation()
+    }
 
     BackHandler(enabled = !state.saving) {
         if (state.step == NewJourneyStep.CALENDAR) viewModel.closeCalendar() else onClose()
@@ -33,6 +61,8 @@ fun NewJourneyFlow(
             onCityQueryChange = viewModel::updateCityQuery,
             onCitySelect = viewModel::selectCity,
             onCityClear = viewModel::clearCity,
+            onLocate = ::requestLocation,
+            onSearchMap = viewModel::searchMap,
             onOpenCalendar = viewModel::openCalendar,
             onNotifyHours = viewModel::selectNotifyHours,
             onToggleNotifyOff = viewModel::toggleNotifyOff,

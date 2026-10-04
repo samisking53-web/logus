@@ -14,6 +14,7 @@ credentials = "1.3.0"
 googleId = "1.1.1"
 coil = "3.0.4"
 exifinterface = "1.3.7"
+playServicesLocation = "21.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,9 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 
 # 안드로이드 8(API 26·27)에서 사진 방향(EXIF)을 읽어 옆으로 눕지 않게 한다
 androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
+
+# 현재 위치(대략) 잡기. 새 여정의 도시 추천에 쓴다(구글 장소 데이터는 쓰지 않는다)
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
