@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      안드로이드 12 이상은 앱을 켤 때 시스템이 아이콘 화면을 먼저 잠깐 보여 준다.
+      아이콘을 투명하게 하고 바탕을 앱 시작 화면(ui/SplashScreen.kt)과 같은 색으로 맞춰,
+      시스템 화면 → 앱 시작 화면이 한 화면처럼 이어져 보이게 한다.
+    -->
+    <style name="Theme.LogUs" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

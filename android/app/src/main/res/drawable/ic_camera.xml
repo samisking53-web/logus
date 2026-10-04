@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 카메라(선): 사진 수정 표시, 지금 기록하기 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M4,8h3l1.5,-2.5h7L17,8h3a1,1 0,0 1,1 1v9a1,1 0,0 1,-1 1H4a1,1 0,0 1,-1 -1V9a1,1 0,0 1,1 -1z M12,10a3.2,3.2 0,1 1,0 6.4a3.2,3.2 0,1 1,0 -6.4z" />
+</vector>

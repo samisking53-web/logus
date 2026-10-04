@@ -49,4 +49,16 @@ object LogUsColors {
         @Composable get() = if (isSystemInDarkTheme()) BorderDark else Border
     val primaryStrong: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) PrimaryStrongDark else PrimaryStrong
+    /** 흰 카드(라이트) / 카드 배경(다크) */
+    val card: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) SurfaceDark else Card
+    /** 홈 프로필 상자 배경: 라이트는 연보라(border 색), 다크는 카드 배경 */
+    val profileBox: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) SurfaceDark else Border
+    /** 구분선 */
+    val line: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) BorderDark else Line
+    /** 프로필 상자 안 코인 상자: 라이트는 흰색, 다크는 바탕색(상자보다 어둡게) */
+    val coinChip: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Card
 }

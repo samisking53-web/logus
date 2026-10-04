@@ -50,8 +50,8 @@ sealed interface AuthUiState {
         val error: String? = null,
     ) : AuthUiState
 
-    /** 가입까지 끝남 → 홈 */
-    data class Ready(val profile: Profile) : AuthUiState
+    /** 가입까지 끝남 → 홈. uid 는 홈에서 내 여정을 찾을 때 쓴다 */
+    data class Ready(val uid: String, val profile: Profile) : AuthUiState
 
     /** 프로필을 읽지 못함(네트워크·보안 규칙 문제 등) */
     data class Failed(val message: String) : AuthUiState
@@ -145,7 +145,8 @@ class AuthViewModel(
                 viewModelScope.launch {
                     _state.value = try {
                         AuthUiState.Ready(
-                            repository.createProfile(appContext, user.uid, check.value, current.photo, current.agreements)
+                            user.uid,
+                            repository.createProfile(appContext, user.uid, check.value, current.photo, current.agreements),
                         )
                     } catch (e: Exception) {
                         Log.w(TAG, "회원가입 실패 (보안 규칙 배포·Firestore·Storage 설정 확인)", e)
@@ -192,7 +193,7 @@ class AuthViewModel(
             _state.value = try {
                 val profile = repository.loadProfile(user.uid)
                 if (profile != null) {
-                    AuthUiState.Ready(profile)
+                    AuthUiState.Ready(user.uid, profile)
                 } else {
                     // 처음 온 사람: 약관 동의부터. 구글 사진이 있으면 그 사진을 기본으로 보여 준다.
                     val googlePhoto = safePhotoUrl(user.photoUrl?.toString())
