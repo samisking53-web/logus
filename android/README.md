@@ -1,7 +1,7 @@
 # LOG US 안드로이드 앱 (Kotlin)
 
 LOG US는 **안드로이드 앱으로만** 만든다(웹 앱 개발은 중지).
-지금 있는 기능은 **구글 로그인 → 회원가입(닉네임·프로필 사진) → 홈(임시)** 이다. 화면은 Jetpack Compose로 그린다.
+지금 있는 기능은 **앱 시작 화면 → 구글 로그인 → 회원가입(약관·닉네임·프로필 사진) → 홈(S01·S01-A) + 하단 탭** 이다. 화면은 Jetpack Compose로 그린다.
 
 백엔드는 Firebase다(프로젝트 `logus-80f21`).
 - Firebase Authentication: 구글 계정으로 회원 만들기·로그인
@@ -13,6 +13,7 @@ LOG US는 **안드로이드 앱으로만** 만든다(웹 앱 개발은 중지).
 android/
 ├─ app/build.gradle.kts        앱 설정(패키지 이름 com.logus.app, 라이브러리)
 ├─ gradle/libs.versions.toml   라이브러리 버전 모음
+├─ app/src/main/res/drawable-nodpi/intro_*.webp  첫 화면 소개 사진
 └─ app/src/main/java/com/logus/app/
    ├─ MainActivity.kt           앱 시작 지점. 상태에 따라 로그인·회원가입·홈 화면을 고른다
    ├─ auth/AuthRepository.kt    Firebase와 이야기하는 곳(구글 로그인, users/{uid} 읽기·만들기)
@@ -21,12 +22,17 @@ android/
    ├─ auth/Agreements.kt        약관 동의 항목과 약관 버전(TERMS_VERSION)
    ├─ auth/ProfilePhoto.kt      앨범 사진을 줄여서 JPEG로 바꾸기
    ├─ legal/LegalDocs.kt        약관·개인정보 처리방침 문구(캡스톤용 예시)
-   ├─ ui/WelcomeScreen.kt       첫 화면(Google 계정으로 계속하기)
+   ├─ ui/WelcomeScreen.kt       첫 화면(겹친 소개 사진 3장 + Google 계정으로 계속하기)
    ├─ ui/signup/TermsScreen.kt  약관 동의(1/2 단계), LegalDocScreen.kt 약관 전문
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
-   ├─ ui/HomeScreen.kt          홈(임시: 프로필 상자와 로그아웃)
-   ├─ ui/components/Avatar.kt   동그란 프로필 사진
+   ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users)
+   ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
+   ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
+   ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
+   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드
+   ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
+   ├─ ui/components/            동그란 프로필 사진, 하단 탭, 오류 문구 등
    └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
 ```
 

@@ -111,13 +111,13 @@ SHA-1 은 "이 컴퓨터에서 만든 앱이 진짜 우리 앱"이라는 표시�
    → 설정 → 개발자 옵션 → USB 디버깅 ON → USB 로 컴퓨터에 연결 → 폰에 뜬 허용 창에서 "허용"
 2) Android Studio 위쪽에서 폰을 고르고 ▶ Run
 3) "Google 계정으로 계속하기" → 계정 선택 → 약관 동의(필수 3개 체크) → 프로필 설정(닉네임에 구글 이름, 사진 원을 눌러 앨범 사진 고르기) → "가입 완료"
-4) 홈에 닉네임과 "보유 0 코인"이 보이면 성공
+4) 앱 시작 화면(LOG EARTH)이 잠깐 보인 뒤, 홈에 닉네임과 보유 코인 0이 보이면 성공
 5) Firebase 콘솔에서 확인
    - Authentication → 사용자: 고른 구글 계정이 있는지
    - Firestore → users → (uid): nickname · photoURL · createdAt 이 있는지
    - Firestore → users → (uid) → agreements → (약관 버전): 동의 항목과 agreedAt 이 있는지
    - (앨범 사진을 골랐다면) Storage → users → (uid): profile_….jpg 가 있는지
-6) 홈의 "로그아웃" → 다시 로그인하면 회원가입 없이 바로 홈으로 가는지
+6) 하단 탭 마이로그(책 그림)의 "로그아웃" → 다시 로그인하면 회원가입 없이 바로 홈으로 가는지
 
 
 7. 끝나면 Claude 에게 알려 줄 것

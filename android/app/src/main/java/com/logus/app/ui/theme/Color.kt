@@ -14,6 +14,10 @@ val TextSecondary = Color(0xFF5A5570)
 val Background = Color(0xFFF7F5FB)
 val Error = Color(0xFFC0392B)
 val AmberText = Color(0xFF8A5606)
+val Amber = Color(0xFFE0930F) // 코인 채움(위 글자는 본문색, 흰 글자 금지)
+val Line = Color(0xFFE3E0EC) // 구분선(하단 탭 위 선)
+val Success = Color(0xFF17795A) // "진행 중" 점
+val Card = Color(0xFFFFFFFF) // 흰 카드(홈의 코인 상자·여정 카드·하단 탭). 다크 모드에서는 SurfaceDark 를 쓴다
 
 // 다크
 val PrimaryDark = Color(0xFF6B4FE0)
@@ -26,6 +30,11 @@ val BackgroundDark = Color(0xFF141220)
 val AmberTextDark = Color(0xFFE0930F)
 
 val OnPrimary = Color(0xFFFFFFFF)
+
+// 여정 구성원 구분색(위 글자는 흰색). 색만으로 구분하지 않게 이름 첫 글자를 함께 쓴다
+val MemberColors = listOf(Color(0xFF5B3DD6), Color(0xFFC63F33), Color(0xFF0B7A6B), Color(0xFF9C6408))
+
+val PhotoFrame = Color(0xFFFFFFFF) // 첫 화면 소개 사진의 흰 테두리(라이트·다크 같음)
 
 // 구글 로그인 버튼은 구글 디자인 가이드에 정해진 색을 그대로 써야 해서 팔레트의 예외로 둔다.
 val GoogleButton = Color(0xFFFFFFFF)

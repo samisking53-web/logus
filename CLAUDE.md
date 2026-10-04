@@ -43,7 +43,9 @@
 - 함수 공통 옵션: 리전 `asia-northeast3`(서울, Firestore와 같은 위치), `maxInstances: 10`. `minInstances`는 설정하지 않는다(상시 과금)
 
 ## UI 규칙
-- 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(아이콘)
+- 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
+- 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
+- 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`)
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
 - 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
@@ -55,6 +57,8 @@
   - 다크 모드(폰 설정을 따름, `isSystemInDarkTheme()`): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
   - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
+  - 흰 카드: `#FFFFFF`(홈의 코인 상자·여정 카드·흰 버튼·하단 탭 바탕. 라이트 전용이고 다크는 surface `#1E1B2E`. Color.kt의 `Card`, `LogUsColors.card`)
+  - 사진 테두리: `#FFFFFF`(첫 화면 소개 사진 카드의 흰 테두리, 라이트·다크 같음. Color.kt의 `PhotoFrame`). 글자색으로는 쓰지 않는다
   - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 
 ## 화면 번호 (스토리보드 v3)
