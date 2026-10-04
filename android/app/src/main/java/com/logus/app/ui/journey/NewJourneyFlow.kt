@@ -16,7 +16,7 @@ import com.logus.app.journey.NewJourneyViewModel
 import java.time.LocalDate
 
 /**
- * 새 여정 만들기 흐름: S02 새 여정 만들기 ↔ S03 여행 기간 달력.
+ * 새 여정 만들기 흐름: S02 새 여정 만들기 ↔ S03 여행 기간 달력, S02 위의 초대 코드 팝업.
  * 폰의 뒤로 가기: 달력 → S02, S02 → 닫기(홈).
  */
 @Composable
@@ -48,6 +48,12 @@ fun NewJourneyFlow(
         if (!state.locationAsked) requestLocation()
     }
 
+    // 친구 초대하기 → 초대 코드 팝업(S02 위에 뜬다). 닫으면 저장과 똑같이 홈으로 간다
+    val code = state.inviteCode
+    if (state.showInviteDialog && code != null) {
+        InviteCodeDialog(code = code, onClose = { viewModel.closeInviteDialog(onSaved) })
+    }
+
     BackHandler(enabled = !state.saving) {
         if (state.step == NewJourneyStep.CALENDAR) viewModel.closeCalendar() else onClose()
     }
@@ -66,6 +72,7 @@ fun NewJourneyFlow(
             onOpenCalendar = viewModel::openCalendar,
             onNotifyHours = viewModel::selectNotifyHours,
             onToggleNotifyOff = viewModel::toggleNotifyOff,
+            onInviteFriends = viewModel::inviteFriends,
         )
 
         NewJourneyStep.CALENDAR -> PeriodCalendarScreen(

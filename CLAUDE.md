@@ -46,7 +46,7 @@
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`)
-- S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →"로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
+- S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정 시작일에는 폰 카메라 앱을 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. `journey/StartDayCamera.kt`). 앱 안 카메라(S04)를 만들면 그쪽으로 바꾼다
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
@@ -65,7 +65,7 @@
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
-- S02 새 여정 만들기 / S03 여행 기간 달력 / 초대하기(링크 복사·카카오톡·공유 창)
+- S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사)
 - S04 앱 내 카메라 / S05 기록 올리기(짧은 글·태그·테마)
 - S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+30코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
@@ -83,7 +83,8 @@
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
-- `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName. 로그인 전 초대 화면용 요약만 담는다
+- `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName, expiresAt(만든 뒤 7일). 문서 ID가 6자리 초대 코드. 서버 함수만 읽고 쓴다
+- `inviteAttempts/{uid}`: date(UTC `YYYY-MM-DD`), count. 초대 코드 입력 횟수(하루 20번 제한). 서버만 읽고 쓴다
 - `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, theme, mediaPath, placeName, location, createdAt)
 - `sharedRecaps/{slug}`: 공유를 누른 리캡의 공개 사본
 - `users/{uid}/coinLedger/{logId}`: reason, amount, journeyId, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
@@ -94,15 +95,16 @@
 - 여정 생성과 참여는 서버 함수(`createJourney`, `joinJourney`)로만 한다. 클라이언트는 `journeys` 문서를 직접 만들거나 `memberIds`를 고치지 못한다
 - 기록 수정·삭제는 작성자만. `location`, `placeName`, `isPublic`은 클라이언트가 직접 바꾸지 못하고 `saveLogLocation` 함수로만 바꾼다
 - `users/{uid}`는 로그인한 사용자가 읽을 수 있고, 본인은 nickname·photoURL만 고칠 수 있다
-- `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`는 클라이언트가 쓰지 못한다
-- 비로그인 읽기는 `invites`·`sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
-- 초대 코드와 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
+- `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`, `inviteAttempts`는 클라이언트가 쓰지 못한다. `invites`·`inviteAttempts`는 읽지도 못한다
+- 비로그인 읽기는 `sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
+- 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
+- 초대 코드는 헷갈리는 글자(0·O·1·I)를 뺀 영문 대문자·숫자 6자리(32글자, 약 10억 가지)다. 짧은 대신 ① 7일 뒤 만료 ② 로그인한 사람만 `joinJourney`로 사용(앱이 `invites`를 직접 읽지 못함) ③ 한 사람당 하루 20번까지 입력으로 보완한다(2026-10-04 팀 결정)
 - Storage: 프로필 사진 `users/{uid}/{파일}`은 로그인한 사람이 읽고 본인만 올린다(이미지 5MB 미만). `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
 
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
-- `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약을 한 트랜잭션으로 만든다
-- `joinJourney`: 초대 코드로 참여한다. memberIds·members·memberCount·invites 요약을 함께 갱신한다
+- `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약(6자리 코드, 7일 뒤 만료)을 한 트랜잭션으로 만든다. 코드가 겹치면 새 코드로 다시 만든다. 돌려주는 값: journeyId, inviteCode, inviteExpiresAt
+- `joinJourney`: 6자리 초대 코드로 참여한다(대소문자·공백 무시). 하루 입력 횟수와 만료를 확인하고, memberIds·members·memberCount·invites 요약을 함께 갱신한다
 - `saveLogLocation`: 위치 저장과 30코인 지급을 한 트랜잭션으로 처리한다. coinLedger 문서가 이미 있으면 코인은 주지 않는다
 - `syncPublicLog`(Firestore 트리거): 공개이고 위치가 있는 기록만 publicLogs 사본과 `public/` 미디어 사본을 만들고, 조건이 깨지면 지운다
 - `generateRecapCaptions`: 썸네일·시간·장소를 LLM에 보내 제목·장면 순서·캡션을 JSON으로 받아 저장한다. 사용자당 하루 호출 횟수를 제한한다
@@ -113,7 +115,7 @@
 - 로그인: Credential Manager(`GetSignInWithGoogleOption`)로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 Firebase Auth에 넘긴다. `R.string.default_web_client_id`(구글 로그인을 켜면 자동으로 생기는 OAuth 클라이언트, 웹 앱 등록과 무관)가 필요하다. Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
 - 회원가입 흐름: 첫 화면(`ui/WelcomeScreen.kt`, Google 계정으로 계속하기) → 로그인 후 `users/{uid}`가 없으면 약관 동의(1/2 단계) → P01 프로필 설정(2/2 단계, 닉네임 1~20자) ↔ P02 프로필 사진(앨범·구글 사진·기본) → 홈. 가입 완료 때 `users/{uid}`와 `users/{uid}/agreements/{약관 버전}`을 한 배치로 저장하고, 앨범 사진은 줄여서 Storage에 올린다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·Signup(step)·Ready·Failed)
 - 약관 문구는 `legal/LegalDocs.kt`(캡스톤용 예시, 출시 전 법률 검토 필요). 문구를 바꾸면 `TERMS_VERSION`도 바꾼다
-- 초대 링크(`invites/{inviteCode}`)는 로그인 전에도 요약을 보여주고, 로그인·가입 후 `joinJourney`로 참여를 끝낸다(안드로이드 앱 링크 방식은 그 기능을 만들 때 정한다)
+- 초대는 링크 없이 6자리 초대 코드로만 한다. S02 "친구 초대하기"를 누르면 여정을 저장하고 코드 팝업(`ui/journey/InviteCodeDialog.kt`)에서 코드를 복사한다. 받은 사람은 로그인·가입 후 코드를 입력하고 `joinJourney`로 참여한다(로그인 전 미리보기 없음)
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다

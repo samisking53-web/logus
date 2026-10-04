@@ -141,7 +141,7 @@ fun HomeScreen(
                         ActionButton(
                             icon = painterResource(R.drawable.ic_person_add),
                             title = "초대 코드로 참여",
-                            subtitle = "받은 초대 코드나 링크로 들어가요",
+                            subtitle = "받은 6자리 초대 코드로 들어가요",
                             filled = false,
                             onClick = onJoinWithCode,
                         )

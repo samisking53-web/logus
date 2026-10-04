@@ -78,7 +78,7 @@ import java.time.LocalDate
  *   ③ "지도에서 찾기"로 오픈스트리트맵 지도 데이터에서 세계 도시를 찾는다. 어디에도 없으면 입력한 글자 그대로 저장한다.
  * - 여행 기간: 누르면 S03 달력이 열린다.
  * - 촬영 알림: 1·2·3시간 중 하나, 또는 "촬영 알림 받지 않기".
- * - 친구 초대하기: 초대 링크 공유 화면은 다음 작업에서 만든다. 지금은 버튼만 있다.
+ * - 친구 초대하기: 여정을 저장하고 6자리 초대 코드 팝업(InviteCodeDialog)을 띄운다. 덜 채웠으면 안내만 보여 준다.
  * - 위쪽 "저장 →": 모두 채우면 켜진다. 누르면 서버 함수 createJourney 로 여정을 만든다.
  */
 @Composable
@@ -186,8 +186,9 @@ fun NewJourneyScreen(
                 NotifyOffRow(checked = state.notifyOff, onToggle = onToggleNotifyOff)
             }
 
-            // 친구 초대하기(버튼만)
-            InviteButton(onClick = onInviteFriends)
+            // 친구 초대하기: 누르면 여정을 저장하고 6자리 초대 코드 팝업(InviteCodeDialog)을 띄운다
+            state.inviteHint?.let { ErrorMessage(it) }
+            InviteButton(working = state.saving, onClick = onInviteFriends)
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -568,13 +569,14 @@ private fun NotifyOffRow(checked: Boolean, onToggle: () -> Unit) {
 }
 
 /**
- * 친구 초대하기(초대 링크 만들기). 짙은 보라(primary-strong #4A2FB8) 채움 + 흰 글자(대비 8:1).
- * 다크 모드에서도 같은 짙은 보라를 쓴다(흰 글자가 잘 보이게). 공유 화면은 다음 작업에서 연결한다.
+ * 친구 초대하기(6자리 초대 코드 만들기). 짙은 보라(primary-strong #4A2FB8) 채움 + 흰 글자(대비 8:1).
+ * 다크 모드에서도 같은 짙은 보라를 쓴다(흰 글자가 잘 보이게).
  */
 @Composable
-private fun InviteButton(onClick: () -> Unit) {
+private fun InviteButton(working: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        enabled = !working,
         color = PrimaryStrong,
         contentColor = MaterialTheme.colorScheme.onPrimary,
         shape = RoundedCornerShape(20.dp),
@@ -588,16 +590,20 @@ private fun InviteButton(onClick: () -> Unit) {
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    painterResource(R.drawable.ic_person_add),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                )
+                if (working) {
+                    CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        painterResource(R.drawable.ic_person_add),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text("친구 초대하기", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("초대 링크를 만들어요", fontSize = 13.sp)
+                Text(if (working) "초대 코드를 만드는 중…" else "초대 코드를 만들어요", fontSize = 13.sp)
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }

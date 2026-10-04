@@ -20,6 +20,9 @@ data class Journey(
     val memberCount: Int,
 )
 
+/** 새로 만든 여정: ID 와 6자리 초대 코드(7일 동안 쓸 수 있다) */
+data class CreatedJourney(val journeyId: String, val inviteCode: String)
+
 /** 여정 구성원 한 명(홈의 동그란 이름 표시용) */
 data class Member(val uid: String, val nickname: String)
 
@@ -38,7 +41,7 @@ class JourneyRepository {
      * S02 새 여정 만들기: 서버 함수 createJourney 를 부른다.
      * 여정 문서·내 멤버 문서(알림 간격)·초대 요약을 서버가 한 번에 만든다(앱은 journeys 를 직접 만들 수 없다).
      * 날짜는 "YYYY-MM-DD", notifyIntervalHours 는 1·2·3 또는 null(촬영 알림 받지 않기).
-     * 돌려주는 값: 새 여정 ID
+     * 돌려주는 값: 새 여정 ID 와 6자리 초대 코드
      */
     suspend fun createJourney(
         name: String,
@@ -47,7 +50,7 @@ class JourneyRepository {
         startDate: String,
         endDate: String,
         notifyIntervalHours: Int?,
-    ): String {
+    ): CreatedJourney {
         val result = functions.getHttpsCallable("createJourney")
             .call(
                 hashMapOf(
@@ -61,7 +64,10 @@ class JourneyRepository {
             )
             .await()
         val data = result.getData() as? Map<*, *>
-        return data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요.")
+        return CreatedJourney(
+            journeyId = data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요."),
+            inviteCode = data?.get("inviteCode") as? String ?: error("서버가 초대 코드를 돌려주지 않았어요."),
+        )
     }
 
     /**

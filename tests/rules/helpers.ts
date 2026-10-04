@@ -8,7 +8,7 @@ export const BOB = "bob"; // 초대받아 참여한 사람
 export const CAROL = "carol"; // 이 여정과 관계없는 사람
 export const JOURNEY_ID = "journey1";
 export const LOG_ID = "log1";
-export const INVITE_CODE = "inviteCode123456";
+export const INVITE_CODE = "K7PQ2M";
 
 export const journeyDoc = {
   name: "우리의 포르투",

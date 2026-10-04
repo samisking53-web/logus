@@ -1,5 +1,5 @@
 // 여러 함수가 함께 쓰는 확인·검증 도우미
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 
 /** 로그인하지 않았으면 거부하고, 로그인한 사용자의 uid를 돌려준다. */
@@ -55,15 +55,31 @@ export function requireNotifyInterval(value: unknown): 1 | 2 | 3 | null {
   throw new HttpsError("invalid-argument", "알림 주기는 1·2·3시간 중에서 골라 주세요.");
 }
 
-/** 초대 코드: 추측하기 어려운 16자 무작위 문자열 (영문 대소문자·숫자·-·_) */
+/**
+ * 초대 코드: 영문 대문자·숫자 6자리 (예: K7PQ2M)
+ * 헷갈리는 글자(0·O·1·I)를 빼서 32가지 글자 × 6자리 = 약 10억 가지.
+ * 짧은 대신 7일 뒤 만료, 로그인한 사람만 사용(joinJourney), 한 사람당 하루 입력 횟수 제한으로 보완한다.
+ */
+export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const INVITE_CODE_LENGTH = 6;
+/** 초대 코드를 쓸 수 있는 기간(일) */
+export const INVITE_VALID_DAYS = 7;
+/** 한 사람이 하루(UTC)에 초대 코드를 입력할 수 있는 횟수 */
+export const INVITE_ATTEMPTS_PER_DAY = 20;
+
 export function createInviteCode(): string {
-  return randomBytes(12).toString("base64url");
+  let code = "";
+  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+    code += INVITE_CODE_ALPHABET[randomInt(INVITE_CODE_ALPHABET.length)];
+  }
+  return code;
 }
 
-/** 초대 코드 형식 확인 (12자 이상) */
+/** 초대 코드 형식 확인. 앞뒤 공백을 지우고 대문자로 바꿔서 본다(소문자로 입력해도 된다) */
 export function requireInviteCode(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{12,64}$/.test(value)) {
-    throw new HttpsError("invalid-argument", "초대 코드가 올바르지 않아요.");
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) {
+    throw new HttpsError("invalid-argument", "초대 코드는 영문·숫자 6자리예요.");
   }
-  return value;
+  return code;
 }

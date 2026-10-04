@@ -312,11 +312,17 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
 });
 
 describe("공개 문서 (서버만 쓴다)", () => {
-  it("초대 요약은 로그인 없이 코드로 한 건만 읽는다", async () => {
-    await assertSucceeds(getDoc(doc(dbAnon(), "invites", INVITE_CODE)));
+  it("초대 요약은 앱이 읽지도 쓰지도 못한다(6자리 코드를 넣어 보는 것 방지, 서버 함수만 사용)", async () => {
+    await assertFails(getDoc(doc(dbAnon(), "invites", INVITE_CODE)));
+    await assertFails(getDoc(doc(dbAs(ALICE), "invites", INVITE_CODE)));
     await assertFails(getDocs(collection(dbAnon(), "invites")));
-    await assertFails(setDoc(doc(dbAs(ALICE), "invites", "myOwnCode12345"), { journeyId: JOURNEY_ID }));
+    await assertFails(setDoc(doc(dbAs(ALICE), "invites", "ABCDEF"), { journeyId: JOURNEY_ID }));
     await assertFails(updateDoc(doc(dbAs(ALICE), "invites", INVITE_CODE), { memberCount: 99 }));
+  });
+
+  it("초대 코드 입력 횟수는 본인도 읽거나 고치지 못한다", async () => {
+    await assertFails(getDoc(doc(dbAs(ALICE), "inviteAttempts", ALICE)));
+    await assertFails(setDoc(doc(dbAs(ALICE), "inviteAttempts", ALICE), { date: "2026-10-04", count: 0 }));
   });
 
   it("공개 기록 목록은 누구나 읽고, 아무도 쓰지 못한다", async () => {

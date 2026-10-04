@@ -53,6 +53,14 @@ data class NewJourneyUiState(
     val mapResults: List<City> = emptyList(),
     val mapSearching: Boolean = false,
     val mapError: String? = null,
+    /** 이미 만든 여정 ID(친구 초대하기로 먼저 만들었으면 저장 때 다시 만들지 않는다) */
+    val createdJourneyId: String? = null,
+    /** 서버가 만든 6자리 초대 코드 */
+    val inviteCode: String? = null,
+    /** 초대 코드 팝업을 보여 주는 중인지 */
+    val showInviteDialog: Boolean = false,
+    /** 친구 초대하기를 눌렀는데 아직 다 채우지 않았을 때 버튼 위에 보여 주는 안내 */
+    val inviteHint: String? = null,
 ) {
     /** 지도 검색 결과가 지금 입력한 글자에 대한 것인지 */
     val showMapResults: Boolean
@@ -62,11 +70,15 @@ data class NewJourneyUiState(
     val suggestions: List<City>
         get() = if (selectedCity != null && selectedCity.name == cityQuery.trim()) emptyList() else Cities.search(cityQuery)
 
-    /** 저장할 수 있는지: 이름 1~40자, 도시 1~60자, 기간 선택 완료 */
-    val canSave: Boolean
+    /** 이름 1~40자, 도시 1~60자, 기간 선택까지 모두 채웠는지 */
+    val isComplete: Boolean
         get() = name.trim().length in 1..NAME_MAX &&
             cityQuery.trim().length in 1..CITY_MAX &&
-            startDate != null && endDate != null && !saving
+            startDate != null && endDate != null
+
+    /** 저장할 수 있는지 */
+    val canSave: Boolean
+        get() = isComplete && !saving
 
     companion object {
         const val NAME_MAX = 40 // 서버 함수 createJourney 의 제한과 같다
@@ -93,7 +105,7 @@ class NewJourneyViewModel(
     }
 
     fun updateName(value: String) = update {
-        if (value.length <= NewJourneyUiState.NAME_MAX) it.copy(name = value, error = null) else it
+        if (value.length <= NewJourneyUiState.NAME_MAX) it.copy(name = value, error = null, inviteHint = null) else it
     }
 
     /** 도시 입력: 글자를 바꾸면 고른 도시는 풀린다(직접 입력한 글자 그대로 저장할 수도 있다) */
@@ -105,7 +117,7 @@ class NewJourneyViewModel(
         }
     }
 
-    fun selectCity(city: City) = update { it.copy(cityQuery = city.name, selectedCity = city, error = null) }
+    fun selectCity(city: City) = update { it.copy(cityQuery = city.name, selectedCity = city, error = null, inviteHint = null) }
 
     fun clearCity() = update { it.copy(cityQuery = "", selectedCity = null) }
 
@@ -160,7 +172,7 @@ class NewJourneyViewModel(
 
     /** S03 "기간 선택 완료" */
     fun confirmPeriod(start: LocalDate, end: LocalDate) = update {
-        it.copy(startDate = start, endDate = end, step = NewJourneyStep.FORM, error = null)
+        it.copy(startDate = start, endDate = end, step = NewJourneyStep.FORM, error = null, inviteHint = null)
     }
 
     fun selectNotifyHours(hours: Int) = update { it.copy(notifyHours = hours, notifyOff = false) }
@@ -169,18 +181,54 @@ class NewJourneyViewModel(
 
     /**
      * 위쪽 "저장 →". 성공하면 onSaved(시작일)를 부른다.
-     * 국가는 추천 목록에서 고른 경우에만 채운다(직접 입력한 도시는 국가를 모른다).
+     * 친구 초대하기로 이미 여정을 만들었으면 다시 만들지 않고 바로 onSaved 를 부른다.
      */
     fun save(onSaved: (startDate: LocalDate) -> Unit) {
+        val s = _state.value
+        val start = s.startDate ?: return
+        if (s.createdJourneyId != null) {
+            onSaved(start)
+            return
+        }
+        createJourney { onSaved(start) }
+    }
+
+    /**
+     * "친구 초대하기": 여정을 저장하고(서버가 6자리 초대 코드를 만든다) 코드 팝업을 띄운다.
+     * 이름·도시·기간을 다 채우지 않았으면 안내만 보여 준다.
+     */
+    fun inviteFriends() {
+        val s = _state.value
+        if (s.saving) return
+        if (s.inviteCode != null) {
+            _state.value = s.copy(showInviteDialog = true)
+            return
+        }
+        if (!s.isComplete) {
+            _state.value = s.copy(inviteHint = "여정 이름·도시·여행 기간을 먼저 정해 주세요.")
+            return
+        }
+        createJourney { _state.value = _state.value.copy(showInviteDialog = true) }
+    }
+
+    /** 초대 코드 팝업 닫기(X·뒤로 가기): 여정은 이미 저장됐으니 저장과 똑같이 홈으로 간다 */
+    fun closeInviteDialog(onSaved: (startDate: LocalDate) -> Unit) {
+        val s = _state.value
+        _state.value = s.copy(showInviteDialog = false)
+        s.startDate?.let(onSaved)
+    }
+
+    /** 서버 함수 createJourney 로 여정을 만든다. 성공하면 여정 ID·초대 코드를 기억하고 onDone 을 부른다 */
+    private fun createJourney(onDone: () -> Unit) {
         val s = _state.value
         if (!s.canSave) return
         val start = s.startDate ?: return
         val end = s.endDate ?: return
-        _state.value = s.copy(saving = true, error = null)
+        _state.value = s.copy(saving = true, error = null, inviteHint = null)
         viewModelScope.launch {
             try {
                 val city = s.selectedCity
-                repository.createJourney(
+                val created = repository.createJourney(
                     name = s.name.trim(),
                     city = city?.name ?: s.cityQuery.trim(),
                     country = city?.country ?: "",
@@ -188,8 +236,12 @@ class NewJourneyViewModel(
                     endDate = end.toString(),
                     notifyIntervalHours = if (s.notifyOff) null else s.notifyHours,
                 )
-                _state.value = _state.value.copy(saving = false)
-                onSaved(start)
+                _state.value = _state.value.copy(
+                    saving = false,
+                    createdJourneyId = created.journeyId,
+                    inviteCode = created.inviteCode,
+                )
+                onDone()
             } catch (e: Exception) {
                 Log.w(TAG, "여정 만들기 실패 (createJourney 함수 배포 확인)", e)
                 _state.value = _state.value.copy(saving = false, error = e.toKoreanMessage())

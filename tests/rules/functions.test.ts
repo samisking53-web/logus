@@ -45,13 +45,17 @@ describe("createJourney", () => {
     const owner = newUid();
     const { journeyId, inviteCode } = await makeJourney(owner);
 
-    expect(inviteCode.length).toBeGreaterThanOrEqual(12);
+    expect(inviteCode).toMatch(/^[A-HJ-NP-Z2-9]{6}$/); // 6자리, 헷갈리는 글자(0·O·1·I) 없음
     const journey = (await db.doc(`journeys/${journeyId}`).get()).data();
     expect(journey).toMatchObject({ ownerId: owner, memberIds: [owner], memberCount: 1, inviteCode });
     const member = (await db.doc(`journeys/${journeyId}/members/${owner}`).get()).data();
     expect(member).toMatchObject({ role: "owner", notifyIntervalHours: 2 });
     const invite = (await db.doc(`invites/${inviteCode}`).get()).data();
     expect(invite).toMatchObject({ journeyId, name: "우리의 포르투", memberCount: 1 });
+    // 7일 뒤 만료
+    const days = (invite!.expiresAt.toMillis() - Date.now()) / (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThanOrEqual(7);
   });
 
   it("로그인하지 않으면 거부", async () => {
@@ -93,8 +97,39 @@ describe("joinJourney", () => {
   });
 
   it("없는 초대 코드는 거부", async () => {
-    await expect(joinJourney.run(req({ inviteCode: "noSuchCode123456" }, newUid())))
+    await expect(joinJourney.run(req({ inviteCode: "ZZZZZ2" }, newUid())))
       .rejects.toMatchObject({ code: "not-found" });
+  });
+
+  it("6자리 형식이 아니면 거부", async () => {
+    await expect(joinJourney.run(req({ inviteCode: "inviteCode123456" }, newUid())))
+      .rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(joinJourney.run(req({ inviteCode: "K0PQ1M" }, newUid()))) // 0·1 은 쓰지 않는 글자
+      .rejects.toMatchObject({ code: "invalid-argument" });
+  });
+
+  it("소문자·공백이 섞여도 같은 코드로 참여한다", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    const result = await joinJourney.run(req({ inviteCode: ` ${inviteCode.toLowerCase()} ` }, guest));
+    expect(result).toEqual({ journeyId, alreadyMember: false });
+  });
+
+  it("만료된 초대 코드는 거부", async () => {
+    const owner = newUid();
+    const { inviteCode } = await makeJourney(owner);
+    await db.doc(`invites/${inviteCode}`).update({ expiresAt: new Date(Date.now() - 1000) });
+    await expect(joinJourney.run(req({ inviteCode }, newUid())))
+      .rejects.toMatchObject({ code: "failed-precondition" });
+  });
+
+  it("한 사람이 하루에 너무 많이 입력하면 거부", async () => {
+    const guest = newUid();
+    const today = new Date().toISOString().slice(0, 10);
+    await db.doc(`inviteAttempts/${guest}`).set({ date: today, count: 20 });
+    await expect(joinJourney.run(req({ inviteCode: "ZZZZZ2" }, guest)))
+      .rejects.toMatchObject({ code: "resource-exhausted" });
   });
 });
 
