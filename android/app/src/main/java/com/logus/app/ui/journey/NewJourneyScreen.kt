@@ -68,6 +68,7 @@ import com.logus.app.journey.NewJourneyUiState
 import com.logus.app.ui.components.ErrorMessage
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
+import com.logus.app.ui.theme.PrimaryStrong
 import java.time.LocalDate
 
 // S02 새 여정 만들기
@@ -566,40 +567,39 @@ private fun NotifyOffRow(checked: Boolean, onToggle: () -> Unit) {
     }
 }
 
-/** 친구 초대하기(초대 링크 만들기). 공유 화면은 다음 작업에서 연결한다 */
+/**
+ * 친구 초대하기(초대 링크 만들기). 짙은 보라(primary-strong #4A2FB8) 채움 + 흰 글자(대비 8:1).
+ * 다크 모드에서도 같은 짙은 보라를 쓴다(흰 글자가 잘 보이게). 공유 화면은 다음 작업에서 연결한다.
+ */
 @Composable
 private fun InviteButton(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = LogUsColors.card,
+        color = PrimaryStrong,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, LogUsColors.line),
+        shadowElevation = 4.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .size(44.dp)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)),
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painterResource(R.drawable.ic_person_add),
                     contentDescription = null,
-                    tint = LogUsColors.primaryStrong,
                     modifier = Modifier.size(24.dp),
                 )
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("친구 초대하기", color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("초대 링크를 만들어요", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text("친구 초대하기", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("초대 링크를 만들어요", fontSize = 13.sp)
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }
     }
 }

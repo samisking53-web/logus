@@ -4,7 +4,7 @@ package com.logus.app.auth
  * 약관 버전. 약관 문구(legal/LegalDocs.kt)를 바꾸면 이 날짜도 바꾼다.
  * Firestore 에 users/{uid}/agreements/{TERMS_VERSION} 으로 동의 기록이 남는다(보안 규칙: YYYY-MM-DD 형식).
  */
-const val TERMS_VERSION = "2026-10-03"
+const val TERMS_VERSION = "2026-10-04" // 2026-10-04: 새 여정 도시 추천에 현재 위치를 쓰는 내용 추가
 
 /** 약관 동의 화면의 체크 상태 */
 data class Agreements(
