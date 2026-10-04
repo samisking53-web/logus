@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage) // 프로필 사진 올리기
+    implementation(libs.firebase.functions) // 서버 함수 부르기(새 여정 만들기 createJourney)
     implementation(libs.kotlinx.coroutines.play.services) // Firebase Task 를 await() 로 기다리기
 
     // 구글 로그인: 안드로이드 표준 로그인 창(Credential Manager)

@@ -3,6 +3,7 @@ package com.logus.app.journey
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.firestore
+import com.google.firebase.functions.functions
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -29,6 +30,39 @@ data class Member(val uid: String, val nickname: String)
  */
 class JourneyRepository {
     private val db = Firebase.firestore
+
+    // 서버 함수는 서울 리전(asia-northeast3)에 있다(functions/src/globalOptions.ts)
+    private val functions = Firebase.functions("asia-northeast3")
+
+    /**
+     * S02 새 여정 만들기: 서버 함수 createJourney 를 부른다.
+     * 여정 문서·내 멤버 문서(알림 간격)·초대 요약을 서버가 한 번에 만든다(앱은 journeys 를 직접 만들 수 없다).
+     * 날짜는 "YYYY-MM-DD", notifyIntervalHours 는 1·2·3 또는 null(촬영 알림 받지 않기).
+     * 돌려주는 값: 새 여정 ID
+     */
+    suspend fun createJourney(
+        name: String,
+        city: String,
+        country: String,
+        startDate: String,
+        endDate: String,
+        notifyIntervalHours: Int?,
+    ): String {
+        val result = functions.getHttpsCallable("createJourney")
+            .call(
+                hashMapOf(
+                    "name" to name,
+                    "city" to city,
+                    "country" to country,
+                    "startDate" to startDate,
+                    "endDate" to endDate,
+                    "notifyIntervalHours" to notifyIntervalHours,
+                ),
+            )
+            .await()
+        val data = result.getData() as? Map<*, *>
+        return data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요.")
+    }
 
     /**
      * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정. 없으면 null.

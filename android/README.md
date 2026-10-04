@@ -28,9 +28,13 @@ android/
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
    ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users)
    ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
+   ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
+   ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
+   ├─ journey/StartDayCamera.kt 여정 시작일에 폰 카메라 열기
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
    ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드
+   ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
    ├─ ui/components/            동그란 프로필 사진, 하단 탭, 오류 문구 등
    └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
