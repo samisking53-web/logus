@@ -1,4 +1,4 @@
-// joinJourney: 6자리 초대 코드로 여정에 참여한다 (I01 초대 코드 입력 → I02 참여 완료에서 호출)
+// joinJourney: 6자리 초대 코드로 여정에 참여한다 (I01 초대 확인의 "초대 수락하기"에서 호출)
 // memberIds·memberCount, 멤버 문서, invites 요약의 인원수를 한 트랜잭션으로 함께 고친다.
 // 코드가 짧은 대신(6자리) 아래로 보완한다.
 //   - 로그인한 사람만 쓸 수 있다(invites 는 앱이 직접 읽지 못하고 이 함수만 읽는다)
@@ -7,7 +7,7 @@
 import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
-import { INVITE_ATTEMPTS_PER_DAY, requireAuth, requireInviteCode, requireObject } from "./common";
+import { countInviteAttempt, requireAuth, requireInviteCode, requireObject } from "./common";
 
 type JoinJourneyResult = { journeyId: string; alreadyMember: boolean };
 
@@ -16,7 +16,7 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
   const data = requireObject(request.data);
   const inviteCode = requireInviteCode(data.inviteCode);
 
-  await countAttempt(uid);
+  await countInviteAttempt(uid);
 
   return db.runTransaction(async (tx) => {
     const inviteRef = db.collection("invites").doc(inviteCode);
@@ -63,20 +63,3 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
     return { journeyId, alreadyMember: false };
   });
 });
-
-/**
- * 초대 코드 입력 횟수를 센다(맞든 틀리든). 오늘(UTC) 횟수를 넘으면 거부한다.
- * inviteAttempts/{uid}: date("YYYY-MM-DD"), count — 서버만 읽고 쓴다(보안 규칙 기본 거부).
- */
-async function countAttempt(uid: string): Promise<void> {
-  const ref = db.collection("inviteAttempts").doc(uid);
-  const today = new Date().toISOString().slice(0, 10);
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const count = snap.get("date") === today ? ((snap.get("count") as number | undefined) ?? 0) : 0;
-    if (count >= INVITE_ATTEMPTS_PER_DAY) {
-      throw new HttpsError("resource-exhausted", "오늘은 초대 코드를 너무 많이 입력했어요. 내일 다시 시도해 주세요.");
-    }
-    tx.set(ref, { date: today, count: count + 1 });
-  });
-}

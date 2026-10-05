@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.logus.app.auth.Profile
 import com.logus.app.home.HomeUiState
 import com.logus.app.home.HomeViewModel
+import com.logus.app.home.JoinViewModel
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.journey.StartDayCamera
 import com.logus.app.ui.components.BottomTabBar
@@ -28,6 +29,7 @@ import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
+import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
 import java.time.LocalDate
@@ -43,14 +45,20 @@ fun MainScreen(
     onSignOut: () -> Unit,
     homeViewModel: HomeViewModel = viewModel(),
     newJourneyViewModel: NewJourneyViewModel = viewModel(),
+    joinViewModel: JoinViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
     // S02·S03 새 여정 만들기를 보여 주는 중인지(이때는 하단 탭을 숨긴다)
     var creatingJourney by rememberSaveable { mutableStateOf(false) }
-    // S01 "초대 코드로 참여" → 초대 코드 입력 팝업을 보여 주는 중인지
-    var joiningWithCode by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = !creatingJourney && tab != MainTab.HOME) { tab = MainTab.HOME }
+
+    // 초대 코드로 참여: 입력 팝업 → (서버 확인) → I01 초대 확인 화면(홈 탭 자리에 보인다)
+    val joinState by joinViewModel.state.collectAsStateWithLifecycle()
+    val invitePreview = joinState.preview
+    BackHandler(enabled = !creatingJourney && tab == MainTab.HOME && invitePreview != null) {
+        joinViewModel.closePreview()
+    }
 
     // 진행 중인 여정 확인(로그인한 사람이 바뀔 때만 다시 읽는다)
     LaunchedEffect(uid) { homeViewModel.load(uid) }
@@ -101,7 +109,8 @@ fun MainScreen(
                     .statusBarsPadding(),
             ) {
                 when (tab) {
-                    MainTab.HOME -> HomeScreen(
+                    // I01 초대 확인. "초대 수락하기"(참여 → 다음 화면)는 다음 작업에서 연결한다
+                    MainTab.HOME -> if (invitePreview != null) InvitePreviewScreen(preview = invitePreview) else HomeScreen(
                         profile = profile,
                         state = homeState,
                         onRetry = { homeViewModel.load(uid, force = true) },
@@ -109,7 +118,7 @@ fun MainScreen(
                             newJourneyViewModel.reset()
                             creatingJourney = true
                         },
-                        onJoinWithCode = { joiningWithCode = true },
+                        onJoinWithCode = joinViewModel::openDialog,
                     )
                     MainTab.EXPLORE -> ExploreScreen()
                     MainTab.MY_LOG -> MyLogScreen(onSignOut = onSignOut)
@@ -117,9 +126,14 @@ fun MainScreen(
             }
             BottomTabBar(selected = tab, onSelect = { tab = it })
         }
-        if (joiningWithCode) {
-            // "여정 확인하기"(onConfirm)를 누른 뒤 화면은 다음 작업에서 연결한다(joinJourney 로 코드 확인 → 참여)
-            JoinCodeDialog(onClose = { joiningWithCode = false })
+        if (joinState.dialogOpen) {
+            JoinCodeDialog(
+                onClose = joinViewModel::closeDialog,
+                onConfirm = joinViewModel::check, // 서버(previewInvite)가 코드를 확인 → 맞으면 I01 화면
+                checking = joinState.checking,
+                error = joinState.error,
+                onEdit = joinViewModel::clearError,
+            )
         }
     }
 }

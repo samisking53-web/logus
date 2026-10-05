@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "../../functions/src/admin";
 import { createJourney } from "../../functions/src/createJourney";
 import { joinJourney } from "../../functions/src/joinJourney";
+import { previewInvite } from "../../functions/src/previewInvite";
 import { LOCATION_REWARD_COINS, saveLogLocation } from "../../functions/src/saveLogLocation";
 
 /** 로그인한 사용자가 callable을 부른 것처럼 요청을 만든다. uid가 없으면 비로그인 */
@@ -208,3 +209,46 @@ describe("saveLogLocation (코인 중복 지급 거부)", () => {
       .rejects.toMatchObject({ code: "invalid-argument" });
   });
 });
+
+describe("previewInvite", () => {
+  it("코드로 여정 요약을 확인한다(참여는 하지 않는다)", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    const result = await previewInvite.run(req({ inviteCode: inviteCode.toLowerCase() }, guest));
+    expect(result).toMatchObject({
+      name: "우리의 포르투", city: "포르투", startDate: "2026-09-24", endDate: "2026-09-26",
+      memberCount: 1, notifyIntervalHours: 2, alreadyMember: false,
+    });
+    // 확인만 하므로 구성원이 늘지 않는다
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner]);
+  });
+
+  it("이미 구성원이면 alreadyMember", async () => {
+    const owner = newUid();
+    const { inviteCode } = await makeJourney(owner);
+    const result = await previewInvite.run(req({ inviteCode }, owner));
+    expect(result.alreadyMember).toBe(true);
+  });
+
+  it("없는 코드·만료된 코드·로그인 안 함은 거부", async () => {
+    await expect(previewInvite.run(req({ inviteCode: "ZZZZZ2" }, newUid())))
+      .rejects.toMatchObject({ code: "not-found" });
+    const { inviteCode } = await makeJourney(newUid());
+    await db.doc(`invites/${inviteCode}`).update({ expiresAt: new Date(Date.now() - 1000) });
+    await expect(previewInvite.run(req({ inviteCode }, newUid())))
+      .rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(previewInvite.run(req({ inviteCode })))
+      .rejects.toMatchObject({ code: "unauthenticated" });
+  });
+
+  it("코드 확인도 하루 입력 횟수에 포함된다", async () => {
+    const guest = newUid();
+    const today = new Date().toISOString().slice(0, 10);
+    await db.doc(`inviteAttempts/${guest}`).set({ date: today, count: 19 });
+    await expect(previewInvite.run(req({ inviteCode: "ZZZZZ2" }, guest))).rejects.toMatchObject({ code: "not-found" });
+    await expect(previewInvite.run(req({ inviteCode: "ZZZZZ2" }, guest)))
+      .rejects.toMatchObject({ code: "resource-exhausted" });
+  });
+});
+

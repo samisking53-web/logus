@@ -23,6 +23,20 @@ data class Journey(
 /** 새로 만든 여정: ID 와 6자리 초대 코드(7일 동안 쓸 수 있다) */
 data class CreatedJourney(val journeyId: String, val inviteCode: String)
 
+/** 초대 코드로 확인한 여정 요약(I01 초대 확인 화면). 아직 참여하기 전이다 */
+data class InvitePreview(
+    val code: String,
+    val journeyName: String,
+    val city: String,
+    val startDate: String,
+    val endDate: String,
+    val memberCount: Int,
+    val inviterName: String,
+    /** 여정을 만든 사람의 촬영 알림 간격(1·2·3시간, 없으면 null) */
+    val notifyIntervalHours: Int?,
+    val alreadyMember: Boolean,
+)
+
 /** 여정 구성원 한 명(홈의 동그란 이름 표시용) */
 data class Member(val uid: String, val nickname: String)
 
@@ -67,6 +81,29 @@ class JourneyRepository {
         return CreatedJourney(
             journeyId = data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요."),
             inviteCode = data?.get("inviteCode") as? String ?: error("서버가 초대 코드를 돌려주지 않았어요."),
+        )
+    }
+
+    /**
+     * 초대 코드 확인: 서버 함수 previewInvite 를 부른다(참여는 하지 않는다).
+     * 앱은 invites 를 직접 읽지 못해서(보안 규칙) 서버가 코드를 확인하고 요약만 돌려준다.
+     * 없는 코드·만료·하루 입력 횟수 초과면 FirebaseFunctionsException 이 난다.
+     */
+    suspend fun previewInvite(code: String): InvitePreview {
+        val result = functions.getHttpsCallable("previewInvite")
+            .call(hashMapOf("inviteCode" to code))
+            .await()
+        val data = result.getData() as? Map<*, *> ?: error("서버 응답을 읽을 수 없어요.")
+        return InvitePreview(
+            code = code,
+            journeyName = data["name"] as? String ?: "",
+            city = data["city"] as? String ?: "",
+            startDate = data["startDate"] as? String ?: "",
+            endDate = data["endDate"] as? String ?: "",
+            memberCount = (data["memberCount"] as? Number)?.toInt() ?: 1,
+            inviterName = data["inviterName"] as? String ?: "친구",
+            notifyIntervalHours = (data["notifyIntervalHours"] as? Number)?.toInt(),
+            alreadyMember = data["alreadyMember"] as? Boolean ?: false,
         )
     }
 

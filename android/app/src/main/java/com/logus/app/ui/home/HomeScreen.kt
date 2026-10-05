@@ -156,7 +156,7 @@ fun HomeScreen(
 
 /** 화면 맨 위 로고: 지구 모양 + LOG EARTH (강조 보라) */
 @Composable
-private fun LogoHeader() {
+internal fun LogoHeader() {
     Row(
         Modifier
             .fillMaxWidth()
@@ -186,7 +186,7 @@ private fun LogoHeader() {
  * filled = true 면 보라 채움(흰 글자), false 면 흰 카드(본문 글자)
  */
 @Composable
-private fun ActionButton(
+internal fun ActionButton(
     icon: Painter,
     title: String,
     subtitle: String?,

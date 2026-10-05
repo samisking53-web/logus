@@ -169,7 +169,7 @@ private fun MemberDots(members: List<Member>) {
  * "여기에 대표 사진이 들어간다"는 자리 표시용이다.
  */
 @Composable
-private fun CoverPlaceholder(modifier: Modifier = Modifier) {
+internal fun CoverPlaceholder(modifier: Modifier = Modifier) {
     val fill = LogUsColors.card
     val wave = LogUsColors.border
     Canvas(modifier.semantics { contentDescription = "대표 사진이 들어갈 자리" }) {

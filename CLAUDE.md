@@ -73,7 +73,7 @@
 - S12 추억 지도 / S13 추억 타임라인
 - S14 추억 영상 만들기(하루·전체·기간) / S15 재생·저장·공유
 - 초대 코드 입력 팝업(S01 "초대 코드로 참여" → 6자리 입력 → 여정 확인하기, `ui/home/JoinCodeDialog.kt`)
-- I01 초대 확인 / I02 참여 완료·내 알림 설정 / I03 참여한 여정 / I04 공동 피드의 첫 기록
+- I01 초대 확인("○○ 님이 초대했습니다" + 여정 카드 + 초대 수락하기, `ui/invite/InvitePreviewScreen.kt`) / I02 참여 완료·내 알림 설정 / I03 참여한 여정 / I04 공동 피드의 첫 기록
 
 ## 데이터 모델 (Firestore 초안. 바꾸면 이 파일도 함께 고친다)
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
@@ -105,6 +105,7 @@
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
 - `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약(6자리 코드, 7일 뒤 만료)을 한 트랜잭션으로 만든다. 코드가 겹치면 새 코드로 다시 만든다. 돌려주는 값: journeyId, inviteCode, inviteExpiresAt
+- `previewInvite`: 6자리 초대 코드로 여정 요약(여정 이름·도시·기간·현재 인원·초대한 사람·만든 사람의 알림 간격·이미 구성원인지)만 돌려준다(참여하지 않음). 앱은 `invites`를 읽지 못하므로 I01 화면은 이 함수로 채운다. `joinJourney`와 하루 입력 횟수를 함께 센다
 - `joinJourney`: 6자리 초대 코드로 참여한다(대소문자·공백 무시). 하루 입력 횟수와 만료를 확인하고, memberIds·members·memberCount·invites 요약을 함께 갱신한다
 - `saveLogLocation`: 위치 저장과 30코인 지급을 한 트랜잭션으로 처리한다. coinLedger 문서가 이미 있으면 코인은 주지 않는다
 - `syncPublicLog`(Firestore 트리거): 공개이고 위치가 있는 기록만 publicLogs 사본과 `public/` 미디어 사본을 만들고, 조건이 깨지면 지운다
@@ -116,7 +117,7 @@
 - 로그인: Credential Manager(`GetSignInWithGoogleOption`)로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 Firebase Auth에 넘긴다. `R.string.default_web_client_id`(구글 로그인을 켜면 자동으로 생기는 OAuth 클라이언트, 웹 앱 등록과 무관)가 필요하다. Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
 - 회원가입 흐름: 첫 화면(`ui/WelcomeScreen.kt`, Google 계정으로 계속하기) → 로그인 후 `users/{uid}`가 없으면 약관 동의(1/2 단계) → P01 프로필 설정(2/2 단계, 닉네임 1~20자) ↔ P02 프로필 사진(앨범·구글 사진·기본) → 홈. 가입 완료 때 `users/{uid}`와 `users/{uid}/agreements/{약관 버전}`을 한 배치로 저장하고, 앨범 사진은 줄여서 Storage에 올린다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·Signup(step)·Ready·Failed)
 - 약관 문구는 `legal/LegalDocs.kt`(캡스톤용 예시, 출시 전 법률 검토 필요). 문구를 바꾸면 `TERMS_VERSION`도 바꾼다
-- 초대는 링크 없이 6자리 초대 코드로만 한다. S02 "친구 초대하기"를 누르면 여정을 저장하고 코드 팝업(`ui/journey/InviteCodeDialog.kt`)에서 코드를 복사한다. 받은 사람은 로그인·가입 후 홈(S01)의 "초대 코드로 참여" 팝업에 코드를 입력하고 `joinJourney`로 참여한다(로그인 전 미리보기 없음). 코드 글자 규칙은 앱 `journey/InviteCode.kt`와 서버 `functions/src/common.ts`가 같아야 한다
+- 초대는 링크 없이 6자리 초대 코드로만 한다. S02 "친구 초대하기"를 누르면 여정을 저장하고 코드 팝업(`ui/journey/InviteCodeDialog.kt`)에서 코드를 복사한다. 받은 사람은 로그인·가입 후 홈(S01)의 "초대 코드로 참여" 팝업에 코드를 입력 → "여정 확인하기"(`previewInvite`) → I01 초대 확인 → "초대 수락하기"(`joinJourney`)로 참여한다(상태는 `home/JoinViewModel.kt`)(로그인 전 미리보기 없음). 코드 글자 규칙은 앱 `journey/InviteCode.kt`와 서버 `functions/src/common.ts`가 같아야 한다
 
 ## 데이터 원칙
 - 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다

@@ -1,6 +1,7 @@
 // 여러 함수가 함께 쓰는 확인·검증 도우미
 import { randomInt } from "node:crypto";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
+import { db } from "./admin";
 
 /** 로그인하지 않았으면 거부하고, 로그인한 사용자의 uid를 돌려준다. */
 export function requireAuth(request: CallableRequest<unknown>): string {
@@ -82,4 +83,21 @@ export function requireInviteCode(value: unknown): string {
     throw new HttpsError("invalid-argument", "초대 코드는 영문·숫자 6자리예요.");
   }
   return code;
+}
+
+/**
+ * 초대 코드 입력 횟수를 센다(맞든 틀리든, 코드 확인·참여 모두). 오늘(UTC) 횟수를 넘으면 거부한다.
+ * inviteAttempts/{uid}: date("YYYY-MM-DD"), count — 서버만 읽고 쓴다(보안 규칙 기본 거부).
+ */
+export async function countInviteAttempt(uid: string): Promise<void> {
+  const ref = db.collection("inviteAttempts").doc(uid);
+  const today = new Date().toISOString().slice(0, 10);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = snap.get("date") === today ? ((snap.get("count") as number | undefined) ?? 0) : 0;
+    if (count >= INVITE_ATTEMPTS_PER_DAY) {
+      throw new HttpsError("resource-exhausted", "오늘은 초대 코드를 너무 많이 입력했어요. 내일 다시 시도해 주세요.");
+    }
+    tx.set(ref, { date: today, count: count + 1 });
+  });
 }
