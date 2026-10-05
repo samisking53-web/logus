@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 // 라이트
 val Primary = Color(0xFF5B3DD6) // 채움 전용(버튼·활성 탭). 위 글자는 흰색
 val PrimaryStrong = Color(0xFF4A2FB8) // 강조 글자
+val PrimaryLight = Color(0xFF6B4FE0) // 조금 밝은 보라 채움(S01-A "새 여정 시작하기"). 위 글자는 흰색(대비 5.5:1)
 val Surface = Color(0xFFEEEAFB) // 카드
 val Border = Color(0xFFD8CFF5)
 val Text = Color(0xFF1A1725)

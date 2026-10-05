@@ -58,6 +58,9 @@ object LogUsColors {
     /** 구분선 */
     val line: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BorderDark else Line
+    /** 조금 밝은 보라 버튼 채움(S01-A "새 여정 시작하기"). 다크 모드는 primary 와 같은 #6B4FE0(흰 글자 대비를 지키는 가장 밝은 보라) */
+    val primaryLight: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) PrimaryDark else PrimaryLight
     /** 팝업 위쪽 그림 동그라미: 라이트는 연보라(surface), 다크는 바탕색(카드와 같은 색이면 동그라미가 안 보여서) */
     val iconCircle: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Surface

@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
@@ -52,7 +53,8 @@ import com.logus.app.ui.theme.PrimaryStrong
 /**
  * 홈 화면. 진행 중인 여정이 없으면 S01, 오늘이 여행 기간 안이면 S01-A 를 보여 준다.
  * - S01: 제목 → 프로필 상자 → "현재 진행중인 여정이 없어요!" → 새 여정 시작하기 / 초대 코드로 참여
- * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기
+ * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기(보라) → 새 여정 시작하기(조금 밝은 보라)
+ *   → 초대 코드로 참여(흰색). 세 버튼은 크기가 같고, 화면이 길어지면 아래로 스크롤된다.
  * "새 여정 시작하기"는 S02, "초대 코드로 참여"는 6자리 초대 코드 입력 팝업(링크는 쓰지 않음)을 연다.
  * "지금 기록하기"·"사진 수정"은 다음 작업에서 화면을 만들며 연결한다. 지금은 눌러도 아무 일도 없다.
  */
@@ -88,6 +90,25 @@ fun HomeScreen(
                     subtitle = null,
                     filled = true,
                     onClick = onRecordNow,
+                )
+                Spacer(Modifier.height(12.dp))
+                // S01 과 같은 두 버튼. 새 여정은 조금 밝은 보라(그림 상자는 기본 보라)
+                ActionButton(
+                    icon = rememberVectorPainter(Icons.Filled.Add),
+                    title = "새 여정 시작하기",
+                    subtitle = "이름과 날짜만 정하면 돼요",
+                    filled = true,
+                    onClick = onNewJourney,
+                    containerColor = LogUsColors.primaryLight,
+                    iconBoxColor = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(12.dp))
+                ActionButton(
+                    icon = painterResource(R.drawable.ic_person_add),
+                    title = "초대 코드로 참여",
+                    subtitle = "받은 6자리 초대 코드로 들어가요",
+                    filled = false,
+                    onClick = onJoinWithCode,
                 )
             }
 
@@ -184,6 +205,8 @@ internal fun LogoHeader() {
 /**
  * 큰 상자 버튼: 왼쪽 그림 상자 + 제목(+설명) + 오른쪽 ›.
  * filled = true 면 보라 채움(흰 글자), false 면 흰 카드(본문 글자)
+ * containerColor·iconBoxColor 로 채움색·그림 상자 색을 바꿀 수 있다(팔레트 색만, 채움이면 흰 글자 대비 4.5:1 이상)
+ * 버튼 높이는 76dp 로 모두 같다(설명 글이 있어도 그림 상자 44dp + 위아래 여백 안에 들어간다)
  */
 @Composable
 internal fun ActionButton(
@@ -192,12 +215,14 @@ internal fun ActionButton(
     subtitle: String?,
     filled: Boolean,
     onClick: () -> Unit,
+    containerColor: Color? = null,
+    iconBoxColor: Color? = null,
 ) {
-    val container = if (filled) MaterialTheme.colorScheme.primary else LogUsColors.card
+    val container = containerColor ?: if (filled) MaterialTheme.colorScheme.primary else LogUsColors.card
     val titleColor = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     val subColor = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     // 보라 버튼 안 그림 상자는 한 단계 진한 보라, 흰 버튼 안은 연보라
-    val iconBox = if (filled) PrimaryStrong else MaterialTheme.colorScheme.surface
+    val iconBox = iconBoxColor ?: if (filled) PrimaryStrong else MaterialTheme.colorScheme.surface
     val iconTint = if (filled) MaterialTheme.colorScheme.onPrimary else LogUsColors.primaryStrong
 
     Surface(
