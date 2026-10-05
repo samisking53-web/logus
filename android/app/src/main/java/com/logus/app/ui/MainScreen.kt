@@ -27,6 +27,7 @@ import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.home.HomeScreen
+import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
 import java.time.LocalDate
@@ -47,6 +48,8 @@ fun MainScreen(
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
     // S02·S03 새 여정 만들기를 보여 주는 중인지(이때는 하단 탭을 숨긴다)
     var creatingJourney by rememberSaveable { mutableStateOf(false) }
+    // S01 "초대 코드로 참여" → 초대 코드 입력 팝업을 보여 주는 중인지
+    var joiningWithCode by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = !creatingJourney && tab != MainTab.HOME) { tab = MainTab.HOME }
 
     // 진행 중인 여정 확인(로그인한 사람이 바뀔 때만 다시 읽는다)
@@ -106,12 +109,17 @@ fun MainScreen(
                             newJourneyViewModel.reset()
                             creatingJourney = true
                         },
+                        onJoinWithCode = { joiningWithCode = true },
                     )
                     MainTab.EXPLORE -> ExploreScreen()
                     MainTab.MY_LOG -> MyLogScreen(onSignOut = onSignOut)
                 }
             }
             BottomTabBar(selected = tab, onSelect = { tab = it })
+        }
+        if (joiningWithCode) {
+            // "여정 확인하기"(onConfirm)를 누른 뒤 화면은 다음 작업에서 연결한다(joinJourney 로 코드 확인 → 참여)
+            JoinCodeDialog(onClose = { joiningWithCode = false })
         }
     }
 }

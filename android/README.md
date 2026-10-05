@@ -34,7 +34,7 @@ android/
    ├─ journey/StartDayCamera.kt 여정 시작일에 폰 카메라 열기
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
-   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드
+   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
    ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력, 초대 코드 팝업
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
    ├─ ui/components/            동그란 프로필 사진, 하단 탭, 오류 문구 등
