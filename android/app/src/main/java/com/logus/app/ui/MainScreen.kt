@@ -29,6 +29,7 @@ import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
+import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
@@ -54,6 +55,7 @@ fun MainScreen(
     BackHandler(enabled = !creatingJourney && tab != MainTab.HOME) { tab = MainTab.HOME }
 
     // 초대 코드로 참여: 입력 팝업 → (서버 확인) → I01 초대 확인 화면(홈 탭 자리에 보인다)
+    // → "초대 수락하기"(서버 참여) → 수락 완료 팝업 → "홈으로 가기"(참여한 여정의 S01-A)
     val joinState by joinViewModel.state.collectAsStateWithLifecycle()
     val invitePreview = joinState.preview
     BackHandler(enabled = !creatingJourney && tab == MainTab.HOME && invitePreview != null) {
@@ -109,8 +111,13 @@ fun MainScreen(
                     .statusBarsPadding(),
             ) {
                 when (tab) {
-                    // I01 초대 확인. "초대 수락하기"(참여 → 다음 화면)는 다음 작업에서 연결한다
-                    MainTab.HOME -> if (invitePreview != null) InvitePreviewScreen(preview = invitePreview) else HomeScreen(
+                    // I01 초대 확인. "초대 수락하기" → 서버 참여 → 아래 수락 완료 팝업
+                    MainTab.HOME -> if (invitePreview != null) InvitePreviewScreen(
+                        preview = invitePreview,
+                        onAccept = joinViewModel::accept,
+                        accepting = joinState.accepting,
+                        error = joinState.acceptError,
+                    ) else HomeScreen(
                         profile = profile,
                         state = homeState,
                         onRetry = { homeViewModel.load(uid, force = true) },
@@ -133,6 +140,18 @@ fun MainScreen(
                 checking = joinState.checking,
                 error = joinState.error,
                 onEdit = joinViewModel::clearError,
+            )
+        }
+        // 초대 수락 완료 팝업(I01 위). "홈으로 가기" → 방금 참여한 여정을 S01-A 로 보여 준다("지금 기록하기")
+        val joinedJourneyId = joinState.joinedJourneyId
+        if (joinedJourneyId != null && invitePreview != null) {
+            InviteAcceptedDialog(
+                inviterName = invitePreview.inviterName,
+                onGoHome = {
+                    joinViewModel.finish()
+                    tab = MainTab.HOME
+                    homeViewModel.showJoined(uid, joinedJourneyId)
+                },
             )
         }
     }

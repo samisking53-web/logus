@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.logus.app.R
 import com.logus.app.journey.InvitePreview
+import com.logus.app.ui.components.ErrorMessage
 import com.logus.app.ui.home.ActionButton
 import com.logus.app.ui.home.CoverPlaceholder
 import com.logus.app.ui.home.LogoHeader
@@ -47,14 +48,17 @@ import com.logus.app.ui.theme.LogUsTheme
  * 초대 코드를 확인한 뒤 보이는 화면. 여정 진행 중 홈(S01-A)을 바탕으로 만들었다.
  * - 프로필 상자 대신 "○○ 님이 초대했습니다" 상자(연보라: 바탕보다 진하고 아래 보라 버튼보다 옅다)
  * - 가운데 여정 카드를 크게: 대표 사진 자리, 여정 이름, 기간·현재 인원, 촬영 알림 간격(여정을 만든 사람의 설정)
- * - "초대 수락하기"를 누르면 참여(joinJourney) 후 다음 화면으로 갈 예정이다. 그 화면은 다음 작업에서 만들고,
- *   지금은 onAccept 가 아무 일도 하지 않는다.
+ * - "초대 수락하기"를 누르면 서버(joinJourney)로 참여하고, 이 화면 위에 수락 완료 팝업(InviteAcceptedDialog)이 뜬다.
+ *   참여하는 동안(accepting)은 버튼 설명에 "참여하는 중…"을 보여 주고 다시 눌리지 않는다.
+ *   실패하면 error 문구를 버튼 위에 보여 준다.
  * 폰의 뒤로 가기를 누르면 홈으로 돌아간다(MainScreen).
  */
 @Composable
 fun InvitePreviewScreen(
     preview: InvitePreview,
     onAccept: () -> Unit = {},
+    accepting: Boolean = false,
+    error: String? = null,
 ) {
     Column(
         Modifier
@@ -154,12 +158,16 @@ fun InvitePreviewScreen(
         }
         Spacer(Modifier.height(28.dp))
 
+        if (error != null) {
+            ErrorMessage(error)
+            Spacer(Modifier.height(12.dp))
+        }
         ActionButton(
             icon = painterResource(R.drawable.ic_login),
             title = "초대 수락하기",
-            subtitle = null,
+            subtitle = if (accepting) "참여하는 중…" else null,
             filled = true,
-            onClick = onAccept,
+            onClick = { if (!accepting) onAccept() },
         )
         Spacer(Modifier.height(24.dp))
     }

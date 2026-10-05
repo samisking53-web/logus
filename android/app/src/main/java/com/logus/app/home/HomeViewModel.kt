@@ -62,6 +62,28 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * 초대를 수락하고 "홈으로 가기"를 눌렀을 때: 방금 참여한 여정을 바로 S01-A 로 보여 준다.
+     * (진행 중인 내 여정이 여러 개여도 방금 참여한 여정이 보이게 그 문서를 직접 읽는다)
+     * 오늘이 그 여정 기간 밖이면 홈 규칙대로 다른 진행 중 여정(S01-A) 또는 S01 을 보여 준다.
+     */
+    fun showJoined(uid: String, journeyId: String) {
+        loadedUid = uid
+        _state.value = HomeUiState.Loading
+        viewModelScope.launch {
+            val today = LocalDate.now().toString()
+            val joined = runCatching { repository.loadJourney(journeyId) }
+                .onFailure { Log.w(TAG, "참여한 여정 읽기 실패", it) }
+                .getOrNull()
+            if (joined != null && joined.startDate <= today && today <= joined.endDate) {
+                val members = runCatching { repository.loadMembers(joined.memberIds) }.getOrDefault(emptyList())
+                _state.value = HomeUiState.Ongoing(joined, members)
+            } else {
+                load(uid, force = true)
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "HomeViewModel"
     }

@@ -108,6 +108,33 @@ class JourneyRepository {
     }
 
     /**
+     * I01 "초대 수락하기": 서버 함수 joinJourney 로 여정에 참여한다.
+     * 서버가 memberIds·멤버 문서·인원수를 한 번에 고친다(앱은 memberIds 를 직접 고칠 수 없다).
+     * 이미 구성원이면 서버가 아무것도 바꾸지 않고 성공으로 돌려준다.
+     * 돌려주는 값: 참여한 여정 ID
+     */
+    suspend fun joinJourney(code: String): String {
+        val result = functions.getHttpsCallable("joinJourney")
+            .call(hashMapOf("inviteCode" to code))
+            .await()
+        val data = result.getData() as? Map<*, *>
+        return data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요.")
+    }
+
+    /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */
+    suspend fun loadJourney(journeyId: String): Journey? {
+        val doc = db.collection("journeys").document(journeyId).get().await()
+        return Journey(
+            id = doc.id,
+            name = doc.getString("name") ?: return null,
+            startDate = doc.getString("startDate") ?: return null,
+            endDate = doc.getString("endDate") ?: return null,
+            memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+            memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
+        )
+    }
+
+    /**
      * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정. 없으면 null.
      * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 5개만 읽고(비용 관리: limit),
      * 그중 종료일이 오늘 이후인 첫 여정을 고른다.
