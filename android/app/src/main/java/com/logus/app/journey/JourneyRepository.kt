@@ -18,9 +18,11 @@ data class Journey(
     val endDate: String,
     val memberIds: List<String>,
     val memberCount: Int,
+    /** 이 여정의 6자리 초대 코드. 여정을 만들 때 정해지고 바뀌지 않는다(여정이 끝날 때까지 쓸 수 있다) */
+    val inviteCode: String? = null,
 )
 
-/** 새로 만든 여정: ID 와 6자리 초대 코드(7일 동안 쓸 수 있다) */
+/** 새로 만든 여정: ID 와 6자리 초대 코드(여정이 끝날 때까지 쓸 수 있다) */
 data class CreatedJourney(val journeyId: String, val inviteCode: String)
 
 /** 초대 코드로 확인한 여정 요약(I01 초대 확인 화면). 아직 참여하기 전이다 */
@@ -131,6 +133,7 @@ class JourneyRepository {
             endDate = doc.getString("endDate") ?: return null,
             memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
             memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
+            inviteCode = doc.getString("inviteCode"),
         )
     }
 
@@ -157,6 +160,7 @@ class JourneyRepository {
                     endDate = doc.getString("endDate") ?: return@mapNotNull null,
                     memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
+                    inviteCode = doc.getString("inviteCode"),
                 )
             }
             .firstOrNull { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다

@@ -45,7 +45,7 @@
 ## UI 규칙
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
-- 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다(여행 중에도 새 사람 초대. 팝업은 다음 작업, 지금은 동작 없음)
+- 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → 여정의 초대 코드(`journeys.inviteCode`, 같은 여정은 늘 같은 코드)·복사 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정 시작일에는 폰 카메라 앱을 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. `journey/StartDayCamera.kt`). 앱 안 카메라(S04)를 만들면 그쪽으로 바꾼다
 - 화면 문구는 모두 한국어
@@ -65,7 +65,7 @@
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
-- S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사)
+- S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
 - S04 앱 내 카메라 / S05 기록 올리기(짧은 글·태그·테마)
 - S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+30코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
@@ -84,7 +84,7 @@
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
-- `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName, expiresAt(만든 뒤 7일). 문서 ID가 6자리 초대 코드. 서버 함수만 읽고 쓴다
+- `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName, expiresAt(여정 종료일이 끝나는 때 = 종료일 다음 날 12:00 UTC. 기록용이고 실제 만료 확인은 여정 문서의 endDate로 계산한다). 문서 ID가 6자리 초대 코드. 서버 함수만 읽고 쓴다
 - `inviteAttempts/{uid}`: date(UTC `YYYY-MM-DD`), count. 초대 코드 입력 횟수(하루 20번 제한). 서버만 읽고 쓴다
 - `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, theme, mediaPath, placeName, location, createdAt)
 - `sharedRecaps/{slug}`: 공유를 누른 리캡의 공개 사본
@@ -99,14 +99,14 @@
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`, `inviteAttempts`는 클라이언트가 쓰지 못한다. `invites`·`inviteAttempts`는 읽지도 못한다
 - 비로그인 읽기는 `sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
 - 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
-- 초대 코드는 헷갈리는 글자(0·O·1·I)를 뺀 영문 대문자·숫자 6자리(32글자, 약 10억 가지)다. 짧은 대신 ① 7일 뒤 만료 ② 로그인한 사람만 `joinJourney`로 사용(앱이 `invites`를 직접 읽지 못함) ③ 한 사람당 하루 20번까지 입력으로 보완한다(2026-10-04 팀 결정)
+- 초대 코드는 헷갈리는 글자(0·O·1·I)를 뺀 영문 대문자·숫자 6자리(32글자, 약 10억 가지)다. 같은 여정은 처음 만든 코드를 계속 쓴다(바뀌지 않음). 짧은 대신 ① 여정이 끝나면 만료(종료일이 세계 어디서나 끝나는 종료일 다음 날 12:00 UTC까지) ② 로그인한 사람만 `joinJourney`로 사용(앱이 `invites`를 직접 읽지 못함) ③ 한 사람당 하루 20번까지 입력으로 보완한다(2026-10-04 팀 결정, 2026-10-07에 "만든 뒤 7일 만료"를 "여정이 끝날 때까지"로 바꿈)
 - Storage: 프로필 사진 `users/{uid}/{파일}`은 로그인한 사람이 읽고 본인만 올린다(이미지 5MB 미만). `journeys/{journeyId}/...`는 여정 구성원만 읽고, 올리기·지우기는 본인 폴더 `journeys/{journeyId}/{uid}/`에서만 한다(Firestore 구성원 정보로 확인). 이미지 10MB·영상 50MB 미만, `image/*`·`video/*`만 허용. `public/...`은 읽기만 공개하고 쓰기는 서버만
 
 ## 서버 함수 (functions/src)
 - 모든 callable은 로그인 여부와 여정 구성원 여부를 먼저 확인한다
-- `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약(6자리 코드, 7일 뒤 만료)을 한 트랜잭션으로 만든다. 코드가 겹치면 새 코드로 다시 만든다. 돌려주는 값: journeyId, inviteCode, inviteExpiresAt
-- `previewInvite`: 6자리 초대 코드로 여정 요약(여정 이름·도시·기간·현재 인원·초대한 사람·만든 사람의 알림 간격·이미 구성원인지)만 돌려준다(참여하지 않음). 앱은 `invites`를 읽지 못하므로 I01 화면은 이 함수로 채운다. `joinJourney`와 하루 입력 횟수를 함께 센다
-- `joinJourney`: 6자리 초대 코드로 참여한다(대소문자·공백 무시). 하루 입력 횟수와 만료를 확인하고, memberIds·members·memberCount·invites 요약을 함께 갱신한다
+- `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약(6자리 코드, 여정이 끝나면 만료)을 한 트랜잭션으로 만든다. 코드는 여정 문서 `inviteCode`에도 저장해 구성원이 언제 열어도 같은 코드를 본다. 코드가 겹치면 새 코드로 다시 만든다. 돌려주는 값: journeyId, inviteCode, inviteExpiresAt
+- `previewInvite`: 6자리 초대 코드로 여정 요약(여정 이름·도시·기간·현재 인원·초대한 사람·만든 사람의 알림 간격·이미 구성원인지)만 돌려준다(참여하지 않음). 앱은 `invites`를 읽지 못하므로 I01 화면은 이 함수로 채운다. `joinJourney`와 하루 입력 횟수를 함께 세고, 여정이 끝났으면 거부한다
+- `joinJourney`: 6자리 초대 코드로 참여한다(대소문자·공백 무시). 하루 입력 횟수와 만료(여정 문서의 endDate로 계산, `common.ts`의 `requireInviteOpen`)를 확인하고, memberIds·members·memberCount·invites 요약을 함께 갱신한다
 - `saveLogLocation`: 위치 저장과 30코인 지급을 한 트랜잭션으로 처리한다. coinLedger 문서가 이미 있으면 코인은 주지 않는다
 - `syncPublicLog`(Firestore 트리거): 공개이고 위치가 있는 기록만 publicLogs 사본과 `public/` 미디어 사본을 만들고, 조건이 깨지면 지운다
 - `generateRecapCaptions`: 썸네일·시간·장소를 LLM에 보내 제목·장면 순서·캡션을 JSON으로 받아 저장한다. 사용자당 하루 호출 횟수를 제한한다

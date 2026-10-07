@@ -1,11 +1,12 @@
 // createJourney: 새 여정을 만든다 (S02 새 여정 만들기에서 호출)
-// 여정 문서, 만든 사람의 멤버 문서, 초대 요약(invites, 6자리 코드·7일 뒤 만료)을 한 트랜잭션으로 함께 만든다.
+// 여정 문서, 만든 사람의 멤버 문서, 초대 요약(invites, 6자리 코드·여정이 끝나면 만료)을 한 트랜잭션으로 함께 만든다.
+// 초대 코드는 여정 문서(inviteCode)에도 저장해서, 구성원은 언제 열어도 같은 코드를 본다(코드는 바뀌지 않는다).
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
 import {
   createInviteCode,
-  INVITE_VALID_DAYS,
+  inviteExpiresAtMillis,
   requireAuth,
   requireDate,
   requireNotifyInterval,
@@ -16,7 +17,7 @@ import {
 type CreateJourneyResult = {
   journeyId: string;
   inviteCode: string;
-  /** 초대 코드 만료 시각(밀리초) */
+  /** 초대 코드 만료 시각(밀리초): 여정 종료일이 끝나는 때 */
   inviteExpiresAt: number;
 };
 
@@ -38,7 +39,7 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
   const notifyIntervalHours = requireNotifyInterval(data.notifyIntervalHours);
 
   const userRef = db.collection("users").doc(uid);
-  const inviteExpiresAt = Timestamp.fromMillis(Date.now() + INVITE_VALID_DAYS * 24 * 60 * 60 * 1000);
+  const inviteExpiresAt = Timestamp.fromMillis(inviteExpiresAtMillis(endDate));
 
   // 6자리 코드는 드물게 겹칠 수 있어서, 이미 쓰는 코드면 새 코드로 다시 만든다.
   for (let attempt = 0; attempt < MAX_CODE_TRIES; attempt++) {

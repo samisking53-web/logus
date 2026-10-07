@@ -52,8 +52,8 @@ import com.logus.app.ui.theme.Success
  * S01-A 진행 중인 여정 카드: 위쪽 대표 사진 + "진행 중" 표시, 아래쪽 여정 이름·구성원·기간.
  * coverPhoto: 여행 중 기록한 사진·영상 장면 중 대표로 고른 사진(주소). 대표 사진을 고르는 기능을 만들면
  * 여기에 넘긴다. 지금은 null 이라 "사진이 들어갈 자리" 그림을 보여 준다.
- * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는 팝업을 열 자리다.
- * 그 팝업은 다음 작업에서 만들고, 지금은 눌러도 아무 일도 없다.
+ * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는
+ * "여정에 초대하기" 팝업(ui/journey/JourneyInviteDialog.kt)을 연다(MainScreen 이 연결).
  */
 @Composable
 fun JourneyCard(

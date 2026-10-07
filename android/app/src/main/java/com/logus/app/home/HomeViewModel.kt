@@ -63,6 +63,27 @@ class HomeViewModel(
     }
 
     /**
+     * S01-A 여정 카드의 친구 추가 버튼(여정에 초대하기 팝업)을 열 때: 진행 중인 여정 문서를 다시 읽어
+     * 현재 인원수를 새로 고친다. 그사이 누가 참여했어도 팝업에 맞는 인원이 보인다.
+     * 화면은 그대로 두고(Loading 으로 바꾸지 않음) 값만 바꾼다. 구성원이 바뀌었을 때만 이름을 다시 읽는다(비용 절약).
+     */
+    fun refreshOngoing() {
+        val current = _state.value as? HomeUiState.Ongoing ?: return
+        viewModelScope.launch {
+            val fresh = runCatching { repository.loadJourney(current.journey.id) }
+                .onFailure { Log.w(TAG, "여정 다시 읽기 실패", it) }
+                .getOrNull() ?: return@launch
+            val members = if (fresh.memberIds == current.journey.memberIds) {
+                current.members
+            } else {
+                runCatching { repository.loadMembers(fresh.memberIds) }.getOrDefault(current.members)
+            }
+            // 그사이 홈을 다시 읽는 등 상태가 바뀌었으면 덮어쓰지 않는다
+            if (_state.value === current) _state.value = HomeUiState.Ongoing(fresh, members)
+        }
+    }
+
+    /**
      * 초대를 수락하고 "홈으로 가기"를 눌렀을 때: 방금 참여한 여정을 바로 S01-A 로 보여 준다.
      * (진행 중인 내 여정이 여러 개여도 방금 참여한 여정이 보이게 그 문서를 직접 읽는다)
      * 오늘이 그 여정 기간 밖이면 홈 규칙대로 다른 진행 중 여정(S01-A) 또는 S01 을 보여 준다.

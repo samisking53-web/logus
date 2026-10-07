@@ -31,6 +31,7 @@ import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
+import com.logus.app.ui.journey.JourneyInviteDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
 import java.time.LocalDate
@@ -65,6 +66,13 @@ fun MainScreen(
     // 진행 중인 여정 확인(로그인한 사람이 바뀔 때만 다시 읽는다)
     LaunchedEffect(uid) { homeViewModel.load(uid) }
     val homeState by homeViewModel.state.collectAsStateWithLifecycle()
+
+    // S01-A 여정 카드의 친구 추가 버튼 → 여정에 초대하기 팝업(뒤는 S01-A 그대로)
+    var invitingToJourney by rememberSaveable { mutableStateOf(false) }
+    // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업을 닫는다(나중에 갑자기 다시 뜨지 않게)
+    LaunchedEffect(homeState) {
+        if (homeState !is HomeUiState.Ongoing) invitingToJourney = false
+    }
 
     // 여정 시작일이면 폰 카메라를 연다(오늘 시작하는 여정을 방금 만들었거나, 미리 만든 여정의 시작일에 앱을 열었을 때).
     // 같은 여정은 이 폰에서 한 번만 자동으로 연다.
@@ -126,6 +134,10 @@ fun MainScreen(
                             creatingJourney = true
                         },
                         onJoinWithCode = joinViewModel::openDialog,
+                        onInviteToJourney = {
+                            invitingToJourney = true
+                            homeViewModel.refreshOngoing() // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
+                        },
                     )
                     MainTab.EXPLORE -> ExploreScreen()
                     MainTab.MY_LOG -> MyLogScreen(onSignOut = onSignOut)
@@ -140,6 +152,18 @@ fun MainScreen(
                 checking = joinState.checking,
                 error = joinState.error,
                 onEdit = joinViewModel::clearError,
+            )
+        }
+        // 여정에 초대하기 팝업(S01-A 위): 여정 이름·현재 인원·여정의 초대 코드(늘 같은 코드)·복사·공유
+        val ongoing = homeState as? HomeUiState.Ongoing
+        if (invitingToJourney && ongoing != null && tab == MainTab.HOME && invitePreview == null) {
+            JourneyInviteDialog(
+                journeyName = ongoing.journey.name,
+                memberCount = ongoing.journey.memberCount,
+                inviteCode = ongoing.journey.inviteCode,
+                endDate = ongoing.journey.endDate,
+                inviterName = profile.nickname,
+                onClose = { invitingToJourney = false },
             )
         }
         // 초대 수락 완료 팝업(I01 위). "홈으로 가기" → 방금 참여한 여정을 S01-A 로 보여 준다("지금 기록하기")

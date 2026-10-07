@@ -53,7 +53,7 @@ import kotlinx.coroutines.delay
 /**
  * S02 위에 뜨는 초대 코드 팝업. 뒤의 S02 화면은 어둡게 보인다(Dialog 가 바탕을 어둡게 덮는다).
  * - 6자리 초대 코드를 크게 보여 주고 "코드 복사"로 폰 클립보드에 복사한다.
- * - 코드는 7일 동안 쓸 수 있다(서버 createJourney 가 정한다).
+ * - 코드는 여정이 끝날 때까지 쓸 수 있고, 같은 여정은 늘 같은 코드다(서버 createJourney 가 정한다).
  * - X·폰의 뒤로 가기로 닫으면 여정은 이미 저장됐으므로 홈으로 간다(onClose).
  *   바깥을 눌러서는 닫히지 않게 했다(코드를 보기 전에 실수로 닫히지 않게).
  */
@@ -168,7 +168,7 @@ fun InviteCodeDialog(code: String, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "코드는 7일 동안 쓸 수 있어요",
+                    "코드는 여정이 끝날 때까지 쓸 수 있어요",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )

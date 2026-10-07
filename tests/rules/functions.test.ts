@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { describe, expect, it } from "vitest";
 import { db } from "../../functions/src/admin";
+import { inviteExpiresAtMillis } from "../../functions/src/common";
 import { createJourney } from "../../functions/src/createJourney";
 import { joinJourney } from "../../functions/src/joinJourney";
 import { previewInvite } from "../../functions/src/previewInvite";
@@ -22,11 +23,25 @@ function req<T>(data: T, uid?: string): CallableRequest<T> {
 // 테스트끼리 데이터가 섞이지 않도록 사용자 ID를 매번 새로 만든다.
 const newUid = () => `u_${randomUUID().slice(0, 8)}`;
 
+/** 오늘(UTC)에서 days 일 뒤의 날짜 "YYYY-MM-DD" (음수면 그만큼 전) */
+function dateFromToday(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// 초대 코드는 여정이 끝나면 못 쓰므로, 테스트 여정은 오늘 시작해서 2일 뒤에 끝나게 만든다.
+const START = dateFromToday(0);
+const END = dateFromToday(2);
+
 async function makeJourney(ownerId: string) {
   return createJourney.run(req({
     name: "우리의 포르투", city: "포르투", country: "포르투갈",
-    startDate: "2026-09-24", endDate: "2026-09-26", notifyIntervalHours: 2,
+    startDate: START, endDate: END, notifyIntervalHours: 2,
   }, ownerId));
+}
+
+/** 여정을 이미 끝난 여정으로 바꾼다(초대 코드 만료 확인용) */
+async function endJourney(journeyId: string) {
+  await db.doc(`journeys/${journeyId}`).update({ startDate: "2020-01-01", endDate: "2020-01-03" });
 }
 
 async function makeLog(journeyId: string, authorId: string) {
@@ -53,10 +68,9 @@ describe("createJourney", () => {
     expect(member).toMatchObject({ role: "owner", notifyIntervalHours: 2 });
     const invite = (await db.doc(`invites/${inviteCode}`).get()).data();
     expect(invite).toMatchObject({ journeyId, name: "우리의 포르투", memberCount: 1 });
-    // 7일 뒤 만료
-    const days = (invite!.expiresAt.toMillis() - Date.now()) / (24 * 60 * 60 * 1000);
-    expect(days).toBeGreaterThan(6.9);
-    expect(days).toBeLessThanOrEqual(7);
+    // 여정 종료일이 끝나는 때 만료(종료일 다음 날 12:00 UTC)
+    expect(invite!.expiresAt.toMillis()).toBe(inviteExpiresAtMillis(END));
+    expect(new Date(inviteExpiresAtMillis(END)).toISOString()).toBe(`${dateFromToday(3)}T12:00:00.000Z`);
   });
 
   it("로그인하지 않으면 거부", async () => {
@@ -117,12 +131,24 @@ describe("joinJourney", () => {
     expect(result).toEqual({ journeyId, alreadyMember: false });
   });
 
-  it("만료된 초대 코드는 거부", async () => {
+  it("끝난 여정의 초대 코드는 거부", async () => {
     const owner = newUid();
-    const { inviteCode } = await makeJourney(owner);
-    await db.doc(`invites/${inviteCode}`).update({ expiresAt: new Date(Date.now() - 1000) });
+    const { inviteCode, journeyId } = await makeJourney(owner);
+    await endJourney(journeyId);
     await expect(joinJourney.run(req({ inviteCode }, newUid())))
       .rejects.toMatchObject({ code: "failed-precondition" });
+  });
+
+  it("여정이 끝나기 전이면 만든 지 7일이 지난 코드도 쓸 수 있다(같은 여정은 같은 코드)", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    const { inviteCode, journeyId } = await makeJourney(owner);
+    // 예전 규칙(7일 만료)으로 만든 초대 요약처럼 expiresAt 이 지나 있어도, 여정 종료일 기준으로 확인한다
+    await db.doc(`invites/${inviteCode}`).update({ expiresAt: new Date(Date.now() - 1000) });
+    const result = await joinJourney.run(req({ inviteCode }, guest));
+    expect(result).toEqual({ journeyId, alreadyMember: false });
+    // 여정 문서의 코드는 그대로다
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("inviteCode")).toBe(inviteCode);
   });
 
   it("한 사람이 하루에 너무 많이 입력하면 거부", async () => {
@@ -217,7 +243,7 @@ describe("previewInvite", () => {
     const { journeyId, inviteCode } = await makeJourney(owner);
     const result = await previewInvite.run(req({ inviteCode: inviteCode.toLowerCase() }, guest));
     expect(result).toMatchObject({
-      name: "우리의 포르투", city: "포르투", startDate: "2026-09-24", endDate: "2026-09-26",
+      name: "우리의 포르투", city: "포르투", startDate: START, endDate: END,
       memberCount: 1, notifyIntervalHours: 2, alreadyMember: false,
     });
     // 확인만 하므로 구성원이 늘지 않는다
@@ -231,11 +257,11 @@ describe("previewInvite", () => {
     expect(result.alreadyMember).toBe(true);
   });
 
-  it("없는 코드·만료된 코드·로그인 안 함은 거부", async () => {
+  it("없는 코드·끝난 여정의 코드·로그인 안 함은 거부", async () => {
     await expect(previewInvite.run(req({ inviteCode: "ZZZZZ2" }, newUid())))
       .rejects.toMatchObject({ code: "not-found" });
-    const { inviteCode } = await makeJourney(newUid());
-    await db.doc(`invites/${inviteCode}`).update({ expiresAt: new Date(Date.now() - 1000) });
+    const { inviteCode, journeyId } = await makeJourney(newUid());
+    await endJourney(journeyId);
     await expect(previewInvite.run(req({ inviteCode }, newUid())))
       .rejects.toMatchObject({ code: "failed-precondition" });
     await expect(previewInvite.run(req({ inviteCode })))

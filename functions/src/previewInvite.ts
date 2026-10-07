@@ -1,11 +1,10 @@
 // previewInvite: 6자리 초대 코드로 여정 요약을 확인한다(참여는 하지 않는다)
 // 홈 "초대 코드로 참여" 팝업의 "여정 확인하기" → I01 초대 확인 화면에서 보여 줄 내용을 돌려준다.
 // 앱은 invites 를 직접 읽지 못하므로(6자리 코드를 넣어 보는 것 방지) 이 함수로만 확인한다.
-// joinJourney 와 같은 하루 입력 횟수 제한·만료 확인을 거친다.
-import type { Timestamp } from "firebase-admin/firestore";
+// joinJourney 와 같은 하루 입력 횟수 제한·만료(여정이 끝났는지) 확인을 거친다.
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
-import { countInviteAttempt, requireAuth, requireInviteCode, requireObject } from "./common";
+import { countInviteAttempt, requireAuth, requireInviteCode, requireInviteOpen, requireObject } from "./common";
 
 type PreviewInviteResult = {
   name: string;
@@ -31,16 +30,12 @@ export const previewInvite = onCall(async (request): Promise<PreviewInviteResult
   if (!inviteSnap.exists) {
     throw new HttpsError("not-found", "초대 코드를 찾을 수 없어요. 6자리를 다시 확인해 주세요.");
   }
-  const expiresAt = inviteSnap.get("expiresAt") as Timestamp | undefined;
-  if (expiresAt && expiresAt.toMillis() < Date.now()) {
-    throw new HttpsError("failed-precondition", "초대 코드가 만료됐어요. 친구에게 새 코드를 받아 주세요.");
-  }
-
   const journeyId = inviteSnap.get("journeyId") as string;
   const journeySnap = await db.collection("journeys").doc(journeyId).get();
   if (!journeySnap.exists) {
     throw new HttpsError("not-found", "여정을 찾을 수 없어요.");
   }
+  requireInviteOpen(journeySnap.get("endDate")); // 여정이 끝났으면 거부
   const ownerId = journeySnap.get("ownerId") as string;
   const ownerMemberSnap = await journeySnap.ref.collection("members").doc(ownerId).get();
   const memberIds = (journeySnap.get("memberIds") as string[]) ?? [];

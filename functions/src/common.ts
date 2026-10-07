@@ -59,12 +59,11 @@ export function requireNotifyInterval(value: unknown): 1 | 2 | 3 | null {
 /**
  * 초대 코드: 영문 대문자·숫자 6자리 (예: K7PQ2M)
  * 헷갈리는 글자(0·O·1·I)를 빼서 32가지 글자 × 6자리 = 약 10억 가지.
- * 짧은 대신 7일 뒤 만료, 로그인한 사람만 사용(joinJourney), 한 사람당 하루 입력 횟수 제한으로 보완한다.
+ * 같은 여정은 처음 만든 코드를 계속 쓴다(바뀌지 않음). 짧은 대신 여정이 끝나면 만료,
+ * 로그인한 사람만 사용(joinJourney), 한 사람당 하루 입력 횟수 제한으로 보완한다.
  */
 export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const INVITE_CODE_LENGTH = 6;
-/** 초대 코드를 쓸 수 있는 기간(일) */
-export const INVITE_VALID_DAYS = 7;
 /** 한 사람이 하루(UTC)에 초대 코드를 입력할 수 있는 횟수 */
 export const INVITE_ATTEMPTS_PER_DAY = 20;
 
@@ -74,6 +73,26 @@ export function createInviteCode(): string {
     code += INVITE_CODE_ALPHABET[randomInt(INVITE_CODE_ALPHABET.length)];
   }
   return code;
+}
+
+/**
+ * 초대 코드를 쓸 수 있는 마지막 시각(밀리초): 여정 종료일("YYYY-MM-DD", 현지 날짜)이 세계 어디에서나 다 끝나는 때.
+ * 서버는 여정의 시간대를 모르므로 하루가 가장 늦게 끝나는 곳(UTC-12) 기준 종료일 24시,
+ * 곧 종료일 다음 날 12:00 UTC(한국 시간 밤 9시)까지 쓸 수 있게 한다. (2026-10-07 팀 결정: 7일 만료 → 여정 끝까지)
+ */
+export function inviteExpiresAtMillis(endDate: string): number {
+  return Date.parse(`${endDate}T00:00:00Z`) + 36 * 60 * 60 * 1000;
+}
+
+/**
+ * 여정이 끝났으면 초대 코드를 쓸 수 없다(previewInvite·joinJourney 공통).
+ * 초대 요약(invites)의 expiresAt 대신 여정 문서의 종료일로 계산해서, 예전에 7일 만료로 만든 코드도 여정이 끝날 때까지 쓸 수 있다.
+ */
+export function requireInviteOpen(endDate: unknown): void {
+  const end = typeof endDate === "string" ? inviteExpiresAtMillis(endDate) : Number.NaN;
+  if (Number.isNaN(end) || Date.now() > end) {
+    throw new HttpsError("failed-precondition", "여정이 끝나서 이 초대 코드는 더 이상 쓸 수 없어요.");
+  }
 }
 
 /** 초대 코드 형식 확인. 앞뒤 공백을 지우고 대문자로 바꿔서 본다(소문자로 입력해도 된다) */

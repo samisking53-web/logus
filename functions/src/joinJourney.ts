@@ -3,11 +3,11 @@
 // 코드가 짧은 대신(6자리) 아래로 보완한다.
 //   - 로그인한 사람만 쓸 수 있다(invites 는 앱이 직접 읽지 못하고 이 함수만 읽는다)
 //   - 한 사람당 하루 INVITE_ATTEMPTS_PER_DAY 번까지만 입력할 수 있다(여러 코드를 넣어 보는 것 방지)
-//   - 만든 지 7일이 지난 코드는 쓸 수 없다
-import { FieldValue, type Timestamp } from "firebase-admin/firestore";
+//   - 여정이 끝나면(종료일이 지나면) 코드를 쓸 수 없다. 같은 여정은 처음 만든 코드를 계속 쓴다
+import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
-import { countInviteAttempt, requireAuth, requireInviteCode, requireObject } from "./common";
+import { countInviteAttempt, requireAuth, requireInviteCode, requireInviteOpen, requireObject } from "./common";
 
 type JoinJourneyResult = { journeyId: string; alreadyMember: boolean };
 
@@ -38,10 +38,7 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
       return { journeyId, alreadyMember: true };
     }
 
-    const expiresAt = inviteSnap.get("expiresAt") as Timestamp | undefined;
-    if (expiresAt && expiresAt.toMillis() < Date.now()) {
-      throw new HttpsError("failed-precondition", "초대 코드가 만료됐어요. 친구에게 새 코드를 받아 주세요.");
-    }
+    requireInviteOpen(journeySnap.get("endDate")); // 여정이 끝났으면 거부
 
     // 새 구성원의 알림 주기는 여정을 만든 사람의 설정을 기본값으로 쓴다(I02에서 본인이 바꿀 수 있다).
     const ownerId = journeySnap.get("ownerId") as string;
