@@ -56,7 +56,8 @@ import com.logus.app.ui.theme.PrimaryStrong
  * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기(보라) → 새 여정 시작하기(조금 밝은 보라)
  *   → 초대 코드로 참여(흰색). 세 버튼은 크기가 같고, 화면이 길어지면 아래로 스크롤된다.
  * "새 여정 시작하기"는 S02, "초대 코드로 참여"는 6자리 초대 코드 입력 팝업(링크는 쓰지 않음)을 연다.
- * "지금 기록하기"·"사진 수정"은 다음 작업에서 화면을 만들며 연결한다. 지금은 눌러도 아무 일도 없다.
+ * "지금 기록하기"·"사진 수정"·여정 카드의 친구 추가(사람+) 버튼은 다음 작업에서 화면을 만들며 연결한다.
+ * 지금은 눌러도 아무 일도 없다.
  */
 @Composable
 fun HomeScreen(
@@ -67,6 +68,7 @@ fun HomeScreen(
     onNewJourney: () -> Unit = {},
     onJoinWithCode: () -> Unit = {},
     onRecordNow: () -> Unit = {},
+    onInviteToJourney: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -82,7 +84,12 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
                 ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto)
                 Spacer(Modifier.height(32.dp))
-                JourneyCard(journey = state.journey, members = state.members, myNickname = profile.nickname)
+                JourneyCard(
+                    journey = state.journey,
+                    members = state.members,
+                    myNickname = profile.nickname,
+                    onInviteFriends = onInviteToJourney, // 여행 중 친구 초대 팝업은 다음 작업에서 연결
+                )
                 Spacer(Modifier.height(36.dp))
                 ActionButton(
                     icon = painterResource(R.drawable.ic_camera),
