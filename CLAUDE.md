@@ -49,7 +49,8 @@
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → 여정의 초대 코드(`journeys.inviteCode`, 같은 여정은 늘 같은 코드)·복사 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정 시작일에는 S04 앱 내 카메라를 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. 여정마다 이 폰에서 한 번, `journey/StartDayCamera.kt`)
-- S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): S01-A "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 10초까지 담겨요"·"00:04 / 00:10"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 멈추기", 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 최대 10초(FHD, 마이크 거절 시 소리 없이)로 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 기록 올리기(S05)는 다음 작업
+- S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): S01-A "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 10초까지 담겨요"·"00:04 / 00:10"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 멈추기", 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 최대 10초(FHD, 마이크 거절 시 소리 없이)로 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 촬영을 마치면 바로 S05로 넘어간다
+- S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:08" → 흰 카드(「위치 확인 · 지도 열기」 버튼 — 지도 팝업은 다음 작업, "영상·위치 함께 저장하면 +10P", □ 위치 없이 저장) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). 지금은 위치를 고를 수 없어서 "위치 없이 저장"을 켜야 올라간다. 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4` + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 홈(S01-A). 뒤로 가기는 영상을 지우고 S04로
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
 - 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
@@ -68,8 +69,8 @@
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
 - S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
-- S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(짧은 글·태그·테마)
-- S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+30코인, 탐색 공개 선택)
+- S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(위치 확인·위치 없이 저장·테마 태그 3개·여정에 올리기)
+- S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+10코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
 - S10 마이로그(여정 목록) / S11 여정 상세(기록·추억 지도·추억 영상 탭)
 - S12 추억 지도 / S13 추억 타임라인
@@ -82,13 +83,13 @@
 - `users/{uid}/agreements/{termsVersion}`: ageOver14·terms·location(필수, true), notifyNewLogs, agreedAt. 문서 ID는 약관 버전 `YYYY-MM-DD`(`auth/Agreements.kt`의 `TERMS_VERSION`). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
 - `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode, createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
 - `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), joinedAt
-- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, theme, taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
+- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, themes(테마 태그 0~3개, # 없이 각 1~20자), taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
 - `invites/{inviteCode}`: journeyId, name, city, startDate, endDate, memberCount, inviterName, expiresAt(여정 종료일이 끝나는 때 = 종료일 다음 날 12:00 UTC. 기록용이고 실제 만료 확인은 여정 문서의 endDate로 계산한다). 문서 ID가 6자리 초대 코드. 서버 함수만 읽고 쓴다
 - `inviteAttempts/{uid}`: date(UTC `YYYY-MM-DD`), count. 초대 코드 입력 횟수(하루 20번 제한). 서버만 읽고 쓴다
-- `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, theme, mediaPath, placeName, location, createdAt)
+- `publicLogs/{logId}`: 탐색용 공개 사본(journeyId, city, themes, mediaPath, placeName, location, createdAt)
 - `sharedRecaps/{slug}`: 공유를 누른 리캡의 공개 사본
 - `users/{uid}/coinLedger/{logId}`: reason, amount, journeyId, createdAt. 문서 ID가 logId라 기록당 한 번만 생긴다
 
@@ -109,7 +110,7 @@
 - `createJourney`: 여정 문서, owner 멤버 문서, `invites` 요약(6자리 코드, 여정이 끝나면 만료)을 한 트랜잭션으로 만든다. 코드는 여정 문서 `inviteCode`에도 저장해 구성원이 언제 열어도 같은 코드를 본다. 코드가 겹치면 새 코드로 다시 만든다. 돌려주는 값: journeyId, inviteCode, inviteExpiresAt
 - `previewInvite`: 6자리 초대 코드로 여정 요약(여정 이름·도시·기간·현재 인원·초대한 사람·만든 사람의 알림 간격·이미 구성원인지)만 돌려준다(참여하지 않음). 앱은 `invites`를 읽지 못하므로 I01 화면은 이 함수로 채운다. `joinJourney`와 하루 입력 횟수를 함께 세고, 여정이 끝났으면 거부한다
 - `joinJourney`: 6자리 초대 코드로 참여한다(대소문자·공백 무시). 하루 입력 횟수와 만료(여정 문서의 endDate로 계산, `common.ts`의 `requireInviteOpen`)를 확인하고, memberIds·members·memberCount·invites 요약을 함께 갱신한다
-- `saveLogLocation`: 위치 저장과 30코인 지급을 한 트랜잭션으로 처리한다. coinLedger 문서가 이미 있으면 코인은 주지 않는다
+- `saveLogLocation`: 위치 저장과 10코인 지급(`LOCATION_REWARD_COINS`, S05 문구 "+10P"와 같아야 한다)을 한 트랜잭션으로 처리한다. coinLedger 문서가 이미 있으면 코인은 주지 않는다
 - `syncPublicLog`(Firestore 트리거): 공개이고 위치가 있는 기록만 publicLogs 사본과 `public/` 미디어 사본을 만들고, 조건이 깨지면 지운다
 - `generateRecapCaptions`: 썸네일·시간·장소를 LLM에 보내 제목·장면 순서·캡션을 JSON으로 받아 저장한다. 사용자당 하루 호출 횟수를 제한한다
 - `shareRecap`: sharedRecaps 사본과 공유 링크를 만든다

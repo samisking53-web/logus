@@ -203,9 +203,25 @@ describe("기록", () => {
     await assertFails(setDoc(doc(db, ...logPath, "n8"), { ...base, createdAt: past }));
   });
 
+  it("테마 태그는 0~3개, 각각 1~20자 글자", async () => {
+    const db = dbAs(BOB);
+    const base = { ...validLog(BOB), createdAt: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(db, ...logPath, "t0"), { ...base, themes: [] }));
+    await assertSucceeds(setDoc(doc(db, ...logPath, "t3"), { ...base, themes: ["카페", "에그타르트", "야경"] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t4"), { ...base, themes: ["a", "b", "c", "d"] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t5"), { ...base, themes: ["가".repeat(21)] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t6"), { ...base, themes: [""] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t7"), { ...base, themes: [1] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t8"), { ...base, themes: "카페" }));
+    // 예전 필드 이름(theme)은 받지 않는다
+    const { themes: _unused, ...withoutThemes } = base;
+    await assertFails(setDoc(doc(db, ...logPath, "t9"), { ...withoutThemes, theme: "카페" }));
+  });
+
   it("작성자는 글·테마·태그만 고친다", async () => {
     const ref = doc(dbAs(ALICE), ...logPath, LOG_ID);
-    await assertSucceeds(updateDoc(ref, { body: "수정한 글", theme: null, taggedUids: [ALICE, BOB] }));
+    await assertSucceeds(updateDoc(ref, { body: "수정한 글", themes: ["야경"], taggedUids: [ALICE, BOB] }));
+    await assertFails(updateDoc(ref, { themes: ["a", "b", "c", "d"] }));
     await assertFails(updateDoc(ref, { location: { lat: 41.1, lng: -8.6 } }));
     await assertFails(updateDoc(ref, { placeName: "Rua A" }));
     await assertFails(updateDoc(ref, { isPublic: true }));

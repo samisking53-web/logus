@@ -25,7 +25,9 @@ import com.logus.app.home.JoinViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.journey.StartDayCamera
+import com.logus.app.record.CapturePhase
 import com.logus.app.record.CaptureViewModel
+import com.logus.app.record.LogUploadViewModel
 import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
@@ -37,6 +39,7 @@ import com.logus.app.ui.journey.JourneyInviteDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
 import com.logus.app.ui.record.CaptureScreen
+import com.logus.app.ui.record.LogUploadScreen
 import java.time.LocalDate
 
 /**
@@ -52,6 +55,7 @@ fun MainScreen(
     newJourneyViewModel: NewJourneyViewModel = viewModel(),
     joinViewModel: JoinViewModel = viewModel(),
     captureViewModel: CaptureViewModel = viewModel(),
+    uploadViewModel: LogUploadViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -78,8 +82,18 @@ fun MainScreen(
     // S04 앱 내 카메라를 보여 주는 중인지(이때는 하단 탭을 숨긴다)
     var capturing by rememberSaveable { mutableStateOf(false) }
     val captureState by captureViewModel.state.collectAsStateWithLifecycle()
+    val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
+    // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
+    LaunchedEffect(uploadState.done) {
+        if (uploadState.done && capturing) {
+            captureViewModel.discardAndStop()
+            capturing = false
+            Toast.makeText(context, "여정에 올렸어요", Toast.LENGTH_SHORT).show()
+        }
+    }
     fun openCapture(journey: Journey) {
         captureViewModel.open(journey) // 상태를 처음으로 되돌리고 공통 알림 간격을 읽는다
+        uploadViewModel.clear() // 지난번 S05 올리기 상태를 지운다
         capturing = true
     }
     // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업·카메라를 닫는다(나중에 갑자기 다시 뜨지 않게)
@@ -127,23 +141,44 @@ fun MainScreen(
             )
         }
     } else if (capturing && ongoing != null) {
-        // S04 앱 내 카메라(전체 화면, 하단 탭 없음). 뒤로 가기 → 찍던·찍은 영상은 버리고 홈(S01-A)으로
+        // S04 앱 내 카메라 → 촬영을 마치면 S05 기록 올리기(둘 다 전체 화면, 하단 탭 없음)
+        val video = captureState.videoFile
         Box(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            CaptureScreen(
-                journeyName = ongoing.journey.name,
-                state = captureState,
-                onBack = {
-                    captureViewModel.discardAndStop()
-                    capturing = false
-                },
-                onStart = { controller, withAudio -> captureViewModel.startRecording(context, controller, withAudio) },
-                onStop = captureViewModel::stopRecording,
-            )
+            if (captureState.phase == CapturePhase.Done && video != null) {
+                LaunchedEffect(video.path) { uploadViewModel.prepare(video.path) }
+                LogUploadScreen(
+                    video = video,
+                    durationMs = captureState.elapsedMs,
+                    state = uploadState,
+                    // 뒤로 가기 → 찍은 영상을 지우고 S04 로(다시 찍기)
+                    onBack = captureViewModel::discardAndStop,
+                    onOpenMap = {}, // 지도 팝업(위치 확인)은 다음 작업에서 연결
+                    onWithoutLocationChange = uploadViewModel::setWithoutLocation,
+                    onThemeInput = uploadViewModel::onThemeInput,
+                    onThemeDone = uploadViewModel::commitThemeInput,
+                    onRemoveTheme = uploadViewModel::removeTheme,
+                    onUpload = {
+                        uploadViewModel.upload(ongoing.journey.id, uid, video, captureState.capturedAtMillis)
+                    },
+                )
+            } else {
+                // S04: 뒤로 가기 → 찍던 영상은 버리고 홈(S01-A)으로
+                CaptureScreen(
+                    journeyName = ongoing.journey.name,
+                    state = captureState,
+                    onBack = {
+                        captureViewModel.discardAndStop()
+                        capturing = false
+                    },
+                    onStart = { controller, withAudio -> captureViewModel.startRecording(context, controller, withAudio) },
+                    onStop = captureViewModel::stopRecording,
+                )
+            }
         }
     } else {
         Column(Modifier.fillMaxSize()) {

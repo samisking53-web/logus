@@ -41,6 +41,8 @@ data class CaptureUiState(
     val elapsedMs: Long = 0,
     /** 촬영을 마친 영상 파일(폰 안 앱 전용 임시 폴더). 기록 올리기(S05)에서 올린다 */
     val videoFile: File? = null,
+    /** 촬영을 시작한 시각(밀리초). 기록의 capturedAt 으로 저장한다 */
+    val capturedAtMillis: Long = 0,
     /** 사용자에게 보여 줄 오류 문구 */
     val error: String? = null,
     /** 공통 촬영 알림 간격(1·2·3시간, 받지 않으면 null) */
@@ -94,7 +96,15 @@ class CaptureViewModel(
         _state.value.videoFile?.delete()
         val file = newVideoFile(context)
         discardOnFinish = false
-        _state.update { it.copy(phase = CapturePhase.Recording, elapsedMs = 0, videoFile = null, error = null) }
+        _state.update {
+            it.copy(
+                phase = CapturePhase.Recording,
+                elapsedMs = 0,
+                videoFile = null,
+                error = null,
+                capturedAtMillis = System.currentTimeMillis(),
+            )
+        }
         recording = try {
             controller.startRecording(
                 FileOutputOptions.Builder(file).setDurationLimitMillis(MAX_VIDEO_MILLIS).build(),
@@ -114,7 +124,7 @@ class CaptureViewModel(
         recording?.stop()
     }
 
-    /** 뒤로 가기로 나갈 때: 녹화 중이면 멈추고 그 영상은 버린다. 다 찍은 영상도 지운다 */
+    /** 뒤로 가기로 나갈 때(S04), S05 에서 뒤로 갈 때, 여정에 다 올렸을 때: 녹화 중이면 멈추고 영상 파일은 지운다 */
     fun discardAndStop() {
         if (recording != null) {
             discardOnFinish = true

@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -97,7 +96,7 @@ import java.time.LocalTime
  * - 영상은 10초까지. "00:04 / 00:10"과 진행 막대로 보여 주고, 10초가 되면 저절로 멈춘다.
  * - 아래: 빨간 동그라미가 있는 "촬영" 버튼(녹화 중에는 동그라미가 깜빡이고 "촬영 멈추기"),
  *   맨 아래 작게 "공통 알림 · 2시간마다"(여정을 만든 사람이 정한 간격).
- * - 촬영을 마치면 영상은 폰 안 임시 폴더에 남는다. 기록 올리기(S05)는 다음 작업에서 연결한다.
+ * - 촬영을 마치면(10초 또는 "촬영 멈추기") 영상은 폰 안 임시 폴더에 남고, MainScreen 이 S05 기록 올리기로 넘긴다.
  * - 처음 열 때 카메라·마이크 권한을 묻는다. 마이크를 거절하면 소리 없이 찍는다.
  */
 @Composable
@@ -206,36 +205,7 @@ private fun CaptureContent(
             LogoHeader()
 
             // 뒤로 가기 + 여정 이름
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = CircleShape, color = LogUsColors.card, modifier = Modifier.size(48.dp)) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "뒤로 가기",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-                Spacer(Modifier.width(10.dp))
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .background(LogUsColors.card, RoundedCornerShape(50))
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        journeyName,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                }
-            }
+            RecordTopBar(title = journeyName, onBack = onBack)
             Spacer(Modifier.height(12.dp))
 
             // 여정 진행 중 · 지금 시각
@@ -334,21 +304,8 @@ private fun CaptureContent(
                 drawStopIndicator = {},
             )
 
-            // 촬영 완료 / 오류 안내
-            if (state.phase == CapturePhase.Done) {
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Success, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "촬영 완료 · ${state.elapsedMs / 1000}초 영상을 찍었어요",
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            state.error?.let {
+            // 오류 안내(촬영을 마치면 바로 S05 로 넘어가므로 완료 안내는 S04 에 없다)
+        state.error?.let {
                 Spacer(Modifier.height(14.dp))
                 ErrorMessage(it)
             }
@@ -395,6 +352,41 @@ private fun CaptureContent(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/** S04·S05 맨 위: 흰 동그라미 뒤로 가기 + 흰 알약 상자 제목 */
+@Composable
+internal fun RecordTopBar(title: String, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = CircleShape, color = LogUsColors.card, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "뒤로 가기",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier
+                .weight(1f)
+                .height(48.dp)
+                .background(LogUsColors.card, RoundedCornerShape(50))
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
     }
 }
 

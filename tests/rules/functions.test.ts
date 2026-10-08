@@ -48,7 +48,7 @@ async function makeLog(journeyId: string, authorId: string) {
   const ref = db.collection("journeys").doc(journeyId).collection("logs").doc();
   await ref.set({
     authorId, mediaType: "photo", mediaPath: `journeys/${journeyId}/${authorId}/a.jpg`,
-    body: "", theme: null, taggedUids: [], capturedAt: new Date(), capturedTz: "Europe/Lisbon",
+    body: "", themes: [], taggedUids: [], capturedAt: new Date(), capturedTz: "Europe/Lisbon",
     location: null, placeName: null, isPublic: false, createdAt: new Date(),
   });
   return ref.id;
@@ -161,7 +161,8 @@ describe("joinJourney", () => {
 });
 
 describe("saveLogLocation (코인 중복 지급 거부)", () => {
-  it("위치를 처음 저장하면 30코인을 한 번만 준다", async () => {
+  it("위치를 처음 저장하면 10코인을 한 번만 준다", async () => {
+    expect(LOCATION_REWARD_COINS).toBe(10); // 화면 문구 "+10P"와 같아야 한다
     const owner = newUid();
     const { journeyId } = await makeJourney(owner);
     const logId = await makeLog(journeyId, owner);

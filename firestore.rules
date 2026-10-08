@@ -20,7 +20,7 @@ rules_version = '2';
 //   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정
 //   journeys/{journeyId}/logs/{logId}:
 //     authorId(본인 uid, 변경 불가), mediaType(photo|video|text), mediaPath(본인 폴더 경로 또는 null),
-//     body 0~500자, theme(20자 이하 또는 null), taggedUids(구성원 uid 20개 이하),
+//     body 0~500자, themes(테마 태그 0~3개, 각 1~20자, # 없이), taggedUids(구성원 uid 20개 이하),
 //     capturedAt(Timestamp), capturedTz 1~64자, location(생성 시 null), placeName(생성 시 null),
 //     isPublic(생성 시 false), createdAt(서버 시각)
 //   .../comments/{commentId}: authorId(본인), body 1~500자, createdAt(서버 시각)
@@ -57,10 +57,6 @@ service cloud.firestore {
       return value is string && value.size() >= minLen && value.size() <= maxLen;
     }
 
-    function isNullOrStringBetween(value, minLen, maxLen) {
-      return value == null || isStringBetween(value, minLen, maxLen);
-    }
-
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -94,10 +90,10 @@ service cloud.firestore {
     // 기록에서 클라이언트가 정하는 필드를 검증한다. 생성과 수정 모두 이 함수를 거친다.
     function isValidLog(data, journeyId) {
       return data.keys().hasOnly([
-          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'authorId', 'mediaType', 'mediaPath', 'body', 'themes', 'taggedUids',
           'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
         && data.keys().hasAll([
-          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'authorId', 'mediaType', 'mediaPath', 'body', 'themes', 'taggedUids',
           'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
         && data.mediaType in ['photo', 'video', 'text']
         // 글 기록은 미디어가 없고, 사진·영상은 작성자 본인 폴더의 파일만 가리킨다.
@@ -106,7 +102,7 @@ service cloud.firestore {
               : (data.mediaPath is string && data.mediaPath.size() <= 300
                  && data.mediaPath.matches('^journeys/' + journeyId + '/' + data.authorId + '/[^/]+$')))
         && isStringBetween(data.body, 0, 500)
-        && isNullOrStringBetween(data.theme, 1, 20)
+        && isValidThemes(data.themes)
         // 태그는 20명 이하, 모두 이 여정의 구성원이어야 한다.
         && data.taggedUids is list && data.taggedUids.size() <= 20
         && data.taggedUids.toSet().difference(journeyData(journeyId).memberIds.toSet()).size() == 0
@@ -114,6 +110,14 @@ service cloud.firestore {
         && isStringBetween(data.capturedTz, 1, 64)
         && data.isPublic is bool
         && data.createdAt is timestamp;
+    }
+
+    // 테마 태그(S05, 인스타그램 해시태그처럼): 0~3개, 각각 1~20자 글자(# 없이 저장)
+    function isValidThemes(themes) {
+      return themes is list && themes.size() <= 3
+        && (themes.size() < 1 || isStringBetween(themes[0], 1, 20))
+        && (themes.size() < 2 || isStringBetween(themes[1], 1, 20))
+        && (themes.size() < 3 || isStringBetween(themes[2], 1, 20));
     }
 
     function isValidComment(data) {
@@ -195,7 +199,7 @@ service cloud.firestore {
         // 작성자는 글·테마·태그만 고친다.
         allow update: if isMember(journeyId)
           && resource.data.authorId == request.auth.uid
-          && changedKeys().hasOnly(['body', 'theme', 'taggedUids'])
+          && changedKeys().hasOnly(['body', 'themes', 'taggedUids'])
           && isValidLog(request.resource.data, journeyId);
 
         allow delete: if isMember(journeyId) && resource.data.authorId == request.auth.uid;
