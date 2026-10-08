@@ -45,7 +45,7 @@
 
 ## UI 규칙
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
-- 로고: 지구 모양(`res/drawable/ic_globe.xml`, 팀이 정한 그림: 원 + 세로 타원 + 원 끝까지 닿는 가로줄) + "LOG EARTH" 글자, 둘 다 primary-strong. 홈(S01·S01-A)·S04·S05·I01 위쪽(`LogoHeader`)과 첫 화면에 쓴다. 앱 시작 화면·P01은 스토리보드대로 글자만. 앱 아이콘은 흰 바탕 + primary 지구(`ic_launcher_foreground.xml`, `values/colors.xml`의 `ic_launcher_background`)
+- 로고: 지구 모양(`res/drawable/ic_globe.xml`, 팀이 정한 그림: 원 + 세로 타원 + 원 끝까지 닿는 가로줄) + "LOG EARTH" 글자, 둘 다 primary-strong. 공통 부품 `ui/components/LogoMark.kt`(크기만 바꿔 쓴다)를 앱 시작 화면(크게)·첫 화면·P01·홈(S01·S01-A)·S04·S05·I01 위쪽(`LogoHeader`)에 쓴다(2026-10-08 팀 요청으로 앱 시작 화면·P01에도 지구 그림을 넣음). 앱 아이콘은 연보라 바탕(surface `#EEEAFB`) + primary 지구(`ic_launcher_foreground.xml`, `values/colors.xml`의 `ic_launcher_background`)
 - 홈 "보유 코인"은 `users/{uid}` 문서 하나를 실시간으로 지켜봐서(`auth/AuthViewModel.kt`의 `enterHome`, `AuthRepository.profileChanges`) 서버가 코인을 주면(`saveLogLocation`) 앱을 다시 켜지 않아도 바로 바뀐다. 로그아웃하면 멈춘다
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → 여정의 초대 코드(`journeys.inviteCode`, 같은 여정은 늘 같은 코드)·복사 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
@@ -57,7 +57,7 @@
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
 - 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
-  - 브랜드: primary `#5B3DD6`(버튼·핀·활성 탭 채움, 위 글자는 흰색), primary-strong `#4A2FB8`(눌림·강조 글자), primary-light `#6B4FE0`(조금 밝은 보라 채움, S01-A "새 여정 시작하기". 위 글자는 흰색, 대비 5.5:1. 다크도 같은 값), surface `#EEEAFB`(카드), border `#D8CFF5`(테두리)
+  - 브랜드: primary `#5B3DD6`(버튼·핀·활성 탭 채움, 위 글자는 흰색), primary-strong `#4A2FB8`(눌림·강조 글자), primary-light `#6B4FE0`(조금 밝은 보라 채움, S01-A "새 여정 시작하기". 위 글자는 흰색, 대비 5.5:1. 다크도 같은 값), surface `#EEEAFB`(카드·앱 시작 화면·앱 아이콘 바탕), border `#D8CFF5`(테두리)
   - 기록·보상(코인·하이라이트): amber `#E0930F`(채움, 위 글자는 본문색. 흰 글자 금지), amber-text `#8A5606`, amber-soft `#FDF0DC`
   - 멤버 구분: `#5B3DD6` `#C63F33` `#0B7A6B` `#9C6408`. 색만으로 구분하지 않게 이름 첫 글자를 함께 넣는다
   - 뉴트럴: text `#1A1725`, text-secondary `#5A5570`, text-weak `#6E6A85`(바탕 위에서만, 카드 위에서는 대비 부족), line `#E3E0EC`, background `#F7F5FB`
@@ -65,7 +65,7 @@
   - 다크 모드(폰 설정을 따름, `isSystemInDarkTheme()`): background `#141220`, surface `#1E1B2E`, primary `#6B4FE0`, primary-strong `#B3A0FF`. 글자는 `#F7F5FB`·`#E3E0EC`·`#D8CFF5`
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
   - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
-  - 흰 카드: `#FFFFFF`(홈의 코인 상자·여정 카드·흰 버튼·하단 탭 바탕·앱 아이콘 바탕. 라이트 전용이고 다크는 surface `#1E1B2E`. Color.kt의 `Card`, `LogUsColors.card`)
+  - 흰 카드: `#FFFFFF`(홈의 코인 상자·여정 카드·흰 버튼·하단 탭 바탕. 라이트 전용이고 다크는 surface `#1E1B2E`. Color.kt의 `Card`, `LogUsColors.card`)
   - 사진 테두리: `#FFFFFF`(첫 화면 소개 사진 카드의 흰 테두리, 라이트·다크 같음. Color.kt의 `PhotoFrame`). 글자색으로는 쓰지 않는다
   - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 

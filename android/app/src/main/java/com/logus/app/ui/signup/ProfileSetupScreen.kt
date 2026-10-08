@@ -45,6 +45,7 @@ import com.logus.app.auth.AuthUiState
 import com.logus.app.auth.PhotoChoice
 import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.components.ErrorMessage
+import com.logus.app.ui.components.LogoMark
 import com.logus.app.ui.components.StepTopBar
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
@@ -73,7 +74,7 @@ fun ProfileSetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text("LOG EARTH", color = LogUsColors.primaryStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            LogoMark()
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(50),

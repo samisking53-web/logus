@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   앱 아이콘: 108dp 캔버스 가운데(안전 영역 66dp 안)에 LOG EARTH 지구 로고(ic_globe 와 같은 모양).
-  지름 50dp, 보라(팔레트 primary #5B3DD6, 다크 모드에서도 같은 색). 바탕은 흰색(values/colors.xml 의 ic_launcher_background).
+  지름 50dp, 보라(팔레트 primary #5B3DD6, 다크 모드에서도 같은 색). 바탕은 연보라 #EEEAFB(values/colors.xml 의 ic_launcher_background).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

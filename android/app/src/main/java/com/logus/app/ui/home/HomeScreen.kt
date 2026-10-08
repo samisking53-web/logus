@@ -1,9 +1,7 @@
 package com.logus.app.ui.home
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +43,7 @@ import com.logus.app.home.HomeUiState
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ErrorMessage
+import com.logus.app.ui.components.LogoMark
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PrimaryStrong
@@ -185,28 +184,15 @@ fun HomeScreen(
 /** 화면 맨 위 로고: 지구 모양 + LOG EARTH (강조 보라) */
 @Composable
 internal fun LogoHeader() {
-    Row(
+    LogoMark(
         Modifier
             .fillMaxWidth()
             .padding(top = 28.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painterResource(R.drawable.ic_globe),
-            contentDescription = null,
-            tint = LogUsColors.primaryStrong,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            "LOG EARTH",
-            color = LogUsColors.primaryStrong,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 3.sp,
-        )
-    }
+        iconSize = 24.dp,
+        fontSize = 20.sp,
+        letterSpacing = 3.sp,
+        gap = 10.dp,
+    )
 }
 
 /**
