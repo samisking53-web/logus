@@ -18,7 +18,7 @@
 ## 기술 스택 (임의로 바꾸지 않는다)
 - 앱: 안드로이드 네이티브(`android/`, Kotlin + Jetpack Compose, Firebase Android SDK·BoM, 패키지 `com.logus.app`, minSdk 26). 빌드는 Android Studio에서 한다
 - 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript)
-- 지도: MapLibre(안드로이드는 MapLibre Native Android) + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
+- 지도: MapLibre(안드로이드는 MapLibre Native Android `org.maplibre.gl:android-sdk`, TextureView 방식) + OpenFreeMap 타일(`https://tiles.openfreemap.org/styles/liberty`, 키 없음). 카카오맵·구글맵 SDK는 추가하지 않는다
 - 카메라: CameraX(camera-camera2·lifecycle·video·view). S04 앱 내 카메라에 쓴다
 - 추억 영상: 앱 안에서 재생. 안드로이드에서 쓸 방식은 그 기능을 만들 때 정한다. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 Cloud Functions에서만 호출한다
@@ -50,7 +50,8 @@
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정 시작일에는 S04 앱 내 카메라를 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. 여정마다 이 폰에서 한 번, `journey/StartDayCamera.kt`)
 - S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): S01-A "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 10초까지 담겨요"·"00:04 / 00:10"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 멈추기", 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 최대 10초(FHD, 마이크 거절 시 소리 없이)로 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 촬영을 마치면 바로 S05로 넘어간다
-- S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:08" → 흰 카드(「위치 확인 · 지도 열기」 버튼 — 지도 팝업은 다음 작업, "영상·위치 함께 저장하면 +10P", □ 위치 없이 저장) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). 지금은 위치를 고를 수 없어서 "위치 없이 저장"을 켜야 올라간다. 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4` + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 홈(S01-A). 뒤로 가기는 영상을 지우고 S04로
+- S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:08" → 흰 카드(「위치 확인 · 지도 열기」 버튼 → L01 위치 확인 팝업, "영상·위치 함께 저장하면 +10P", □ 위치 없이 저장. 위치를 고르면 "위치 확인 완료 · 지도 열기"와 장소 이름·주소) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). L01에서 위치를 고르거나 "위치 없이 저장"을 켜야 올라간다(둘은 함께 쓸 수 없다). 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4` + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 홈(S01-A). 뒤로 가기는 영상을 지우고 S04로
+- L01 위치 확인(`ui/record/LocationPickerSheet.kt`, 상태는 `record/LocationPickerViewModel.kt`, 데이터는 `record/PlaceRepository.kt`): S05 "위치 확인 · 지도 열기"를 누르면 영상 아래(16dp 간격)부터 화면 맨 아래까지 올라오는 팝업. 제목 "위치 확인"·X → MapLibre 지도(OpenFreeMap 타일, 가운데 고정 핀, "GPS 현재 위치"·"지도를 눌러 옮겨 보세요") → 장소 이름·주소(오픈스트리트맵, 지도를 멈추면 다시 찾음)·안내·"지도·주소 © OpenStreetMap" → "이 위치 사용"(보라). 처음 열 때 정확한·대략적인 위치 권한을 묻고 GPS 위치에서 시작한다(못 쓰면 여정 도시 가운데, 그것도 없으면 서울). "이 위치 사용" → S05 위치 버튼이 "위치 확인 완료 · 지도 열기"+장소 이름·주소로 바뀌고 "위치 없이 저장"이 풀린다. "여정에 올리기"는 기록을 만든 뒤 `saveLogLocation`으로 좌표·장소 이름을 저장하고 10코인을 준다
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
 - 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
@@ -69,7 +70,7 @@
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
 - S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
-- S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(위치 확인·위치 없이 저장·테마 태그 3개·여정에 올리기)
+- S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(위치 확인·위치 없이 저장·테마 태그 3개·여정에 올리기) / L01 위치 확인(S05 위 지도 팝업, 이 위치 사용 → S05에 주소 반영)
 - S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+10코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
 - S10 마이로그(여정 목록) / S11 여정 상세(기록·추억 지도·추억 영상 탭)
@@ -123,8 +124,8 @@
 - 초대는 링크 없이 6자리 초대 코드로만 한다. S02 "친구 초대하기"를 누르면 여정을 저장하고 코드 팝업(`ui/journey/InviteCodeDialog.kt`)에서 코드를 복사한다. 받은 사람은 로그인·가입 후 홈(S01)의 "초대 코드로 참여" 팝업에 코드를 입력 → "여정 확인하기"(`previewInvite`) → I01 초대 확인 → "초대 수락하기"(`joinJourney`)로 참여 → 수락 완료 팝업 → "홈으로 가기"(방금 참여한 여정이 오늘 여행 기간 안이면 그 여정의 S01-A, 아니면 홈 규칙대로)(상태는 `home/JoinViewModel.kt`)(로그인 전 미리보기 없음). 코드 글자 규칙은 앱 `journey/InviteCode.kt`와 서버 `functions/src/common.ts`가 같아야 한다
 
 ## 데이터 원칙
-- 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름은 사용자가 입력한 텍스트, 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
-- 도시 이름은 오픈스트리트맵(OSM) 데이터만 쓴다(안드로이드 기본 Geocoder는 구글 데이터라 쓰지 않는다). Nominatim 규칙: 1초에 1번 이하, User-Agent에 앱 이름, 글자마다 자동 검색 금지(버튼을 누를 때만), 화면에 "© OpenStreetMap" 출처 표시. 위치 좌표는 소수 둘째 자리로 줄여 보내고 저장하지 않는다
+- 카카오·구글 장소 검색 결과는 DB에 저장하지 않는다(이용약관). 장소 이름(placeName)은 사용자가 입력한 텍스트나 오픈스트리트맵 Nominatim 결과(L01 위치 확인에서 고른 장소 이름, 화면에 "© OpenStreetMap" 표시)만 저장한다(2026-10-08 팀 결정). 좌표는 기기 위치나 사용자가 지도에서 고른 점만 저장한다
+- 도시 이름은 오픈스트리트맵(OSM) 데이터만 쓴다(안드로이드 기본 Geocoder는 구글 데이터라 쓰지 않는다). Nominatim 규칙: 1초에 1번 이하, User-Agent에 앱 이름, 글자마다 자동 검색 금지(버튼을 누를 때만), 화면에 "© OpenStreetMap" 출처 표시. 도시 추천(S02)은 위치 좌표를 소수 둘째 자리(약 1km)로 줄여 보내고 저장하지 않는다. L01 위치 확인은 핀 좌표를 소수 다섯째 자리(약 1m)로 보내 장소 이름·주소를 받는다(지도를 멈춘 뒤에만, 앱 전체 1초에 1번 이하, `journey/Nominatim.kt`)
 - 위치는 사용자가 허용했을 때만 저장한다. 좌표 (0,0)은 결측으로 처리한다
 - 시간은 Timestamp(UTC)로 저장하고 촬영지 시간대(capturedTz)를 함께 저장한다. DAY RECAP의 '하루'는 현지 시간 기준으로 나눈다
 - 사진은 업로드 전에 앱에서 줄이고 JPEG/WebP로 올린다. 영상은 15초 이하

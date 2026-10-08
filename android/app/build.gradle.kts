@@ -75,4 +75,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.camera.view)
+
+    // L01 위치 확인 지도(MapLibre + OpenFreeMap 타일)
+    implementation(libs.maplibre.android)
 }

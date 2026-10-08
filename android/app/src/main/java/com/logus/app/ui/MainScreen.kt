@@ -27,6 +27,7 @@ import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.journey.StartDayCamera
 import com.logus.app.record.CapturePhase
 import com.logus.app.record.CaptureViewModel
+import com.logus.app.record.LocationPickerViewModel
 import com.logus.app.record.LogUploadViewModel
 import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
@@ -39,6 +40,7 @@ import com.logus.app.ui.journey.JourneyInviteDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
 import com.logus.app.ui.record.CaptureScreen
+import com.logus.app.ui.record.LocationPickerSheet
 import com.logus.app.ui.record.LogUploadScreen
 import java.time.LocalDate
 
@@ -56,6 +58,7 @@ fun MainScreen(
     joinViewModel: JoinViewModel = viewModel(),
     captureViewModel: CaptureViewModel = viewModel(),
     uploadViewModel: LogUploadViewModel = viewModel(),
+    locationPickerViewModel: LocationPickerViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -83,17 +86,27 @@ fun MainScreen(
     var capturing by rememberSaveable { mutableStateOf(false) }
     val captureState by captureViewModel.state.collectAsStateWithLifecycle()
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
+    val pickerState by locationPickerViewModel.state.collectAsStateWithLifecycle()
+    // S05 위에 L01 위치 확인 팝업을 보여 주는 중인지
+    var mapOpen by rememberSaveable { mutableStateOf(false) }
     // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
     LaunchedEffect(uploadState.done) {
         if (uploadState.done && capturing) {
             captureViewModel.discardAndStop()
             capturing = false
-            Toast.makeText(context, "여정에 올렸어요", Toast.LENGTH_SHORT).show()
+            mapOpen = false
+            val message = when {
+                uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
+                uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
+                else -> "여정에 올렸어요"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
     fun openCapture(journey: Journey) {
         captureViewModel.open(journey) // 상태를 처음으로 되돌리고 공통 알림 간격을 읽는다
         uploadViewModel.clear() // 지난번 S05 올리기 상태를 지운다
+        mapOpen = false
         capturing = true
     }
     // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업·카메라를 닫는다(나중에 갑자기 다시 뜨지 않게)
@@ -156,8 +169,30 @@ fun MainScreen(
                     durationMs = captureState.elapsedMs,
                     state = uploadState,
                     // 뒤로 가기 → 찍은 영상을 지우고 S04 로(다시 찍기)
-                    onBack = captureViewModel::discardAndStop,
-                    onOpenMap = {}, // 지도 팝업(위치 확인)은 다음 작업에서 연결
+                    onBack = {
+                        mapOpen = false
+                        captureViewModel.discardAndStop()
+                    },
+                    // L01 위치 확인 팝업
+                    onOpenMap = { mapOpen = true },
+                    mapOpen = mapOpen,
+                    onCloseMap = { mapOpen = false },
+                    mapSheet = {
+                        LocationPickerSheet(
+                            state = pickerState,
+                            onOpen = { ctx, fine, coarse ->
+                                locationPickerViewModel.open(ctx, uploadState.place, fine, coarse, ongoing.journey.city)
+                            },
+                            onClose = { mapOpen = false },
+                            onRecenter = locationPickerViewModel::recenterToGps,
+                            onCameraIdle = locationPickerViewModel::onCameraIdle,
+                            // 이 위치 사용 → S05 에 장소를 넣고 팝업을 닫는다(저장은 "여정에 올리기"에서)
+                            onUse = { place ->
+                                uploadViewModel.setPlace(place)
+                                mapOpen = false
+                            },
+                        )
+                    },
                     onWithoutLocationChange = uploadViewModel::setWithoutLocation,
                     onThemeInput = uploadViewModel::onThemeInput,
                     onThemeDone = uploadViewModel::commitThemeInput,

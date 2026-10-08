@@ -5,17 +5,9 @@ import android.content.Context
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 
@@ -75,38 +67,6 @@ class CityRepository {
         return City(name = name.take(60), country = country.take(60), english = "", fromMap = true)
     }
 
-    /** Nominatim 에 GET 요청. 1초에 한 번을 넘지 않게 앞 요청과 간격을 둔다 */
-    private suspend fun request(pathAndQuery: String): String = rateLimit.withLock {
-        val wait = lastRequestAt + MIN_INTERVAL_MS - System.currentTimeMillis()
-        if (wait > 0) delay(wait)
-        try {
-            withContext(Dispatchers.IO) {
-                val connection = URL("$BASE_URL/$pathAndQuery").openConnection() as HttpURLConnection
-                try {
-                    connection.connectTimeout = 8_000
-                    connection.readTimeout = 8_000
-                    connection.setRequestProperty("User-Agent", USER_AGENT)
-                    connection.setRequestProperty("Accept-Language", "ko")
-                    if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                        throw IOException("지도 검색 서버 응답 ${connection.responseCode}")
-                    }
-                    connection.inputStream.bufferedReader().use { it.readText() }
-                } finally {
-                    connection.disconnect()
-                }
-            }
-        } finally {
-            lastRequestAt = System.currentTimeMillis()
-        }
-    }
-
-    private companion object {
-        const val BASE_URL = "https://nominatim.openstreetmap.org"
-        const val USER_AGENT = "LOGUS-Android/1.0 (university capstone; https://github.com/samisking53-web/logus)"
-        const val MIN_INTERVAL_MS = 1_100L
-
-        // 앱 전체에서 요청 간격을 함께 지킨다
-        val rateLimit = Mutex()
-        var lastRequestAt = 0L
-    }
+    /** Nominatim 에 GET 요청(앱 전체에서 1초에 한 번 이하, Nominatim.kt) */
+    private suspend fun request(pathAndQuery: String): String = Nominatim.get(pathAndQuery)
 }

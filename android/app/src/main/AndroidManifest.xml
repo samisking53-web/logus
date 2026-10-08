@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 새 여정의 도시 추천에 현재 위치를 쓴다. 도시 이름만 알면 돼서 대략적인 위치만 묻는다 -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- L01 위치 확인 지도: 핀을 촬영 위치에 정확히 찍으려고 정확한 위치를 묻는다(거절하면 대략적인 위치·지도 이동으로 고른다) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- S04 앱 내 카메라: 영상 촬영(카메라)과 소리 녹음(마이크). 마이크를 거절하면 소리 없이 찍는다 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

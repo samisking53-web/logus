@@ -18,6 +18,8 @@ import java.time.ZoneId
 data class LogUploadUiState(
     /** "위치 없이 저장"에 체크했는지 */
     val withoutLocation: Boolean = false,
+    /** L01 지도에서 고른 장소(좌표·이름·주소). 있으면 위치와 함께 올린다 */
+    val place: PickedPlace? = null,
     /** 넣은 테마 태그(# 없이, 최대 3개) */
     val themes: List<String> = emptyList(),
     /** 지금 치고 있는 태그 글자(# 없이) */
@@ -30,6 +32,10 @@ data class LogUploadUiState(
     val error: String? = null,
     /** 여정에 다 올렸다(MainScreen 이 보고 홈으로 돌아간다) */
     val done: Boolean = false,
+    /** 위치와 함께 올려서 받은 코인 수 */
+    val coinsGranted: Int = 0,
+    /** 기록은 올렸지만 위치 저장(saveLogLocation)에 실패했다 */
+    val locationSaveFailed: Boolean = false,
 )
 
 /** 테마 태그는 최대 3개 */
@@ -42,7 +48,8 @@ const val MAX_THEME_LENGTH = 20
  * S05 기록 올리기: 위치 없이 저장 체크, 테마 태그(인스타그램 해시태그처럼 # 이 앞에 붙는다), 여정에 올리기.
  * - 태그: 띄어쓰기·쉼표·# 를 치거나 키보드의 완료를 누르면 지금까지 친 글자가 태그 하나가 된다.
  *   글자·숫자·_ 만 남기고, 최대 3개, 같은 태그는 한 번만.
- * - "위치 확인 · 지도 열기"(지도 팝업)는 다음 작업에서 만든다. 그래서 지금은 "위치 없이 저장"을 켜야 올릴 수 있다.
+ * - 위치: "위치 확인 · 지도 열기"(L01)에서 고른 장소와 함께 올리거나(+10코인), "위치 없이 저장"을 켜고 올린다.
+ *   둘 중 하나는 해야 올릴 수 있다. 둘은 함께 쓸 수 없다(하나를 고르면 다른 하나가 풀린다).
  */
 class LogUploadViewModel(
     private val repository: LogRepository = LogRepository(),
@@ -69,7 +76,12 @@ class LogUploadViewModel(
     }
 
     fun setWithoutLocation(checked: Boolean) {
-        _state.update { it.copy(withoutLocation = checked, error = null) }
+        _state.update { it.copy(withoutLocation = checked, place = if (checked) null else it.place, error = null) }
+    }
+
+    /** L01 "이 위치 사용": 고른 장소를 넣고 "위치 없이 저장"은 끈다 */
+    fun setPlace(place: PickedPlace) {
+        _state.update { it.copy(place = place, withoutLocation = false, error = null) }
     }
 
     /** 태그 입력칸 글자가 바뀔 때. 구분 글자(띄어쓰기·쉼표·#)가 나오면 그 앞까지를 태그로 넣는다 */
@@ -108,13 +120,15 @@ class LogUploadViewModel(
     }
 
     /**
-     * "여정에 올리기". 위치를 정하지 않았으면(지도 팝업은 다음 작업) "위치 없이 저장"을 켜야 올라간다.
+     * "여정에 올리기". 지도에서 위치를 고르거나 "위치 없이 저장"을 켜야 올라간다.
+     * ① 영상·기록 올리기(위치 비움) → ② 위치를 골랐으면 saveLogLocation 으로 위치 저장 + 10코인.
      * 다 올리면 done = true 가 되고, MainScreen 이 영상 파일을 지우고 홈으로 돌아간다.
+     * ②만 실패하면 기록은 올라간 것이므로 done 으로 두고 locationSaveFailed 로 알린다.
      */
     fun upload(journeyId: String, uid: String, video: File, capturedAtMillis: Long) {
         val current = _state.value
         if (current.uploading || current.done) return
-        if (!current.withoutLocation) {
+        if (!current.withoutLocation && current.place == null) {
             _state.update {
                 it.copy(error = "먼저 '위치 확인 · 지도 열기'로 위치를 확인하거나, '위치 없이 저장'을 켜 주세요.")
             }
@@ -123,11 +137,12 @@ class LogUploadViewModel(
         // 치다 만 태그도 함께 넣는다
         if (current.themeInput.isNotBlank()) commitThemeInput()
         val themes = _state.value.themes
+        val place = if (current.withoutLocation) null else current.place
 
         _state.update { it.copy(uploading = true, error = null) }
         viewModelScope.launch {
             try {
-                repository.uploadVideoLog(
+                val logId = repository.uploadVideoLog(
                     journeyId = journeyId,
                     uid = uid,
                     video = video,
@@ -135,7 +150,18 @@ class LogUploadViewModel(
                     capturedTz = ZoneId.systemDefault().id,
                     themes = themes,
                 )
-                _state.update { it.copy(uploading = false, done = true) }
+                if (place == null) {
+                    _state.update { it.copy(uploading = false, done = true) }
+                    return@launch
+                }
+                val coins = try {
+                    repository.saveLocation(journeyId, logId, place)
+                } catch (e: Exception) {
+                    Log.w(TAG, "위치 저장 실패 (saveLogLocation 함수 배포 확인)", e)
+                    _state.update { it.copy(uploading = false, done = true, locationSaveFailed = true) }
+                    return@launch
+                }
+                _state.update { it.copy(uploading = false, done = true, coinsGranted = coins) }
             } catch (e: Exception) {
                 Log.w(TAG, "기록 올리기 실패 (보안 규칙·Storage 배포 확인)", e)
                 _state.update { it.copy(uploading = false, error = e.toKoreanMessage()) }

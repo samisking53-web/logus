@@ -33,7 +33,7 @@ export const saveLogLocation = onCall(async (request): Promise<SaveLogLocationRe
   const journeyId = requireString(data.journeyId, "journeyId", 1, 128);
   const logId = requireString(data.logId, "logId", 1, 128);
   const location = parseLocation(data.location);
-  // 장소 이름은 사용자가 입력한 글자만 저장한다. 위치가 없으면 장소 이름도 지운다.
+  // 장소 이름은 사용자가 입력한 글자나 오픈스트리트맵(L01 위치 확인)이 알려준 이름만 저장한다. 위치가 없으면 장소 이름도 지운다.
   const placeName =
     location && data.placeName != null ? requireString(data.placeName, "장소 이름", 1, 100) : null;
   if (data.isPublic !== undefined && typeof data.isPublic !== "boolean") {

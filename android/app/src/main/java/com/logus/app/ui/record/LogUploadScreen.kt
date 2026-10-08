@@ -49,6 +49,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -85,7 +93,8 @@ import java.io.File
  * S04 에서 촬영을 마치면 바로 뜨는 화면. 하단 탭은 숨긴다. 위에서부터:
  * - 뒤로 가기 + "기록 올리기"
  * - 찍은 영상의 첫 장면(16:9)과 "▶ 0:08"(영상 길이)
- * - 흰 카드: "위치 확인 · 지도 열기"(지도 팝업은 다음 작업, 지금은 눌러도 아무 일도 없다) →
+ * - 흰 카드: "위치 확인 · 지도 열기"(누르면 영상 아래부터 L01 위치 확인 팝업이 올라온다.
+ *   고르면 "위치 확인 완료"와 장소 이름·주소가 보인다) →
  *   "영상·위치 함께 저장하면 +10P" → □ 위치 없이 저장(켜면 위치 정보 없이 올린다)
  * - 테마(직접 입력): 인스타그램 해시태그처럼 # 이 앞에 붙는다. 띄어쓰기·쉼표·완료로 태그 하나가 되고 최대 3개.
  * - 맨 아래 "여정에 올리기"와 작은 안내 문구
@@ -103,26 +112,77 @@ fun LogUploadScreen(
     onThemeDone: () -> Unit,
     onRemoveTheme: (String) -> Unit,
     onUpload: () -> Unit,
+    /** L01 위치 확인 팝업을 보여 주는 중인지 */
+    mapOpen: Boolean = false,
+    onCloseMap: () -> Unit = {},
+    /** L01 팝업 내용(MainScreen 이 LocationPickerSheet 를 넣는다) */
+    mapSheet: @Composable () -> Unit = {},
 ) {
-    BackHandler { if (!state.uploading) onBack() }
+    BackHandler(enabled = !mapOpen) { if (!state.uploading) onBack() }
+    BackHandler(enabled = mapOpen, onBack = onCloseMap)
 
     // 영상 첫 장면(앱 안에서 작은 그림으로 보여 준다)
     val thumbnail by produceState<ImageBitmap?>(initialValue = null, video) {
         value = withContext(Dispatchers.IO) { firstFrame(video)?.asImageBitmap() }
     }
 
-    LogUploadContent(
-        thumbnail = thumbnail,
-        durationMs = durationMs,
-        state = state,
-        onBack = { if (!state.uploading) onBack() },
-        onOpenMap = onOpenMap,
-        onWithoutLocationChange = onWithoutLocationChange,
-        onThemeInput = onThemeInput,
-        onThemeDone = onThemeDone,
-        onRemoveTheme = onRemoveTheme,
-        onUpload = onUpload,
-    )
+    // 팝업 위치를 정하려고 화면 전체와 영상 상자의 자리를 기억한다
+    var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var videoCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { rootCoords = it },
+    ) {
+        LogUploadContent(
+            thumbnail = thumbnail,
+            durationMs = durationMs,
+            state = state,
+            onBack = { if (!state.uploading) onBack() },
+            onOpenMap = onOpenMap,
+            onWithoutLocationChange = onWithoutLocationChange,
+            onThemeInput = onThemeInput,
+            onThemeDone = onThemeDone,
+            onRemoveTheme = onRemoveTheme,
+            onUpload = onUpload,
+            videoModifier = Modifier.onGloballyPositioned { videoCoords = it },
+        )
+
+        // L01 위치 확인 팝업: 영상 바로 아래(16dp 간격)부터 화면 맨 아래까지
+        if (mapOpen) {
+            val density = LocalDensity.current
+            val root = rootCoords
+            val videoBox = videoCoords
+            val sheetTop = with(density) {
+                val heightDp = (root?.size?.height ?: 0).toDp()
+                val videoBottom = if (root != null && videoBox != null && videoBox.isAttached) {
+                    root.localBoundingBoxOf(videoBox, clipBounds = false).bottom.toDp()
+                } else {
+                    heightDp * 0.4f
+                }
+                // 너무 위·아래로 가지 않게: 위에서 72dp ~ 화면 높이의 48%
+                (videoBottom + 16.dp).coerceIn(72.dp, maxOf(72.dp, heightDp * 0.48f))
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    // 팝업 위쪽(영상 부분)을 눌러도 뒤 화면이 눌리지 않게
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                    color = LogUsColors.card,
+                    shadowElevation = 12.dp,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = sheetTop),
+                ) {
+                    mapSheet()
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -138,6 +198,7 @@ private fun LogUploadContent(
     onThemeDone: () -> Unit,
     onRemoveTheme: (String) -> Unit,
     onUpload: () -> Unit,
+    videoModifier: Modifier = Modifier,
 ) {
     Column(
         Modifier
@@ -156,7 +217,7 @@ private fun LogUploadContent(
 
             // 찍은 영상(첫 장면) + 길이
             Box(
-                Modifier
+                videoModifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(20.dp))
@@ -188,7 +249,7 @@ private fun LogUploadContent(
                     .border(1.dp, LogUsColors.line, RoundedCornerShape(20.dp))
                     .padding(20.dp),
             ) {
-                // 위치 확인 · 지도 열기(지도 팝업은 다음 작업). "위치 없이 저장"을 켜면 누를 수 없다
+                // 위치 확인 · 지도 열기(L01 팝업). 고르면 "위치 확인 완료"와 장소 이름·주소. "위치 없이 저장"을 켜면 누를 수 없다
                 Surface(
                     onClick = onOpenMap,
                     enabled = !state.withoutLocation && !state.uploading,
@@ -204,14 +265,26 @@ private fun LogUploadContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = LogUsColors.primaryStrong)
-                        Text(
-                            "위치 확인 · 지도 열기",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
-                        )
+                        val place = state.place
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                if (place != null) "위치 확인 완료 · 지도 열기" else "위치 확인 · 지도 열기",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                            )
+                            if (place != null) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    listOf(place.name, place.address).filter { it.isNotBlank() }.distinct().joinToString(" · "),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,

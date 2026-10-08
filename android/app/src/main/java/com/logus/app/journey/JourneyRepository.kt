@@ -22,6 +22,8 @@ data class Journey(
     val inviteCode: String? = null,
     /** 여정을 만든 사람 uid. 이 사람의 촬영 알림 간격이 모든 구성원의 공통 알림이 된다 */
     val ownerId: String? = null,
+    /** 여정 도시 이름(위치 확인 지도에서 GPS 를 못 쓸 때 시작 위치) */
+    val city: String = "",
 )
 
 /** 새로 만든 여정: ID 와 6자리 초대 코드(여정이 끝날 때까지 쓸 수 있다) */
@@ -137,6 +139,7 @@ class JourneyRepository {
             memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
             inviteCode = doc.getString("inviteCode"),
             ownerId = doc.getString("ownerId"),
+            city = doc.getString("city").orEmpty(),
         )
     }
 
@@ -165,6 +168,7 @@ class JourneyRepository {
                     memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
                     inviteCode = doc.getString("inviteCode"),
                     ownerId = doc.getString("ownerId"),
+                    city = doc.getString("city").orEmpty(),
                 )
             }
             .firstOrNull { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다

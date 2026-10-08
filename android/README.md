@@ -36,10 +36,13 @@ android/
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
    ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
-   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·10초 영상 촬영), S05 기록 올리기
+   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·10초 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
    ├─ record/CaptureViewModel.kt 촬영 상태(촬영 전·녹화 중·완료), 10초 제한, 공통 알림 간격
    ├─ record/LogUploadViewModel.kt S05 상태(위치 없이 저장·테마 태그 3개·올리기)
    ├─ record/LogRepository.kt   영상을 Storage 에 올리고 logs 문서 만들기
+   ├─ record/LocationPickerViewModel.kt  L01 위치 확인 상태(GPS·지도 가운데·주소)
+   ├─ record/PlaceRepository.kt GPS 현재 위치, 핀 자리의 장소 이름·주소(오픈스트리트맵)
+   ├─ journey/Nominatim.kt      오픈스트리트맵 검색 서버 요청(앱 전체 1초에 1번 이하)
    ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력, 초대 코드 팝업, 여정에 초대하기 팝업(S01-A)
    ├─ ui/invite/                I01 초대 확인(초대 코드를 확인한 뒤 화면), 초대 수락 완료 팝업
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
