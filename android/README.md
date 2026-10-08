@@ -32,10 +32,12 @@ android/
    ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
    ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
    ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
-   ├─ journey/StartDayCamera.kt 여정 시작일에 폰 카메라 열기
+   ├─ journey/StartDayCamera.kt 여정 시작일에 S04 앱 내 카메라 열기(여정마다 한 번)
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
    ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
+   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·10초 영상 촬영)
+   ├─ record/CaptureViewModel.kt 촬영 상태(촬영 전·녹화 중·완료), 10초 제한, 공통 알림 간격
    ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력, 초대 코드 팝업, 여정에 초대하기 팝업(S01-A)
    ├─ ui/invite/                I01 초대 확인(초대 코드를 확인한 뒤 화면), 초대 수락 완료 팝업
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)

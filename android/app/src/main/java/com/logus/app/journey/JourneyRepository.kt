@@ -20,6 +20,8 @@ data class Journey(
     val memberCount: Int,
     /** 이 여정의 6자리 초대 코드. 여정을 만들 때 정해지고 바뀌지 않는다(여정이 끝날 때까지 쓸 수 있다) */
     val inviteCode: String? = null,
+    /** 여정을 만든 사람 uid. 이 사람의 촬영 알림 간격이 모든 구성원의 공통 알림이 된다 */
+    val ownerId: String? = null,
 )
 
 /** 새로 만든 여정: ID 와 6자리 초대 코드(여정이 끝날 때까지 쓸 수 있다) */
@@ -134,6 +136,7 @@ class JourneyRepository {
             memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
             memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
             inviteCode = doc.getString("inviteCode"),
+            ownerId = doc.getString("ownerId"),
         )
     }
 
@@ -161,9 +164,23 @@ class JourneyRepository {
                     memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
                     memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
                     inviteCode = doc.getString("inviteCode"),
+                    ownerId = doc.getString("ownerId"),
                 )
             }
             .firstOrNull { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
+    }
+
+    /**
+     * 공통 촬영 알림 간격(1·2·3시간, 받지 않으면 null): 여정을 만든 사람의 멤버 문서(members/{ownerId})에서 읽는다.
+     * 여정을 만든 사람이 정한 간격이 모든 구성원에게 똑같이 적용된다(스토리보드 6쪽).
+     */
+    suspend fun loadCommonNotifyInterval(journey: Journey): Int? {
+        val ownerId = journey.ownerId ?: return null
+        val snap = db.collection("journeys").document(journey.id)
+            .collection("members").document(ownerId)
+            .get()
+            .await()
+        return snap.getLong("notifyIntervalHours")?.toInt()
     }
 
     /** 구성원 닉네임(최대 limit 명). users/{uid} 를 한 명씩 동시에 읽는다. */

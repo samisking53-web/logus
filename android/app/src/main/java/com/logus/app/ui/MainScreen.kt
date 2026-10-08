@@ -22,8 +22,10 @@ import com.logus.app.auth.Profile
 import com.logus.app.home.HomeUiState
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
+import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.journey.StartDayCamera
+import com.logus.app.record.CaptureViewModel
 import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
@@ -34,6 +36,7 @@ import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.JourneyInviteDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
+import com.logus.app.ui.record.CaptureScreen
 import java.time.LocalDate
 
 /**
@@ -48,6 +51,7 @@ fun MainScreen(
     homeViewModel: HomeViewModel = viewModel(),
     newJourneyViewModel: NewJourneyViewModel = viewModel(),
     joinViewModel: JoinViewModel = viewModel(),
+    captureViewModel: CaptureViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -67,21 +71,33 @@ fun MainScreen(
     LaunchedEffect(uid) { homeViewModel.load(uid) }
     val homeState by homeViewModel.state.collectAsStateWithLifecycle()
 
+    val ongoing = homeState as? HomeUiState.Ongoing
+
     // S01-A 여정 카드의 친구 추가 버튼 → 여정에 초대하기 팝업(뒤는 S01-A 그대로)
     var invitingToJourney by rememberSaveable { mutableStateOf(false) }
-    // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업을 닫는다(나중에 갑자기 다시 뜨지 않게)
+    // S04 앱 내 카메라를 보여 주는 중인지(이때는 하단 탭을 숨긴다)
+    var capturing by rememberSaveable { mutableStateOf(false) }
+    val captureState by captureViewModel.state.collectAsStateWithLifecycle()
+    fun openCapture(journey: Journey) {
+        captureViewModel.open(journey) // 상태를 처음으로 되돌리고 공통 알림 간격을 읽는다
+        capturing = true
+    }
+    // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업·카메라를 닫는다(나중에 갑자기 다시 뜨지 않게)
     LaunchedEffect(homeState) {
-        if (homeState !is HomeUiState.Ongoing) invitingToJourney = false
+        if (homeState !is HomeUiState.Ongoing) {
+            invitingToJourney = false
+            capturing = false
+        }
     }
 
-    // 여정 시작일이면 폰 카메라를 연다(오늘 시작하는 여정을 방금 만들었거나, 미리 만든 여정의 시작일에 앱을 열었을 때).
+    // 여정 시작일이면 S04 앱 내 카메라를 연다(오늘 시작하는 여정을 방금 만들었거나, 미리 만든 여정의 시작일에 앱을 열었을 때).
     // 같은 여정은 이 폰에서 한 번만 자동으로 연다.
     LaunchedEffect(homeState) {
-        val ongoing = homeState as? HomeUiState.Ongoing ?: return@LaunchedEffect
-        if (ongoing.journey.startDate == LocalDate.now().toString() &&
-            StartDayCamera.claimAutoOpen(context, ongoing.journey.id)
+        val current = homeState as? HomeUiState.Ongoing ?: return@LaunchedEffect
+        if (current.journey.startDate == LocalDate.now().toString() &&
+            StartDayCamera.claimAutoOpen(context, current.journey.id)
         ) {
-            StartDayCamera.open(context)
+            openCapture(current.journey)
         }
     }
 
@@ -105,9 +121,28 @@ fun MainScreen(
                             Toast.LENGTH_LONG,
                         ).show()
                     }
-                    // 홈을 다시 읽는다: 오늘 시작하는 여정이면 S01-A 가 되고 카메라가 열린다
+                    // 홈을 다시 읽는다: 오늘 시작하는 여정이면 S01-A 가 되고 S04 카메라가 열린다
                     homeViewModel.load(uid, force = true)
                 },
+            )
+        }
+    } else if (capturing && ongoing != null) {
+        // S04 앱 내 카메라(전체 화면, 하단 탭 없음). 뒤로 가기 → 찍던·찍은 영상은 버리고 홈(S01-A)으로
+        Box(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            CaptureScreen(
+                journeyName = ongoing.journey.name,
+                state = captureState,
+                onBack = {
+                    captureViewModel.discardAndStop()
+                    capturing = false
+                },
+                onStart = { controller, withAudio -> captureViewModel.startRecording(context, controller, withAudio) },
+                onStop = captureViewModel::stopRecording,
             )
         }
     } else {
@@ -134,6 +169,8 @@ fun MainScreen(
                             creatingJourney = true
                         },
                         onJoinWithCode = joinViewModel::openDialog,
+                        // S01-A "지금 기록하기" → S04 앱 내 카메라
+                        onRecordNow = { ongoing?.let { openCapture(it.journey) } },
                         onInviteToJourney = {
                             invitingToJourney = true
                             homeViewModel.refreshOngoing() // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
@@ -155,7 +192,6 @@ fun MainScreen(
             )
         }
         // 여정에 초대하기 팝업(S01-A 위): 여정 이름·현재 인원·여정의 초대 코드(늘 같은 코드)·복사·공유
-        val ongoing = homeState as? HomeUiState.Ongoing
         if (invitingToJourney && ongoing != null && tab == MainTab.HOME && invitePreview == null) {
             JourneyInviteDialog(
                 journeyName = ongoing.journey.name,

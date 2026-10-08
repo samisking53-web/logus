@@ -69,4 +69,10 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.exifinterface)
     implementation(libs.play.services.location) // 현재 위치 → 도시 추천(S02)
+
+    // S04 앱 내 카메라(CameraX): 미리보기, 10초 영상 녹화, 16:9 잘라 찍기
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.video)
+    implementation(libs.androidx.camera.view)
 }

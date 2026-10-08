@@ -19,6 +19,7 @@
 - 앱: 안드로이드 네이티브(`android/`, Kotlin + Jetpack Compose, Firebase Android SDK·BoM, 패키지 `com.logus.app`, minSdk 26). 빌드는 Android Studio에서 한다
 - 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript)
 - 지도: MapLibre(안드로이드는 MapLibre Native Android) + OpenFreeMap 타일. 카카오맵·구글맵 SDK는 추가하지 않는다
+- 카메라: CameraX(camera-camera2·lifecycle·video·view). S04 앱 내 카메라에 쓴다
 - 추억 영상: 앱 안에서 재생. 안드로이드에서 쓸 방식은 그 기능을 만들 때 정한다. mp4 렌더링은 나중에
 - AI(제목·캡션 생성): LLM API는 Cloud Functions에서만 호출한다
 - Firebase에는 안드로이드 앱만 등록한다(웹 앱은 등록하지 않음)
@@ -47,7 +48,8 @@
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → 여정의 초대 코드(`journeys.inviteCode`, 같은 여정은 늘 같은 코드)·복사 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
-- 여정 시작일에는 폰 카메라 앱을 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. `journey/StartDayCamera.kt`). 앱 안 카메라(S04)를 만들면 그쪽으로 바꾼다
+- 여정 시작일에는 S04 앱 내 카메라를 자동으로 한 번 연다(오늘 시작하는 여정을 만들었을 때, 미래 여정은 시작일에 앱을 열 때. 여정마다 이 폰에서 한 번, `journey/StartDayCamera.kt`)
+- S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): S01-A "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 10초까지 담겨요"·"00:04 / 00:10"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 멈추기", 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 최대 10초(FHD, 마이크 거절 시 소리 없이)로 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 기록 올리기(S05)는 다음 작업
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
 - 색은 `android/app/src/main/java/com/logus/app/ui/theme/Color.kt`의 팔레트 값만 쓴다(`MaterialTheme.colorScheme`, `LogUsColors`). 화면 코드에 임의 색을 쓰지 않는다. 새 색이 필요하면 팔레트에서 골라 Color.kt에 추가하고 이 목록도 고친다
@@ -66,7 +68,7 @@
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
 - S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
-- S04 앱 내 카메라 / S05 기록 올리기(짧은 글·태그·테마)
+- S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(짧은 글·태그·테마)
 - S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+30코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
 - S10 마이로그(여정 목록) / S11 여정 상세(기록·추억 지도·추억 영상 탭)
