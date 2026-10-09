@@ -67,6 +67,9 @@ object LogUsColors {
      */
     val iconCircle: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Surface
+    /** 주의 글자(N03 저장 팝업 "저장한 뒤에는 …"): 라이트는 warning #A8620A, 다크는 앰버 #E0930F(어두운 카드 위 대비 4.5:1 이상) */
+    val warning: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) AmberTextDark else Warning
     /** 프로필 상자 안 코인 상자: 라이트는 흰색, 다크는 바탕색(상자보다 어둡게) */
     val coinChip: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Card

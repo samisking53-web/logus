@@ -18,6 +18,7 @@ val AmberText = Color(0xFF8A5606)
 val Amber = Color(0xFFE0930F) // 코인 채움(위 글자는 본문색, 흰 글자 금지)
 val Line = Color(0xFFE3E0EC) // 구분선(하단 탭 위 선)
 val Success = Color(0xFF17795A) // "진행 중" 점
+val Warning = Color(0xFFA8620A) // 주의 글자(흰 카드 위 대비 4.7:1). 다크 모드는 AmberTextDark 를 쓴다(LogUsColors.warning)
 val Card = Color(0xFFFFFFFF) // 흰 카드(홈의 코인 상자·여정 카드·하단 탭). 다크 모드에서는 SurfaceDark 를 쓴다
 
 // 다크

@@ -130,14 +130,14 @@ fun MainScreen(
         val journey = ongoing?.journey ?: return@LaunchedEffect
         if (viewingFeed && feedState.journeyId != journey.id) feedViewModel.open(journey)
     }
-    // N01 "여정 마치기"가 끝나면: 나에게만 여정이 끝났으니 홈을 다시 읽고(S01) 마이로그로 간다
+    // N03 저장 팝업에서 "저장"이 끝나면: 나에게만 여정이 끝났으니 홈을 다시 읽고(S01) 마이로그로 간다
     LaunchedEffect(feedState.finished) {
         if (feedState.finished) {
             feedViewModel.consumeFinished()
             viewingFeed = false
             tab = MainTab.MY_LOG
             homeViewModel.load(uid, force = true)
-            Toast.makeText(context, "여정을 마쳤어요. 마이로그에 저장했어요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "여정을 저장했어요. 마이로그로 옮겼어요.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -243,7 +243,8 @@ fun MainScreen(
                 state = feedState,
                 onBack = { viewingFeed = false },
                 onRecordNow = { openCapture(ongoing.journey) }, // → S04, 다 올리면 기록 보기로 돌아온다
-                onFinish = { feedViewModel.finish(uid) },
+                onFinish = { feedViewModel.finish(uid) }, // N03 저장 팝업의 "저장"
+                onAskSave = feedViewModel::loadRecordCount,
                 onLoadMore = feedViewModel::loadMore,
                 onRetry = { feedViewModel.open(ongoing.journey) },
                 previewUrl = feedViewModel::previewUrl,

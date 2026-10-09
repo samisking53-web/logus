@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,7 +87,7 @@ import java.time.ZoneId
  *   ("09:20 ~ 11:20 시간대" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
  * - 카드: 영상 대표 화면(첫 장면) 위 왼쪽 위에 기록한 사람의 작은 동그란 프로필, 오른쪽 위에 찍은 시각, 왼쪽 아래에 장소 이름.
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
- * - "여정 마치기": 확인 팝업 → 나에게만 여정을 끝내고 마이로그로 간다(MainScreen).
+ * - 다운로드 모양 버튼: N03 "저장하시겠습니까?" 팝업(SaveJourneyDialog) → "저장" → 나에게만 여정을 끝내고 마이로그로 간다(MainScreen).
  */
 @Composable
 fun JourneyFeedScreen(
@@ -97,11 +96,14 @@ fun JourneyFeedScreen(
     onBack: () -> Unit,
     onRecordNow: () -> Unit,
     onFinish: () -> Unit,
+    /** 저장 팝업을 열 때(기록 수 세기) */
+    onAskSave: () -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
 ) {
-    var askFinish by rememberSaveable { mutableStateOf(false) }
+    var askSave by rememberSaveable { mutableStateOf(false) }
+    val today = LocalDate.now()
     val listState = rememberLazyListState()
 
     // 끝에서 3칸 안쪽까지 내려오면 다음 기록을 읽는다(한 번에 다 읽지 않는다)
@@ -118,21 +120,29 @@ fun JourneyFeedScreen(
     JourneyFeedContent(
         journey = journey,
         state = state,
-        today = LocalDate.now(),
+        today = today,
         listState = listState,
         onBack = onBack,
         onRecordNow = onRecordNow,
-        onAskFinish = { askFinish = true },
+        onAskFinish = {
+            onAskSave()
+            askSave = true
+        },
         onRetry = onRetry,
         previewUrl = previewUrl,
     )
 
-    if (askFinish || state.finishing) {
-        FinishJourneyDialog(
-            finishing = state.finishing,
+    // N03 "저장하시겠습니까?" 팝업. "저장"을 눌러야만 여정을 저장하고 마이로그로 간다
+    if (askSave || state.finishing) {
+        SaveJourneyDialog(
+            journeyName = journey.name,
+            today = today,
+            recordCount = state.recordCount,
+            memberCount = journey.memberCount,
+            saving = state.finishing,
             error = state.finishError,
-            onConfirm = onFinish,
-            onDismiss = { if (!state.finishing) askFinish = false },
+            onSave = onFinish,
+            onDismiss = { askSave = false },
         )
     }
 }
@@ -189,7 +199,7 @@ private fun JourneyFeedContent(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painterResource(R.drawable.ic_download),
-                            contentDescription = "여정 마치고 저장하기",
+                            contentDescription = "여정 저장하기",
                             modifier = Modifier.size(26.dp),
                         )
                     }
@@ -375,40 +385,6 @@ private fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog)
             )
         }
     }
-}
-
-/** 여정 마치기 확인 팝업. 마치는 동안은 닫을 수 없다 */
-@Composable
-private fun FinishJourneyDialog(finishing: Boolean, error: String?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = LogUsColors.card,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = { Text("여정을 마칠까요?", fontWeight = FontWeight.Bold) },
-        text = {
-            Text(
-                (error?.let { "$it\n\n" } ?: "") +
-                    "마치면 내 홈에서 이 여정이 끝나고 더 기록할 수 없어요. 지금까지의 기록은 마이로그에 저장돼요.\n" +
-                    "다른 사람은 종료일까지 계속 기록할 수 있어요.",
-                lineHeight = 21.sp,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !finishing) {
-                if (finishing) {
-                    CircularProgressIndicator(color = LogUsColors.primaryStrong, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("마치기", color = LogUsColors.primaryStrong, fontWeight = FontWeight.Bold)
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !finishing) {
-                Text("취소", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-    )
 }
 
 @Composable

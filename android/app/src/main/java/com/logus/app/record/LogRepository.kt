@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
@@ -129,6 +130,18 @@ class LogRepository {
         val last = if (snap.size() < limit) null else snap.documents.lastOrNull()
         return LogPage(logs, last)
     }
+
+    /**
+     * 이 여정에 올라온 기록 수(모든 구성원, N03 저장 팝업의 "기록 N개").
+     * Firestore 의 개수 세기(count)는 문서를 내려받지 않고 숫자만 받는다(읽기 비용: 기록 1000개당 1번).
+     */
+    suspend fun countLogs(journeyId: String): Int =
+        db.collection("journeys").document(journeyId).collection("logs")
+            .count()
+            .get(AggregateSource.SERVER)
+            .await()
+            .count
+            .toInt()
 
     /**
      * 기록의 대표 화면 주소(Storage 다운로드 주소). 사진은 그 사진, 영상은 같은 폴더의 {logId}.jpg 썸네일.

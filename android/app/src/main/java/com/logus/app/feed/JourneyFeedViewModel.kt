@@ -44,7 +44,9 @@ data class JourneyFeedUiState(
     /** 오늘 기록을 끝까지 다 읽었다 */
     val endReached: Boolean = false,
     val error: String? = null,
-    /** "여정 마치기"를 처리하는 중 / 끝남(MainScreen 이 보고 마이로그로 간다) / 실패 문구 */
+    /** N03 저장 팝업의 "기록 N개"(이 여정 전체 기록 수). 세는 중이거나 못 세면 null */
+    val recordCount: Int? = null,
+    /** 여정 저장(나에게만 여정 끝내기)을 처리하는 중 / 끝남(MainScreen 이 보고 마이로그로 간다) / 실패 문구 */
     val finishing: Boolean = false,
     val finished: Boolean = false,
     val finishError: String? = null,
@@ -58,7 +60,8 @@ const val DEFAULT_INTERVAL_HOURS = 2
  * - 오늘(폰 날짜) 찍은 이 여정의 기록을 찍은 시각 순서로 30개씩 읽고, 아래로 내리면 다음 30개를 읽는다(비용 관리).
  * - 공통 알림 간격(1·2·3시간)으로 시간대를 나눈다. 시작점은 오늘 첫 기록 시각을 10분 단위로 내린 시각
  *   (예: 첫 기록 09:24, 2시간 → 09:20 ~ 11:20, 11:20 ~ 13:20 …). 기록이 없는 시간대는 건너뛴다.
- * - "여정 마치기": 나에게만 여정을 끝낸다(내 멤버 문서 finishedAt). 다른 구성원은 계속 기록할 수 있다.
+ * - 여정 저장(다운로드 모양 버튼 → N03 "저장하시겠습니까?" → 저장): 나에게만 여정을 끝낸다(내 멤버 문서 finishedAt).
+ *   다른 구성원은 계속 기록할 수 있다.
  */
 class JourneyFeedViewModel(
     private val logs: LogRepository = LogRepository(),
@@ -154,7 +157,19 @@ class JourneyFeedViewModel(
         return url
     }
 
-    /** "여정 마치기"(확인 팝업에서 "마치기"): 나에게만 이 여정을 끝낸다 */
+    /** 저장 팝업을 열 때: 이 여정의 전체 기록 수를 센다(팝업의 "기록 N개") */
+    fun loadRecordCount() {
+        val journeyId = _state.value.journeyId ?: return
+        _state.update { it.copy(recordCount = null, finishError = null) }
+        viewModelScope.launch {
+            val count = runCatching { logs.countLogs(journeyId) }
+                .onFailure { Log.w(TAG, "기록 수 세기 실패", it) }
+                .getOrNull()
+            if (_state.value.journeyId == journeyId) _state.update { it.copy(recordCount = count) }
+        }
+    }
+
+    /** 여정 저장(N03 팝업의 "저장"): 나에게만 이 여정을 끝낸다 */
     fun finish(uid: String) {
         val journeyId = _state.value.journeyId ?: return
         if (_state.value.finishing || _state.value.finished) return
@@ -166,7 +181,7 @@ class JourneyFeedViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "여정 마치기 실패 (보안 규칙 배포 확인)", e)
                 _state.update {
-                    it.copy(finishing = false, finishError = "여정을 마치지 못했어요. 잠시 후 다시 시도해 주세요.")
+                    it.copy(finishing = false, finishError = "저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.")
                 }
             }
         }
