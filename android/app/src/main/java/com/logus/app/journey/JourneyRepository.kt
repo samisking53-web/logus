@@ -18,7 +18,7 @@ data class Journey(
     val endDate: String,
     val memberIds: List<String>,
     val memberCount: Int,
-    /** 이 여정의 6자리 초대 코드. 여정을 만들 때 정해지고 바뀌지 않는다(여정이 끝날 때까지 쓸 수 있다) */
+    /** 여정을 만든 사람의 6자리 초대 코드. 여정을 만들 때 정해지고 바뀌지 않는다(다른 구성원은 자기 코드가 따로 있다: myInviteCode) */
     val inviteCode: String? = null,
     /** 여정을 만든 사람 uid. 이 사람의 촬영 알림 간격이 모든 구성원의 공통 알림이 된다 */
     val ownerId: String? = null,
@@ -125,6 +125,27 @@ class JourneyRepository {
             .await()
         val data = result.getData() as? Map<*, *>
         return data?.get("journeyId") as? String ?: error("서버가 여정 ID를 돌려주지 않았어요.")
+    }
+
+    /**
+     * 이 여정에서 쓰는 "내" 초대 코드(구성원마다 다르고, 한 번 만들면 바뀌지 않는다).
+     * 이 코드로 새 친구가 들어오면 나에게 30코인이 쌓인다(서버 joinJourney).
+     * - 여정을 만든 사람: 여정 문서의 inviteCode
+     * - 다른 구성원: 내 멤버 문서(members/{uid})의 inviteCode. 아직 없으면 서버 함수 getInviteCode 가 새로 만들어 준다
+     *   (앱은 invites 를 직접 쓸 수 없어서 코드는 서버만 만든다)
+     */
+    suspend fun myInviteCode(journey: Journey, uid: String): String {
+        if (journey.ownerId == uid) journey.inviteCode?.let { return it }
+        val member = db.collection("journeys").document(journey.id)
+            .collection("members").document(uid)
+            .get()
+            .await()
+        member.getString("inviteCode")?.let { return it }
+        val result = functions.getHttpsCallable("getInviteCode")
+            .call(hashMapOf("journeyId" to journey.id))
+            .await()
+        val data = result.getData() as? Map<*, *>
+        return data?.get("inviteCode") as? String ?: error("서버가 초대 코드를 돌려주지 않았어요.")
     }
 
     /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */

@@ -59,13 +59,19 @@ export function requireNotifyInterval(value: unknown): 1 | 2 | 3 | null {
 /**
  * 초대 코드: 영문 대문자·숫자 6자리 (예: K7PQ2M)
  * 헷갈리는 글자(0·O·1·I)를 빼서 32가지 글자 × 6자리 = 약 10억 가지.
- * 같은 여정은 처음 만든 코드를 계속 쓴다(바뀌지 않음). 짧은 대신 여정이 끝나면 만료,
- * 로그인한 사람만 사용(joinJourney), 한 사람당 하루 입력 횟수 제한으로 보완한다.
+ * 여정의 구성원마다 자기 코드가 하나씩 있고, 한 번 만들면 바뀌지 않는다(2026-10-09 팀 결정:
+ * 코드를 공유한 사람이 초대 보상을 받도록). 만든 사람의 코드는 여정을 만들 때(createJourney),
+ * 다른 구성원의 코드는 처음 초대 팝업을 열 때(getInviteCode) 만든다.
+ * 짧은 대신 여정이 끝나면 만료, 로그인한 사람만 사용(joinJourney), 한 사람당 하루 입력 횟수 제한으로 보완한다.
  */
 export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const INVITE_CODE_LENGTH = 6;
 /** 한 사람이 하루(UTC)에 초대 코드를 입력할 수 있는 횟수 */
 export const INVITE_ATTEMPTS_PER_DAY = 20;
+/** 내 초대 코드로 새 친구가 여정에 들어오면 나(코드 주인)에게 주는 코인. 새 친구 1명당 한 번 */
+export const INVITE_REWARD_COINS = 30;
+/** 6자리 코드가 이미 있으면 새 코드로 다시 시도하는 횟수 */
+export const MAX_INVITE_CODE_TRIES = 5;
 
 export function createInviteCode(): string {
   let code = "";

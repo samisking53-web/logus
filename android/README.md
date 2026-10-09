@@ -26,13 +26,12 @@ android/
    ├─ ui/signup/TermsScreen.kt  약관 동의(1/2 단계), LegalDocScreen.kt 약관 전문
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
-   ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users)
+   ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users), 내 초대 코드(getInviteCode 함수)
    ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
    ├─ home/JoinViewModel.kt     초대 코드 입력 팝업 → 코드 확인(previewInvite) → I01 → 참여(joinJourney) → 수락 완료 팝업 상태
    ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
    ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
    ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
-   ├─ journey/StartDayCamera.kt 여정 시작일에 S04 앱 내 카메라 열기(여정마다 한 번)
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
    ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
@@ -69,6 +68,8 @@ android/
 - Firebase 콘솔 Authentication(사용자)·Firestore(`users/{uid}`)에 생겼는지
 - 로그아웃 후 다시 로그인하면 회원가입 없이 바로 홈
 - 영상을 위치와 함께 여정에 올리면 홈으로 돌아왔을 때 "보유 코인"이 바로 10 올라 있는지(앱을 다시 켜지 않아도)
+- 친구가 내 초대 코드(S01-A 친구 추가 버튼 → 여정에 초대하기 팝업의 코드)로 여정에 들어오면 내 홈 "보유 코인"이 30 오르는지(코드는 구성원마다 다르다)
+- 여정을 만들면 카메라 대신 홈(오늘 시작이면 S01-A)으로 가는지
 - 폰 홈 화면의 앱 아이콘이 연보라 바탕 + 보라 지구 로고인지(바뀐 아이콘이 안 보이면 앱을 지웠다가 다시 설치)
 
 ## 알아 둘 것

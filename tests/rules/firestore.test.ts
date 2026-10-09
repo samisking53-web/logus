@@ -164,6 +164,8 @@ describe("멤버 문서", () => {
     await assertSucceeds(updateDoc(ref, { notifyIntervalHours: null }));
     await assertFails(updateDoc(ref, { notifyIntervalHours: 5 }));
     await assertFails(updateDoc(ref, { role: "owner" }));
+    // 내 초대 코드는 서버(getInviteCode)만 정한다(코인을 받는 사람이 바뀌지 않게)
+    await assertFails(updateDoc(ref, { inviteCode: "ABCDEF" }));
   });
 
   it("다른 사람의 알림 주기는 바꾸지 못한다", async () => {

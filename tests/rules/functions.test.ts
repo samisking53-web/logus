@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { describe, expect, it } from "vitest";
 import { db } from "../../functions/src/admin";
-import { inviteExpiresAtMillis } from "../../functions/src/common";
+import { INVITE_REWARD_COINS, inviteExpiresAtMillis } from "../../functions/src/common";
 import { createJourney } from "../../functions/src/createJourney";
+import { getInviteCode } from "../../functions/src/getInviteCode";
 import { joinJourney } from "../../functions/src/joinJourney";
 import { previewInvite } from "../../functions/src/previewInvite";
 import { LOCATION_REWARD_COINS, saveLogLocation } from "../../functions/src/saveLogLocation";
@@ -55,6 +56,15 @@ async function makeLog(journeyId: string, authorId: string) {
 }
 
 const porto = { lat: 41.1413, lng: -8.6110 };
+
+/** 가입한 사람처럼 프로필(users/{uid})을 만든다(초대 코인은 프로필이 있는 사람에게만 준다) */
+async function makeUser(uid: string, nickname: string) {
+  await db.doc(`users/${uid}`).set({ nickname, photoURL: null, coins: 0, createdAt: new Date() });
+}
+
+async function coinsOf(uid: string): Promise<number> {
+  return ((await db.doc(`users/${uid}`).get()).get("coins") as number | undefined) ?? 0;
+}
 
 describe("createJourney", () => {
   it("여정·owner 멤버·초대 요약을 함께 만든다", async () => {
@@ -157,6 +167,84 @@ describe("joinJourney", () => {
     await db.doc(`inviteAttempts/${guest}`).set({ date: today, count: 20 });
     await expect(joinJourney.run(req({ inviteCode: "ZZZZZ2" }, guest)))
       .rejects.toMatchObject({ code: "resource-exhausted" });
+  });
+});
+
+describe("초대 보상(코드 주인에게 30코인)과 구성원별 초대 코드", () => {
+  it("만든 사람의 코드로 새 친구가 들어오면 만든 사람이 30코인을 한 번만 받는다", async () => {
+    expect(INVITE_REWARD_COINS).toBe(30);
+    const owner = newUid();
+    const guest = newUid();
+    await makeUser(owner, "성연");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    expect((await db.doc(`journeys/${journeyId}/members/${owner}`).get()).get("inviteCode")).toBe(inviteCode);
+    expect((await db.doc(`invites/${inviteCode}`).get()).get("inviterId")).toBe(owner);
+
+    await joinJourney.run(req({ inviteCode }, guest));
+    expect(await coinsOf(owner)).toBe(30);
+    const ledger = (await db.doc(`users/${owner}/coinLedger/invite_${journeyId}_${guest}`).get()).data();
+    expect(ledger).toMatchObject({ reason: "inviteFriend", amount: 30, journeyId, invitedUid: guest });
+
+    // 같은 친구가 코드를 다시 넣어도(이미 구성원) 더 주지 않는다
+    await joinJourney.run(req({ inviteCode }, guest));
+    expect(await coinsOf(owner)).toBe(30);
+    // 다른 친구가 들어오면 또 30
+    await joinJourney.run(req({ inviteCode }, newUid()));
+    expect(await coinsOf(owner)).toBe(60);
+  });
+
+  it("구성원마다 자기 코드를 받고(바뀌지 않음), 그 코드로 들어오면 코드를 공유한 사람이 코인을 받는다", async () => {
+    const owner = newUid();
+    const bob = newUid();
+    const carol = newUid();
+    await makeUser(owner, "성연");
+    await makeUser(bob, "민수");
+    const { journeyId, inviteCode: ownerCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode: ownerCode }, bob));
+
+    // 만든 사람은 여정을 만들 때 받은 코드 그대로
+    expect((await getInviteCode.run(req({ journeyId }, owner))).inviteCode).toBe(ownerCode);
+    // 다른 구성원은 처음 부를 때 새 코드가 생기고, 다시 불러도 같은 코드
+    const bobCode = (await getInviteCode.run(req({ journeyId }, bob))).inviteCode;
+    expect(bobCode).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(bobCode).not.toBe(ownerCode);
+    expect((await getInviteCode.run(req({ journeyId }, bob))).inviteCode).toBe(bobCode);
+    expect((await db.doc(`journeys/${journeyId}/members/${bob}`).get()).get("inviteCode")).toBe(bobCode);
+    expect((await db.doc(`invites/${bobCode}`).get()).data()).toMatchObject({
+      journeyId, inviterId: bob, inviterName: "민수", name: "우리의 포르투", endDate: END,
+    });
+
+    // I01 에는 코드를 공유한 사람이 초대한 사람으로 보인다
+    expect((await previewInvite.run(req({ inviteCode: bobCode }, carol))).inviterName).toBe("민수");
+
+    const ownerCoinsBefore = await coinsOf(owner);
+    await joinJourney.run(req({ inviteCode: bobCode }, carol));
+    expect(await coinsOf(bob)).toBe(30);
+    expect(await coinsOf(owner)).toBe(ownerCoinsBefore); // 만든 사람은 이번에는 받지 않는다
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner, bob, carol]);
+  });
+
+  it("구성원이 아니거나 로그인하지 않으면 코드를 받지 못하고, 끝난 여정에는 새 코드를 만들지 않는다", async () => {
+    const owner = newUid();
+    const bob = newUid();
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await expect(getInviteCode.run(req({ journeyId }, newUid())))
+      .rejects.toMatchObject({ code: "permission-denied" });
+    await expect(getInviteCode.run(req({ journeyId })))
+      .rejects.toMatchObject({ code: "unauthenticated" });
+    await joinJourney.run(req({ inviteCode }, bob));
+    await endJourney(journeyId);
+    await expect(getInviteCode.run(req({ journeyId }, bob)))
+      .rejects.toMatchObject({ code: "failed-precondition" });
+  });
+
+  it("코드 주인의 프로필이 없으면 코인 없이 참여만 된다", async () => {
+    const owner = newUid(); // makeUser 를 부르지 않음
+    const guest = newUid();
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    const result = await joinJourney.run(req({ inviteCode }, guest));
+    expect(result).toEqual({ journeyId, alreadyMember: false });
+    expect((await db.doc(`users/${owner}`).get()).exists).toBe(false);
   });
 });
 

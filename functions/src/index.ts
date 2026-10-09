@@ -3,6 +3,7 @@
 import "./globalOptions"; // 반드시 맨 위에 둔다
 
 export { createJourney } from "./createJourney";
+export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
 export { previewInvite } from "./previewInvite";
 export { saveLogLocation } from "./saveLogLocation";

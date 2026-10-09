@@ -24,7 +24,6 @@ import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
-import com.logus.app.journey.StartDayCamera
 import com.logus.app.record.CapturePhase
 import com.logus.app.record.CaptureViewModel
 import com.logus.app.record.LocationPickerViewModel
@@ -79,6 +78,7 @@ fun MainScreen(
     val homeState by homeViewModel.state.collectAsStateWithLifecycle()
 
     val ongoing = homeState as? HomeUiState.Ongoing
+    val myInviteCode by homeViewModel.myInviteCode.collectAsStateWithLifecycle()
 
     // S01-A 여정 카드의 친구 추가 버튼 → 여정에 초대하기 팝업(뒤는 S01-A 그대로)
     var invitingToJourney by rememberSaveable { mutableStateOf(false) }
@@ -117,17 +117,6 @@ fun MainScreen(
         }
     }
 
-    // 여정 시작일이면 S04 앱 내 카메라를 연다(오늘 시작하는 여정을 방금 만들었거나, 미리 만든 여정의 시작일에 앱을 열었을 때).
-    // 같은 여정은 이 폰에서 한 번만 자동으로 연다.
-    LaunchedEffect(homeState) {
-        val current = homeState as? HomeUiState.Ongoing ?: return@LaunchedEffect
-        if (current.journey.startDate == LocalDate.now().toString() &&
-            StartDayCamera.claimAutoOpen(context, current.journey.id)
-        ) {
-            openCapture(current.journey)
-        }
-    }
-
     if (creatingJourney) {
         Box(
             Modifier
@@ -144,11 +133,12 @@ fun MainScreen(
                     if (startDate.isAfter(LocalDate.now())) {
                         Toast.makeText(
                             context,
-                            "여정을 만들었어요. ${startDate.monthValue}월 ${startDate.dayOfMonth}일에 앱을 열면 카메라가 열려요.",
+                            "여정을 만들었어요. ${startDate.monthValue}월 ${startDate.dayOfMonth}일에 시작해요.",
                             Toast.LENGTH_LONG,
                         ).show()
                     }
-                    // 홈을 다시 읽는다: 오늘 시작하는 여정이면 S01-A 가 되고 S04 카메라가 열린다
+                    // 홈을 다시 읽는다: 오늘이 여행 기간 안이면 S01-A(지금 기록하기), 아니면 S01.
+                    // 카메라는 자동으로 열지 않는다(2026-10-09 팀 결정). 홈의 "지금 기록하기"로만 연다.
                     homeViewModel.load(uid, force = true)
                 },
             )
@@ -244,6 +234,7 @@ fun MainScreen(
                         onInviteToJourney = {
                             invitingToJourney = true
                             homeViewModel.refreshOngoing() // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
+                            ongoing?.let { homeViewModel.loadMyInviteCode(uid, it.journey) } // 이 여정에서 쓰는 내 초대 코드
                         },
                     )
                     MainTab.EXPLORE -> ExploreScreen()
@@ -263,10 +254,12 @@ fun MainScreen(
         }
         // 여정에 초대하기 팝업(S01-A 위): 여정 이름·현재 인원·여정의 초대 코드(늘 같은 코드)·복사·공유
         if (invitingToJourney && ongoing != null && tab == MainTab.HOME && invitePreview == null) {
+            val myCode = myInviteCode.takeIf { it.journeyId == ongoing.journey.id }
             JourneyInviteDialog(
                 journeyName = ongoing.journey.name,
                 memberCount = ongoing.journey.memberCount,
-                inviteCode = ongoing.journey.inviteCode,
+                inviteCode = myCode?.code,
+                loadingCode = myCode?.loading ?: true,
                 endDate = ongoing.journey.endDate,
                 inviterName = profile.nickname,
                 onClose = { invitingToJourney = false },

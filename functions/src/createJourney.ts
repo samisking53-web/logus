@@ -1,12 +1,14 @@
 // createJourney: 새 여정을 만든다 (S02 새 여정 만들기에서 호출)
 // 여정 문서, 만든 사람의 멤버 문서, 초대 요약(invites, 6자리 코드·여정이 끝나면 만료)을 한 트랜잭션으로 함께 만든다.
-// 초대 코드는 여정 문서(inviteCode)에도 저장해서, 구성원은 언제 열어도 같은 코드를 본다(코드는 바뀌지 않는다).
+// 이 코드는 만든 사람의 초대 코드다. 여정 문서(inviteCode)와 만든 사람의 멤버 문서(inviteCode)에 함께 저장한다(바뀌지 않는다).
+// 다른 구성원은 자기 코드를 따로 받는다(getInviteCode). 코드로 새 친구가 들어오면 코드 주인이 코인을 받는다(joinJourney).
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
 import {
   createInviteCode,
   inviteExpiresAtMillis,
+  MAX_INVITE_CODE_TRIES,
   requireAuth,
   requireDate,
   requireNotifyInterval,
@@ -20,9 +22,6 @@ type CreateJourneyResult = {
   /** 초대 코드 만료 시각(밀리초): 여정 종료일이 끝나는 때 */
   inviteExpiresAt: number;
 };
-
-/** 같은 코드가 이미 있으면 새 코드로 다시 시도하는 횟수 */
-const MAX_CODE_TRIES = 5;
 
 export const createJourney = onCall(async (request): Promise<CreateJourneyResult> => {
   const uid = requireAuth(request);
@@ -42,7 +41,7 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
   const inviteExpiresAt = Timestamp.fromMillis(inviteExpiresAtMillis(endDate));
 
   // 6자리 코드는 드물게 겹칠 수 있어서, 이미 쓰는 코드면 새 코드로 다시 만든다.
-  for (let attempt = 0; attempt < MAX_CODE_TRIES; attempt++) {
+  for (let attempt = 0; attempt < MAX_INVITE_CODE_TRIES; attempt++) {
     const journeyRef = db.collection("journeys").doc();
     const inviteCode = createInviteCode();
     const inviteRef = db.collection("invites").doc(inviteCode);
@@ -72,6 +71,7 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
       tx.create(journeyRef.collection("members").doc(uid), {
         role: "owner",
         notifyIntervalHours,
+        inviteCode,
         joinedAt: FieldValue.serverTimestamp(),
       });
       tx.create(inviteRef, {
@@ -81,6 +81,7 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
         startDate,
         endDate,
         memberCount: 1,
+        inviterId: uid,
         inviterName: inviterName.slice(0, 20),
         expiresAt: inviteExpiresAt,
       });

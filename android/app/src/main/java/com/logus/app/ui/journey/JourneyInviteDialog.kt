@@ -57,7 +57,8 @@ import kotlinx.coroutines.delay
 /**
  * 여행 중에도 새 사람을 초대하는 팝업. 뒤의 S01-A 홈은 어둡게 보인다(Dialog 가 바탕을 덮는다).
  * - 위에서부터: "여정에 초대하기" → 여정 이름·현재 함께하는 사람 수 → 초대 코드 상자(복사) → 안내 → "초대 코드 공유"
- * - 초대 코드는 여정 문서(journeys.inviteCode)에 저장된 코드라서 같은 여정은 언제 열어도 같은 코드가 보인다(바뀌지 않음).
+ * - 초대 코드는 "내" 코드다(구성원마다 다르고, 한 번 만들면 바뀌지 않는다. HomeViewModel.loadMyInviteCode).
+ *   이 코드로 새 친구가 들어오면 나에게 30코인이 쌓인다(서버 joinJourney).
  *   여정이 끝날 때까지 쓸 수 있다(서버 previewInvite·joinJourney 가 여정 종료일로 확인한다).
  * - "초대 코드 공유"는 안드로이드 공유 창을 연다. Gmail(내 구글 계정)·메시지·카카오톡 등에서 골라 보낸다.
  *   보내는 글에는 여정 이름·초대 코드·참여 방법만 넣는다. 링크는 쓰지 않는다(팀 결정: 6자리 코드로만 초대).
@@ -67,8 +68,10 @@ import kotlinx.coroutines.delay
 fun JourneyInviteDialog(
     journeyName: String,
     memberCount: Int,
-    /** 여정의 6자리 초대 코드. 없으면(예전 데이터 등) 코드 대신 안내를 보여 주고 복사·공유를 막는다 */
+    /** 이 여정에서 쓰는 내 6자리 초대 코드. 없으면 코드 대신 안내를 보여 주고 복사·공유를 막는다 */
     inviteCode: String?,
+    /** 내 초대 코드를 서버에서 받는 중인지(처음 여는 구성원은 서버가 코드를 새로 만든다) */
+    loadingCode: Boolean = false,
     /** 여정 종료일 "YYYY-MM-DD" (코드를 쓸 수 있는 마지막 날) */
     endDate: String,
     /** 공유 글에 넣을 초대한 사람(나)의 닉네임 */
@@ -191,11 +194,12 @@ fun JourneyInviteDialog(
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (code != null) {
-                        "이 코드는 '$journeyName' 여정에만 쓰이고, 바뀌지 않아요.\n" +
-                            "여정이 끝나는 ${monthDay(endDate)}까지 쓸 수 있어요."
-                    } else {
-                        "초대 코드를 불러오지 못했어요. 홈을 다시 열어 주세요."
+                    when {
+                        code != null ->
+                            "내 초대 코드예요. 친구가 이 코드로 들어오면 나에게 ${InviteCode.REWARD_COINS}코인이 쌓여요.\n" +
+                                "여정이 끝나는 ${monthDay(endDate)}까지 쓸 수 있어요."
+                        loadingCode -> "내 초대 코드를 불러오는 중이에요…"
+                        else -> "초대 코드를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요."
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
