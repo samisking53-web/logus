@@ -199,13 +199,13 @@ class AuthViewModel(
                 if (profile != null) {
                     enterHome(user.uid, profile)
                 } else {
-                    // 처음 온 사람: 약관 동의부터. 구글 사진이 있으면 그 사진을 기본으로 보여 준다.
-                    val googlePhoto = safePhotoUrl(user.photoUrl?.toString())
+                    // 처음 온 사람: 약관 동의부터. 사진은 기본 프로필(지구본 로고)에서 시작한다.
+                    // 구글 사진은 P02 에서 "구글 프로필 사진 사용"을 직접 골랐을 때만 쓴다(2026-10-09 팀 결정).
                     _state.value = AuthUiState.Signup(
                         email = user.email,
-                        googlePhotoUrl = googlePhoto,
+                        googlePhotoUrl = safePhotoUrl(user.photoUrl?.toString()),
                         nickname = suggestNickname(user.displayName),
-                        photo = googlePhoto?.let { PhotoChoice.Google(it) } ?: PhotoChoice.Default,
+                        photo = PhotoChoice.Default,
                     )
                 }
             } catch (e: Exception) {

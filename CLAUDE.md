@@ -46,6 +46,7 @@
 ## UI 규칙
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
 - 로고: 지구 모양(`res/drawable/ic_globe.xml`, 팀이 정한 그림: 원 + 세로 타원 + 원 끝까지 닿는 가로줄) + "LOG EARTH" 글자, 둘 다 primary-strong. 공통 부품 `ui/components/LogoMark.kt`(크기만 바꿔 쓴다)를 앱 시작 화면(크게)·첫 화면·P01·홈(S01·S01-A)·S04·S05·I01 위쪽(`LogoHeader`)에 쓴다(2026-10-08 팀 요청으로 앱 시작 화면·P01에도 지구 그림을 넣음). 앱 아이콘은 연보라 바탕(surface `#EEEAFB`) + primary 지구(`ic_launcher_foreground.xml`, `values/colors.xml`의 `ic_launcher_background`)
+- 기본 프로필: 사진을 고르지 않은 사람(`users.photoURL`이 null)은 지구본 로고(`ui/components/Avatar.kt`의 `DefaultProfileGlobe`, 동그라미 가운데 primary-strong 지구)를 프로필로 쓴다. 홈 프로필 상자·P01·P02, 사진을 불러오지 못했을 때도 같다(2026-10-09 팀 결정)
 - 홈 "보유 코인"은 `users/{uid}` 문서 하나를 실시간으로 지켜봐서(`auth/AuthViewModel.kt`의 `enterHome`, `AuthRepository.profileChanges`) 서버가 코인을 주면(`saveLogLocation` 위치 10코인, `joinJourney` 초대 30코인) 앱을 다시 켜지 않아도 바로 바뀐다. 로그아웃하면 멈춘다
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → **내** 초대 코드(구성원마다 다르고 한 번 만들면 바뀌지 않음. 만든 사람은 `journeys.inviteCode`, 다른 구성원은 `members/{uid}.inviteCode`, 없으면 `getInviteCode` 함수가 만든다. `HomeViewModel.loadMyInviteCode`)·복사·"친구가 이 코드로 들어오면 나에게 30코인" 안내 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
@@ -122,7 +123,7 @@
 ## 인증
 - 로그인 수단: 구글 계정만 쓴다(카카오는 쓰지 않기로 함). 콘솔 설정 순서는 `docs/login-setup.txt`
 - 로그인: Credential Manager(`GetSignInWithGoogleOption`)로 받은 구글 ID 토큰을 `GoogleAuthProvider`로 Firebase Auth에 넘긴다. `R.string.default_web_client_id`(구글 로그인을 켜면 자동으로 생기는 OAuth 클라이언트, 웹 앱 등록과 무관)가 필요하다. Firebase 콘솔에 팀원별 SHA-1 등록이 필요하다
-- 회원가입 흐름: 첫 화면(`ui/WelcomeScreen.kt`, Google 계정으로 계속하기) → 로그인 후 `users/{uid}`가 없으면 약관 동의(1/2 단계) → P01 프로필 설정(2/2 단계, 닉네임 1~20자) ↔ P02 프로필 사진(앨범·구글 사진·기본) → 홈. 가입 완료 때 `users/{uid}`와 `users/{uid}/agreements/{약관 버전}`을 한 배치로 저장하고, 앨범 사진은 줄여서 Storage에 올린다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·Signup(step)·Ready·Failed)
+- 회원가입 흐름: 첫 화면(`ui/WelcomeScreen.kt`, Google 계정으로 계속하기) → 로그인 후 `users/{uid}`가 없으면 약관 동의(1/2 단계) → P01 프로필 설정(2/2 단계, 닉네임 1~20자, 사진 동그라미는 처음에 지구본 + 작은 "+") ↔ P02 프로필 사진(앨범·구글 사진·기본 = 지구본) → 홈. 사진을 고르지 않으면 구글 계정에 사진이 있어도 기본(지구본, photoURL null)으로 가입하고, 구글 사진은 P02에서 직접 골랐을 때만 쓴다(2026-10-09 팀 결정). 가입 완료 때 `users/{uid}`와 `users/{uid}/agreements/{약관 버전}`을 한 배치로 저장하고, 앨범 사진은 줄여서 Storage에 올린다. 흐름과 상태는 `auth/AuthViewModel.kt`(Checking·SignedOut·Signup(step)·Ready·Failed)
 - 약관 문구는 `legal/LegalDocs.kt`(캡스톤용 예시, 출시 전 법률 검토 필요). 문구를 바꾸면 `TERMS_VERSION`도 바꾼다
 - 초대는 링크 없이 6자리 초대 코드로만 한다. S02 "친구 초대하기"를 누르면 여정을 저장하고 코드 팝업(`ui/journey/InviteCodeDialog.kt`)에서 코드를 복사한다. 받은 사람은 로그인·가입 후 홈(S01)의 "초대 코드로 참여" 팝업에 코드를 입력 → "여정 확인하기"(`previewInvite`) → I01 초대 확인 → "초대 수락하기"(`joinJourney`)로 참여 → 수락 완료 팝업 → "홈으로 가기"(방금 참여한 여정이 오늘 여행 기간 안이면 그 여정의 S01-A, 아니면 홈 규칙대로)(상태는 `home/JoinViewModel.kt`)(로그인 전 미리보기 없음). 코드 글자 규칙은 앱 `journey/InviteCode.kt`와 서버 `functions/src/common.ts`가 같아야 한다
 
