@@ -84,7 +84,7 @@ import java.time.ZoneId
  * S01-A 여정 카드를 누르면 여는 화면. 하단 탭은 숨긴다.
  * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → "10월 9일 · 전체 3명"(오늘 날짜·전체 인원) + 다운로드 모양 "여정 마치기" 버튼
  * - 아래로 스크롤되는 부분: "지금 기록하기"(→ S04) → 오늘 기록을 공통 알림 간격으로 나눈 시간대
- *   ("09:20 ~ 11:20 시간대" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
+ *   ("09:20 ~ 11:20 시간" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
  * - 카드: 영상 대표 화면(첫 장면) 위 왼쪽 위에 기록한 사람의 작은 동그란 프로필, 오른쪽 위에 찍은 시각, 왼쪽 아래에 장소 이름.
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
  * - 다운로드 모양 버튼: N03 "저장하시겠습니까?" 팝업(SaveJourneyDialog) → "저장" → 나에게만 여정을 끝내고 마이로그로 간다(MainScreen).
@@ -291,7 +291,7 @@ private fun JourneyFeedContent(
     }
 }
 
-/** "09:20 ~ 11:20 시간대" + 오른쪽 "3개" */
+/** "09:20 ~ 11:20 시간" + 오른쪽 "3개" */
 @Composable
 private fun WindowHeader(window: FeedWindow) {
     Row(
@@ -301,7 +301,7 @@ private fun WindowHeader(window: FeedWindow) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "${minuteLabel(window.startMinute)} ~ ${minuteLabel(window.endMinute)} 시간대",
+            "${minuteLabel(window.startMinute)} ~ ${minuteLabel(window.endMinute)} 시간",
             color = LogUsColors.primaryStrong,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,

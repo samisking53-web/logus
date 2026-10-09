@@ -20,7 +20,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 
-/** 시간대 하나: "09:20 ~ 11:20 시간대"와 그 안에 찍은 기록들(찍은 순서) */
+/** 시간대 하나: "09:20 ~ 11:20 시간"과 그 안에 찍은 기록들(찍은 순서) */
 data class FeedWindow(
     /** 시작 시각(그날 0시부터 분). 예) 9시 20분 → 560 */
     val startMinute: Int,

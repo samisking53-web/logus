@@ -46,7 +46,7 @@ sealed interface AuthUiState {
         val nickname: String,
         /** P01 에 보이는 확정된 사진 */
         val photo: PhotoChoice,
-        /** P02 에서 고르는 중인 사진("이 사진 사용"을 누르면 photo 가 된다) */
+        /** P02 에서 고르는 중인 사진("프로필 저장"을 누르면 photo 가 된다) */
         val photoDraft: PhotoChoice = photo,
         val saving: Boolean = false,
         val error: String? = null,
@@ -127,7 +127,7 @@ class AuthViewModel(
 
     fun pickDefaultPhoto() = updateSignup { it.copy(photoDraft = PhotoChoice.Default) }
 
-    /** P02 "이 사진 사용" */
+    /** P02 "프로필 저장" */
     fun confirmPhoto() = updateSignup { it.copy(photo = it.photoDraft, step = SignupStep.PROFILE) }
 
     /** P01 "가입 완료" */
