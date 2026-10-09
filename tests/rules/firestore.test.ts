@@ -9,6 +9,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -164,10 +165,27 @@ describe("멤버 문서", () => {
     await assertSucceeds(updateDoc(ref, { notifyIntervalHours: null }));
     await assertFails(updateDoc(ref, { notifyIntervalHours: 5 }));
     await assertFails(updateDoc(ref, { role: "owner" }));
+    // 내 초대 코드는 서버(getInviteCode)만 정한다(코인을 받는 사람이 바뀌지 않게)
+    await assertFails(updateDoc(ref, { inviteCode: "ABCDEF" }));
   });
 
   it("다른 사람의 알림 주기는 바꾸지 못한다", async () => {
     await assertFails(updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), { notifyIntervalHours: 1 }));
+  });
+
+  it("여정 마치기: 본인 문서에 finishedAt 을 서버 시각으로 한 번만 넣는다", async () => {
+    const ref = doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", BOB);
+    // 서버 시각이 아니거나, 다른 칸과 함께 바꾸면 거부
+    await assertFails(updateDoc(ref, { finishedAt: new Date() }));
+    await assertFails(updateDoc(ref, { finishedAt: serverTimestamp(), notifyIntervalHours: 1 }));
+    // 다른 사람 문서는 거부
+    await assertFails(updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), { finishedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { finishedAt: serverTimestamp() }));
+    // 한 번 마치면 다시 바꾸거나 지울 수 없다
+    await assertFails(updateDoc(ref, { finishedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { finishedAt: deleteField() }));
+    // 마친 뒤에도 알림 주기는 바꿀 수 있다
+    await assertSucceeds(updateDoc(ref, { notifyIntervalHours: 2 }));
   });
 });
 
@@ -203,9 +221,25 @@ describe("기록", () => {
     await assertFails(setDoc(doc(db, ...logPath, "n8"), { ...base, createdAt: past }));
   });
 
+  it("테마 태그는 0~3개, 각각 1~20자 글자", async () => {
+    const db = dbAs(BOB);
+    const base = { ...validLog(BOB), createdAt: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(db, ...logPath, "t0"), { ...base, themes: [] }));
+    await assertSucceeds(setDoc(doc(db, ...logPath, "t3"), { ...base, themes: ["카페", "에그타르트", "야경"] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t4"), { ...base, themes: ["a", "b", "c", "d"] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t5"), { ...base, themes: ["가".repeat(21)] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t6"), { ...base, themes: [""] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t7"), { ...base, themes: [1] }));
+    await assertFails(setDoc(doc(db, ...logPath, "t8"), { ...base, themes: "카페" }));
+    // 예전 필드 이름(theme)은 받지 않는다
+    const { themes: _unused, ...withoutThemes } = base;
+    await assertFails(setDoc(doc(db, ...logPath, "t9"), { ...withoutThemes, theme: "카페" }));
+  });
+
   it("작성자는 글·테마·태그만 고친다", async () => {
     const ref = doc(dbAs(ALICE), ...logPath, LOG_ID);
-    await assertSucceeds(updateDoc(ref, { body: "수정한 글", theme: null, taggedUids: [ALICE, BOB] }));
+    await assertSucceeds(updateDoc(ref, { body: "수정한 글", themes: ["야경"], taggedUids: [ALICE, BOB] }));
+    await assertFails(updateDoc(ref, { themes: ["a", "b", "c", "d"] }));
     await assertFails(updateDoc(ref, { location: { lat: 41.1, lng: -8.6 } }));
     await assertFails(updateDoc(ref, { placeName: "Rua A" }));
     await assertFails(updateDoc(ref, { isPublic: true }));
@@ -312,11 +346,17 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
 });
 
 describe("공개 문서 (서버만 쓴다)", () => {
-  it("초대 요약은 로그인 없이 코드로 한 건만 읽는다", async () => {
-    await assertSucceeds(getDoc(doc(dbAnon(), "invites", INVITE_CODE)));
+  it("초대 요약은 앱이 읽지도 쓰지도 못한다(6자리 코드를 넣어 보는 것 방지, 서버 함수만 사용)", async () => {
+    await assertFails(getDoc(doc(dbAnon(), "invites", INVITE_CODE)));
+    await assertFails(getDoc(doc(dbAs(ALICE), "invites", INVITE_CODE)));
     await assertFails(getDocs(collection(dbAnon(), "invites")));
-    await assertFails(setDoc(doc(dbAs(ALICE), "invites", "myOwnCode12345"), { journeyId: JOURNEY_ID }));
+    await assertFails(setDoc(doc(dbAs(ALICE), "invites", "ABCDEF"), { journeyId: JOURNEY_ID }));
     await assertFails(updateDoc(doc(dbAs(ALICE), "invites", INVITE_CODE), { memberCount: 99 }));
+  });
+
+  it("초대 코드 입력 횟수는 본인도 읽거나 고치지 못한다", async () => {
+    await assertFails(getDoc(doc(dbAs(ALICE), "inviteAttempts", ALICE)));
+    await assertFails(setDoc(doc(dbAs(ALICE), "inviteAttempts", ALICE), { date: "2026-10-04", count: 0 }));
   });
 
   it("공개 기록 목록은 누구나 읽고, 아무도 쓰지 못한다", async () => {

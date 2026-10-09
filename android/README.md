@@ -26,11 +26,26 @@ android/
    ├─ ui/signup/TermsScreen.kt  약관 동의(1/2 단계), LegalDocScreen.kt 약관 전문
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
-   ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users)
+   ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users), 내 초대 코드(getInviteCode 함수)
    ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
+   ├─ home/JoinViewModel.kt     초대 코드 입력 팝업 → 코드 확인(previewInvite) → I01 → 참여(joinJourney) → 수락 완료 팝업 상태
+   ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
+   ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
+   ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
-   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드
+   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
+   ├─ ui/feed/JourneyFeedScreen.kt  N01~N03 기록 보기(오늘 기록을 시간대별 카드로, 여정 마치기)
+   ├─ feed/JourneyFeedViewModel.kt  기록 보기 상태(30개씩 읽기, 시간대 나누기, 여정 마치기)
+   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·10초 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
+   ├─ record/CaptureViewModel.kt 촬영 상태(촬영 전·녹화 중·완료), 10초 제한, 공통 알림 간격
+   ├─ record/LogUploadViewModel.kt S05 상태(위치 없이 저장·테마 태그 3개·올리기)
+   ├─ record/LogRepository.kt   영상을 Storage 에 올리고 logs 문서 만들기
+   ├─ record/LocationPickerViewModel.kt  L01 위치 확인 상태(GPS·지도 가운데·주소)
+   ├─ record/PlaceRepository.kt GPS 현재 위치, 핀 자리의 장소 이름·주소(오픈스트리트맵)
+   ├─ journey/Nominatim.kt      오픈스트리트맵 검색 서버 요청(앱 전체 1초에 1번 이하)
+   ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력, 초대 코드 팝업, 여정에 초대하기 팝업(S01-A)
+   ├─ ui/invite/                I01 초대 확인(초대 코드를 확인한 뒤 화면), 초대 수락 완료 팝업
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
    ├─ ui/components/            동그란 프로필 사진, 하단 탭, 오류 문구 등
    └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
@@ -54,6 +69,12 @@ android/
 - "Google로 시작하기" → 계정 선택 → 회원가입 화면 → "가입 완료" → 홈에 닉네임과 "보유 0 코인"
 - Firebase 콘솔 Authentication(사용자)·Firestore(`users/{uid}`)에 생겼는지
 - 로그아웃 후 다시 로그인하면 회원가입 없이 바로 홈
+- 영상을 위치와 함께 여정에 올리면 홈으로 돌아왔을 때 "보유 코인"이 바로 10 올라 있는지(앱을 다시 켜지 않아도)
+- 새 계정으로 가입할 때 사진을 고르지 않으면 P01·홈 프로필이 지구본 로고인지(구글 계정에 사진이 있어도)
+- 친구가 내 초대 코드(S01-A 친구 추가 버튼 → 여정에 초대하기 팝업의 코드)로 여정에 들어오면 내 홈 "보유 코인"이 30 오르는지(코드는 구성원마다 다르다)
+- 여정을 만들면 카메라 대신 홈(오늘 시작이면 S01-A)으로 가는지
+- S01-A 여정 카드를 누르면 N01 기록 보기가 열리고, 오늘 올린 영상이 시간대별 카드(첫 장면·작은 프로필·시각)로 보이는지. 다운로드 모양 버튼 → "저장하시겠습니까?" 팝업(여정 이름·날짜·기록 수·인원) → "취소"면 그대로, "저장"이면 마이로그로 가고 홈이 S01 이 되는지
+- 폰 홈 화면의 앱 아이콘이 연보라 바탕 + 보라 지구 로고인지(바뀐 아이콘이 안 보이면 앱을 지웠다가 다시 설치)
 
 ## 알아 둘 것
 - 로그인은 구글 계정만 쓴다(카카오는 쓰지 않기로 함).

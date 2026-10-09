@@ -13,11 +13,15 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.snapshots
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.storage
 import com.logus.app.R
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 /** 회원가입 때 고른 프로필 사진 */
@@ -76,13 +80,22 @@ class AuthRepository {
     }
 
     /** 가입한 사람이면 프로필을, 아직 가입 전이면 null 을 돌려준다. */
-    suspend fun loadProfile(uid: String): Profile? {
-        val snap = db.collection("users").document(uid).get().await()
-        if (!snap.exists()) return null
+    suspend fun loadProfile(uid: String): Profile? =
+        db.collection("users").document(uid).get().await().toProfile()
+
+    /**
+     * 내 프로필(users/{uid})을 실시간으로 지켜본다. 서버가 코인을 주거나(saveLogLocation) 프로필이 바뀌면
+     * 새 값이 바로 온다(문서가 없으면 null). 문서 한 개만 듣는 리스너라 바뀔 때만 읽기 1회가 든다.
+     */
+    fun profileChanges(uid: String): Flow<Profile?> =
+        db.collection("users").document(uid).snapshots().map { it.toProfile() }
+
+    private fun DocumentSnapshot.toProfile(): Profile? {
+        if (!exists()) return null
         return Profile(
-            nickname = snap.getString("nickname") ?: "여행자",
-            photoUrl = snap.getString("photoURL"),
-            coins = snap.getLong("coins") ?: 0L,
+            nickname = getString("nickname") ?: "여행자",
+            photoUrl = getString("photoURL"),
+            coins = getLong("coins") ?: 0L,
         )
     }
 

@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage) // 프로필 사진 올리기
+    implementation(libs.firebase.functions) // 서버 함수 부르기(새 여정 만들기 createJourney)
     implementation(libs.kotlinx.coroutines.play.services) // Firebase Task 를 await() 로 기다리기
 
     // 구글 로그인: 안드로이드 표준 로그인 창(Credential Manager)
@@ -67,4 +68,14 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.play.services.location) // 현재 위치 → 도시 추천(S02)
+
+    // S04 앱 내 카메라(CameraX): 미리보기, 10초 영상 녹화, 16:9 잘라 찍기
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.video)
+    implementation(libs.androidx.camera.view)
+
+    // L01 위치 확인 지도(MapLibre + OpenFreeMap 타일)
+    implementation(libs.maplibre.android)
 }

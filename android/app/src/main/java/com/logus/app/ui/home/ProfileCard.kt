@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.logus.app.R
 import com.logus.app.auth.Profile
 import com.logus.app.ui.components.Avatar
+import com.logus.app.ui.components.DefaultProfileGlobe
 import com.logus.app.ui.theme.Amber
 import com.logus.app.ui.theme.AmberText
 import com.logus.app.ui.theme.LogUsColors
@@ -104,27 +105,19 @@ fun ProfileCard(
     }
 }
 
-/** 흰 동그라미 안 프로필 사진(없으면 사람 모양) + 오른쪽 아래 카메라 표시 */
+/** 흰 동그라미 안 프로필 사진(없으면 기본 프로필 = 지구본 로고) + 오른쪽 아래 카메라 표시 */
 @Composable
 private fun ProfilePhoto(photoUrl: String?, size: Dp) {
     Box(Modifier.size(size)) {
         if (photoUrl != null) {
             Avatar(photo = photoUrl, size = size)
         } else {
-            Box(
+            DefaultProfileGlobe(
                 Modifier
                     .size(size)
                     .clip(CircleShape)
                     .background(LogUsColors.card),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painterResource(R.drawable.ic_person),
-                    contentDescription = null,
-                    tint = LogUsColors.primaryStrong,
-                    modifier = Modifier.size(size * 0.42f),
-                )
-            }
+            )
         }
         // 카메라 표시(사진을 바꿀 수 있다는 뜻). 보라 원 + 흰 테두리
         val badge = size * 0.32f

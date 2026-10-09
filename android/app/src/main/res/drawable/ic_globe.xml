@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 첫 화면 LOG EARTH 로고 옆 지구 모양(선). 색은 코드에서 tint 로 정한다 -->
+<!--
+  LOG EARTH 로고의 지구 모양(팀이 정한 로고 그림을 그대로 옮긴 선 그림).
+  원 + 세로 타원 + 원 바깥 끝까지 닿는 가로줄(끝이 각짐). 굵기·비율은 원본 그림(1024px)에서 쟀다:
+  원 바깥 지름 642, 선 굵기 49, 타원 가로 반지름 102 → 24 칸 안에 지름 22 로 줄였다.
+  색은 코드에서 tint 로 정한다(LogUsColors.primaryStrong).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -8,6 +13,6 @@
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:pathData="M12,3a9,9 0,1 1,0 18a9,9 0,1 1,0 -18z M3,12h18 M12,3c2.5,2.5 3.8,5.6 3.8,9s-1.3,6.5 -3.8,9c-2.5,-2.5 -3.8,-5.6 -3.8,-9s1.3,-6.5 3.8,-9z" />
+        android:strokeWidth="1.68"
+        android:pathData="M12,1.84a10.16,10.16 0,1 1,0 20.32a10.16,10.16 0,1 1,0 -20.32z M12,1.84a3.49,10.16 0,1 1,0 20.32a3.49,10.16 0,1 1,0 -20.32z M1,12H23" />
 </vector>
