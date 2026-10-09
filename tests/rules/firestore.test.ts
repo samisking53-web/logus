@@ -9,6 +9,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -170,6 +171,21 @@ describe("멤버 문서", () => {
 
   it("다른 사람의 알림 주기는 바꾸지 못한다", async () => {
     await assertFails(updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), { notifyIntervalHours: 1 }));
+  });
+
+  it("여정 마치기: 본인 문서에 finishedAt 을 서버 시각으로 한 번만 넣는다", async () => {
+    const ref = doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", BOB);
+    // 서버 시각이 아니거나, 다른 칸과 함께 바꾸면 거부
+    await assertFails(updateDoc(ref, { finishedAt: new Date() }));
+    await assertFails(updateDoc(ref, { finishedAt: serverTimestamp(), notifyIntervalHours: 1 }));
+    // 다른 사람 문서는 거부
+    await assertFails(updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), { finishedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { finishedAt: serverTimestamp() }));
+    // 한 번 마치면 다시 바꾸거나 지울 수 없다
+    await assertFails(updateDoc(ref, { finishedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { finishedAt: deleteField() }));
+    // 마친 뒤에도 알림 주기는 바꿀 수 있다
+    await assertSucceeds(updateDoc(ref, { notifyIntervalHours: 2 }));
   });
 });
 

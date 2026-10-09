@@ -49,11 +49,12 @@
 - 기본 프로필: 사진을 고르지 않은 사람(`users.photoURL`이 null)은 지구본 로고(`ui/components/Avatar.kt`의 `DefaultProfileGlobe`, 동그라미 가운데 primary-strong 지구)를 프로필로 쓴다. 홈 프로필 상자·P01·P02, 사진을 불러오지 못했을 때도 같다(2026-10-09 팀 결정)
 - 홈 "보유 코인"은 `users/{uid}` 문서 하나를 실시간으로 지켜봐서(`auth/AuthViewModel.kt`의 `enterHome`, `AuthRepository.profileChanges`) 서버가 코인을 주면(`saveLogLocation` 위치 10코인, `joinJourney` 초대 30코인) 앱을 다시 켜지 않아도 바로 바뀐다. 로그아웃하면 멈춘다
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
-- 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → **내** 초대 코드(구성원마다 다르고 한 번 만들면 바뀌지 않음. 만든 사람은 `journeys.inviteCode`, 다른 구성원은 `members/{uid}.inviteCode`, 없으면 `getInviteCode` 함수가 만든다. `HomeViewModel.loadMyInviteCode`)·복사·"친구가 이 코드로 들어오면 나에게 30코인" 안내 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`)
+- 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → **내** 초대 코드(구성원마다 다르고 한 번 만들면 바뀌지 않음. 만든 사람은 `journeys.inviteCode`, 다른 구성원은 `members/{uid}.inviteCode`, 없으면 `getInviteCode` 함수가 만든다. `HomeViewModel.loadMyInviteCode`)·복사·"친구가 이 코드로 들어오면 나에게 30코인" 안내 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`). 여정 카드의 나머지 부분을 누르면 N01 기록 보기
+- N01~N03 기록 보기(스토리보드 v4 13쪽, 화면 목록의 S06 우리 기록. `ui/feed/JourneyFeedScreen.kt`, 상태는 `feed/JourneyFeedViewModel.kt`): S01-A 여정 카드를 누르면 연다(하단 탭 숨김). 위에 고정: LOG EARTH → 뒤로 가기+여정 이름 → "10월 9일 · 전체 3명"(오늘 날짜·전체 인원, profileBox 상자) + 다운로드 모양 "여정 마치기" 버튼(`ic_download`, primary-strong) → 아래로 스크롤: "지금 기록하기"(→ S04, 다 올리면 기록 보기로 돌아옴) → 오늘(폰 날짜) 기록을 공통 알림 간격(없으면 2시간)으로 나눈 시간대("09:20 ~ 11:20 시간대"·N개, 시작점은 오늘 첫 기록 시각을 10분 단위로 내림, 기록 없는 시간대는 건너뜀). 카드는 대표 화면(영상 첫 장면 썸네일, 없으면 보라 그라데이션)을 가로 3:1로 잘라 왼쪽 위 기록한 사람의 작은 프로필(흰 테두리)·오른쪽 위 찍은 시각·왼쪽 아래 장소 이름. 30개씩 읽고 끝에 가까워지면 다음 30개(`LogRepository.loadLogs`). 맨 아래 "↓ 아래로 밀면 다음 시간대"는 끝까지 내리면 사라진다. "여정 마치기" → 확인 팝업 → 내 멤버 문서에 finishedAt(나에게만 여정이 끝남, 다른 구성원은 계속 기록) → 홈은 S01(또는 다른 진행 중 여정) → 마이로그 탭(2026-10-09 팀 결정)
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정을 만들면("저장 →" 또는 "친구 초대하기" 팝업을 닫으면) 홈으로 간다: 오늘이 여행 기간 안이면 S01-A, 미래 여정이면 S01과 "○월 ○일에 시작해요" 안내. 카메라(S04)는 자동으로 열지 않고 S01-A "지금 기록하기"로만 연다(2026-10-09 팀 결정, 시작일 자동 카메라 없앰)
 - S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): S01-A "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 10초까지 담겨요"·"00:04 / 00:10"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 멈추기", 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 최대 10초(FHD, 마이크 거절 시 소리 없이)로 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 촬영을 마치면 바로 S05로 넘어간다
-- S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:08" → 흰 카드(「위치 확인 · 지도 열기」 버튼 → L01 위치 확인 팝업, "영상·위치 함께 저장하면 +10P", □ 위치 없이 저장. 위치를 고르면 "위치 확인 완료 · 지도 열기"와 장소 이름·주소) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). L01에서 위치를 고르거나 "위치 없이 저장"을 켜야 올라간다(둘은 함께 쓸 수 없다). 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4` + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 홈(S01-A). 뒤로 가기는 영상을 지우고 S04로
+- S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:08" → 흰 카드(「위치 확인 · 지도 열기」 버튼 → L01 위치 확인 팝업, "영상·위치 함께 저장하면 +10P", □ 위치 없이 저장. 위치를 고르면 "위치 확인 완료 · 지도 열기"와 장소 이름·주소) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). L01에서 위치를 고르거나 "위치 없이 저장"을 켜야 올라간다(둘은 함께 쓸 수 없다). 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4`·대표 화면 썸네일 `{logId}.jpg`(첫 장면, 가로 640px JPEG) + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 홈(S01-A). 뒤로 가기는 영상을 지우고 S04로
 - L01 위치 확인(`ui/record/LocationPickerSheet.kt`, 상태는 `record/LocationPickerViewModel.kt`, 데이터는 `record/PlaceRepository.kt`): S05 "위치 확인 · 지도 열기"를 누르면 영상 아래(16dp 간격)부터 화면 맨 아래까지 올라오는 팝업. 제목 "위치 확인"·X → MapLibre 지도(OpenFreeMap 타일, 가운데 고정 핀, "GPS 현재 위치"·"지도를 눌러 옮겨 보세요") → 장소 이름·주소(오픈스트리트맵, 지도를 멈추면 다시 찾음)·안내·"지도·주소 © OpenStreetMap" → "이 위치 사용"(보라). 처음 열 때 정확한·대략적인 위치 권한을 묻고 GPS 위치에서 시작한다(못 쓰면 여정 도시 가운데, 그것도 없으면 서울). "이 위치 사용" → S05 위치 버튼이 "위치 확인 완료 · 지도 열기"+장소 이름·주소로 바뀌고 "위치 없이 저장"이 풀린다. "여정에 올리기"는 기록을 만든 뒤 `saveLogLocation`으로 좌표·장소 이름을 저장하고 10코인을 준다
 - 화면 문구는 모두 한국어
 - 글자와 배경의 명도 대비는 4.5:1 이상 (WCAG AA)
@@ -67,14 +68,15 @@
   - 글자색으로는 primary 대신 primary-strong을 쓴다(다크 모드에서 primary 글자는 대비 부족)
   - 오류 빨강은 다크 바탕에서 글자 대비가 3.4라 부족하다. 빨강은 테두리·아이콘에만 쓰고 오류 글자는 본문색으로 쓴다
   - 흰 카드: `#FFFFFF`(홈의 코인 상자·여정 카드·흰 버튼·하단 탭 바탕. 라이트 전용이고 다크는 surface `#1E1B2E`. Color.kt의 `Card`, `LogUsColors.card`)
-  - 사진 테두리: `#FFFFFF`(첫 화면 소개 사진 카드의 흰 테두리, 라이트·다크 같음. Color.kt의 `PhotoFrame`). 글자색으로는 쓰지 않는다
+  - 사진 테두리: `#FFFFFF`(첫 화면 소개 사진 카드의 흰 테두리, N01 카드 위 작은 프로필 테두리, 라이트·다크 같음. Color.kt의 `PhotoFrame`). 바탕 글자색으로는 쓰지 않고, 사진 위 글자는 아래 PhotoScrim 위에서만 쓴다
+  - 사진 위 글자 바탕: 본문색 `#1A1725` 65%(`#A61A1725`, Color.kt의 `PhotoScrim`, 라이트·다크 같음). N01 카드의 시각 표시 바탕·장소 이름 아래 그라데이션. 위 글자는 흰색(`PhotoFrame`), 사진이 밝아도 대비 4.5:1 이상
   - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 
 ## 화면 번호 (스토리보드 v3)
 - S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
 - S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
 - S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(위치 확인·위치 없이 저장·테마 태그 3개·여정에 올리기) / L01 위치 확인(S05 위 지도 팝업, 이 위치 사용 → S05에 주소 반영)
-- S06 우리 기록(시간순 공동 피드) / S07 위치 저장(+10코인, 탐색 공개 선택)
+- S06 우리 기록 = N01~N03 기록 보기(S01-A 여정 카드 → 오늘 기록을 시간대별로, 여정 마치기, `ui/feed/`) / S07 위치 저장(+10코인, 탐색 공개 선택)
 - S08 탐색(세로 스와이프 영상) / S09 검색 결과(지역·테마)
 - S10 마이로그(여정 목록) / S11 여정 상세(기록·추억 지도·추억 영상 탭)
 - S12 추억 지도 / S13 추억 타임라인
@@ -86,8 +88,8 @@
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
 - `users/{uid}/agreements/{termsVersion}`: ageOver14·terms·location(필수, true), notifyNewLogs, agreedAt. 문서 ID는 약관 버전 `YYYY-MM-DD`(`auth/Agreements.kt`의 `TERMS_VERSION`). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
 - `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode(만든 사람의 초대 코드), createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
-- `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), inviteCode(이 구성원의 초대 코드, 서버만 쓴다. 만든 사람은 여정을 만들 때, 다른 구성원은 처음 초대 팝업을 열 때 생긴다), joinedAt
-- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, themes(테마 태그 0~3개, # 없이 각 1~20자), taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null)
+- `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), inviteCode(이 구성원의 초대 코드, 서버만 쓴다. 만든 사람은 여정을 만들 때, 다른 구성원은 처음 초대 팝업을 열 때 생긴다), finishedAt(N01 "여정 마치기"를 누른 시각, 없으면 아직 진행 중. 본인이 한 번만 서버 시각으로 넣는다. 있으면 그 사람 홈에서는 진행 중 여정으로 보지 않는다), joinedAt
+- `journeys/{journeyId}/logs/{logId}`: authorId, mediaType(photo|video|text), mediaPath, body, themes(테마 태그 0~3개, # 없이 각 1~20자), taggedUids, capturedAt(Timestamp), capturedTz, location({lat, lng} 또는 null), placeName, isPublic(기본 false), createdAt. mediaPath는 `journeys/{journeyId}/{작성자 uid}/{파일 이름}`(글 기록은 null). 영상 기록의 대표 화면(썸네일)은 문서 칸 없이 같은 폴더의 `{logId}.jpg`로 정해 둔다(없으면 보라 그림)
 - `.../logs/{logId}/comments/{commentId}`: authorId, body, createdAt
 - `.../logs/{logId}/reactions/{uid}`: emoji, createdAt (1인 1반응)
 - `journeys/{journeyId}/recaps/{recapId}`: rangeType(day|journey|custom), startDate, endDate, title, captions, createdAt
@@ -101,6 +103,7 @@
 - 모든 경로는 거부에서 시작해 필요한 것만 허용한다
 - 여정과 그 하위 문서는 `memberIds`에 있는 사람만 읽고 쓴다
 - 여정 생성과 참여는 서버 함수(`createJourney`, `joinJourney`)로만 한다. 클라이언트는 `journeys` 문서를 직접 만들거나 `memberIds`를 고치지 못한다
+- 멤버 문서는 본인만 notifyIntervalHours를 고치고, finishedAt(여정 마치기)은 본인이 한 번만 서버 시각으로 넣는다(되돌릴 수 없음). role·joinedAt·inviteCode는 서버만
 - 기록 수정·삭제는 작성자만. `location`, `placeName`, `isPublic`은 클라이언트가 직접 바꾸지 못하고 `saveLogLocation` 함수로만 바꾼다
 - `users/{uid}`는 로그인한 사용자가 읽을 수 있고, 본인은 nickname·photoURL만 고칠 수 있다
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`, `inviteAttempts`는 클라이언트가 쓰지 못한다. `invites`·`inviteAttempts`는 읽지도 못한다

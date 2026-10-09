@@ -37,6 +37,10 @@ val MemberColors = listOf(Color(0xFF5B3DD6), Color(0xFFC63F33), Color(0xFF0B7A6B
 
 val PhotoFrame = Color(0xFFFFFFFF) // 첫 화면 소개 사진의 흰 테두리(라이트·다크 같음)
 
+// 사진 위에 얹는 글자 바탕: 본문색(#1A1725)을 65% 불투명하게(라이트·다크 같음). 위 글자는 흰색(PhotoFrame).
+// 사진이 아주 밝아도 흰 글자 대비가 4.5:1 이상 나온다. N01 기록 보기의 시각 표시·장소 이름 아래 그라데이션에 쓴다.
+val PhotoScrim = Color(0xA61A1725)
+
 // 구글 로그인 버튼은 구글 디자인 가이드에 정해진 색을 그대로 써야 해서 팔레트의 예외로 둔다.
 val GoogleButton = Color(0xFFFFFFFF)
 val GoogleLabel = Color(0xFF1F1F1F)

@@ -68,6 +68,7 @@ fun HomeScreen(
     onJoinWithCode: () -> Unit = {},
     onRecordNow: () -> Unit = {},
     onInviteToJourney: () -> Unit = {},
+    onOpenJourney: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -88,6 +89,7 @@ fun HomeScreen(
                     members = state.members,
                     myNickname = profile.nickname,
                     onInviteFriends = onInviteToJourney, // 여정에 초대하기 팝업(MainScreen)
+                    onOpen = onOpenJourney, // 카드를 누르면 N01 기록 보기(MainScreen)
                 )
                 Spacer(Modifier.height(36.dp))
                 ActionButton(

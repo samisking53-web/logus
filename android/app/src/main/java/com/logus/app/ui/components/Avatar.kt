@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
@@ -27,9 +28,16 @@ import com.logus.app.ui.theme.LogUsColors
 /**
  * 동그란 프로필 사진. 사진이 없거나 불러오지 못하면 기본 프로필(지구본 로고)을 그린다.
  * photo: 사진 주소(String, 예: 구글·Storage 주소) 또는 폰 앨범 사진(Uri). null 이면 기본 프로필.
+ * ringWidth·ringColor: 둘레 테두리(기본은 바탕색 4dp. 기록 보기 사진 위 작은 프로필은 흰색 2dp)
  */
 @Composable
-fun Avatar(photo: Any?, size: Dp, modifier: Modifier = Modifier) {
+fun Avatar(
+    photo: Any?,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    ringWidth: Dp = 4.dp,
+    ringColor: Color = MaterialTheme.colorScheme.background,
+) {
     var failed by remember(photo) { mutableStateOf(false) }
 
     Box(
@@ -37,7 +45,7 @@ fun Avatar(photo: Any?, size: Dp, modifier: Modifier = Modifier) {
             .size(size)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(4.dp, MaterialTheme.colorScheme.background, CircleShape),
+            .border(ringWidth, ringColor, CircleShape),
     ) {
         if (photo != null && !failed) {
             AsyncImage(

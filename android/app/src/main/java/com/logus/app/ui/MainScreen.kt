@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.logus.app.auth.Profile
+import com.logus.app.feed.JourneyFeedViewModel
 import com.logus.app.home.HomeUiState
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
@@ -31,6 +32,7 @@ import com.logus.app.record.LogUploadViewModel
 import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
+import com.logus.app.ui.feed.JourneyFeedScreen
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.invite.InviteAcceptedDialog
@@ -58,6 +60,7 @@ fun MainScreen(
     captureViewModel: CaptureViewModel = viewModel(),
     uploadViewModel: LogUploadViewModel = viewModel(),
     locationPickerViewModel: LocationPickerViewModel = viewModel(),
+    feedViewModel: JourneyFeedViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -89,12 +92,17 @@ fun MainScreen(
     val pickerState by locationPickerViewModel.state.collectAsStateWithLifecycle()
     // S05 위에 L01 위치 확인 팝업을 보여 주는 중인지
     var mapOpen by rememberSaveable { mutableStateOf(false) }
+    // N01 기록 보기를 보여 주는 중인지(S01-A 여정 카드를 누르면 연다. 하단 탭은 숨긴다)
+    var viewingFeed by rememberSaveable { mutableStateOf(false) }
+    val feedState by feedViewModel.state.collectAsStateWithLifecycle()
     // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
     LaunchedEffect(uploadState.done) {
         if (uploadState.done && capturing) {
             captureViewModel.discardAndStop()
             capturing = false
             mapOpen = false
+            // 기록 보기에서 "지금 기록하기"로 왔으면 기록 보기로 돌아가서 방금 올린 기록이 보이게 다시 읽는다
+            if (viewingFeed) ongoing?.let { feedViewModel.open(it.journey) }
             val message = when {
                 uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
                 uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
@@ -114,6 +122,22 @@ fun MainScreen(
         if (homeState !is HomeUiState.Ongoing) {
             invitingToJourney = false
             capturing = false
+            viewingFeed = false
+        }
+    }
+    // 기록 보기를 다시 그릴 때(화면 회전·앱 복귀 등) 다른 여정의 기록이 남아 있으면 이 여정으로 다시 읽는다
+    LaunchedEffect(viewingFeed, ongoing?.journey?.id) {
+        val journey = ongoing?.journey ?: return@LaunchedEffect
+        if (viewingFeed && feedState.journeyId != journey.id) feedViewModel.open(journey)
+    }
+    // N01 "여정 마치기"가 끝나면: 나에게만 여정이 끝났으니 홈을 다시 읽고(S01) 마이로그로 간다
+    LaunchedEffect(feedState.finished) {
+        if (feedState.finished) {
+            feedViewModel.consumeFinished()
+            viewingFeed = false
+            tab = MainTab.MY_LOG
+            homeViewModel.load(uid, force = true)
+            Toast.makeText(context, "여정을 마쳤어요. 마이로그에 저장했어요.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -205,6 +229,26 @@ fun MainScreen(
                 )
             }
         }
+    } else if (viewingFeed && ongoing != null) {
+        // N01~N03 기록 보기(전체 화면, 하단 탭 없음). 뒤로 가기 → S01-A
+        BackHandler { viewingFeed = false }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            JourneyFeedScreen(
+                journey = ongoing.journey,
+                state = feedState,
+                onBack = { viewingFeed = false },
+                onRecordNow = { openCapture(ongoing.journey) }, // → S04, 다 올리면 기록 보기로 돌아온다
+                onFinish = { feedViewModel.finish(uid) },
+                onLoadMore = feedViewModel::loadMore,
+                onRetry = { feedViewModel.open(ongoing.journey) },
+                previewUrl = feedViewModel::previewUrl,
+            )
+        }
     } else {
         Column(Modifier.fillMaxSize()) {
             Box(
@@ -235,6 +279,13 @@ fun MainScreen(
                             invitingToJourney = true
                             homeViewModel.refreshOngoing() // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
                             ongoing?.let { homeViewModel.loadMyInviteCode(uid, it.journey) } // 이 여정에서 쓰는 내 초대 코드
+                        },
+                        // S01-A 여정 카드 → N01 기록 보기
+                        onOpenJourney = {
+                            ongoing?.let {
+                                feedViewModel.open(it.journey)
+                                viewingFeed = true
+                            }
                         },
                     )
                     MainTab.EXPLORE -> ExploreScreen()

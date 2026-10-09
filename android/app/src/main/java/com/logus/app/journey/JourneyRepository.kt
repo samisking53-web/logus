@@ -1,6 +1,7 @@
 package com.logus.app.journey
 
 import com.google.firebase.Firebase
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
@@ -43,8 +44,8 @@ data class InvitePreview(
     val alreadyMember: Boolean,
 )
 
-/** 여정 구성원 한 명(홈의 동그란 이름 표시용) */
-data class Member(val uid: String, val nickname: String)
+/** 여정 구성원 한 명(홈의 동그란 이름 표시, 기록 보기의 작은 프로필). photoUrl 이 null 이면 기본 프로필(지구본) */
+data class Member(val uid: String, val nickname: String, val photoUrl: String? = null)
 
 /**
  * 여정 데이터 담당 (백엔드: Firestore)
@@ -167,7 +168,8 @@ class JourneyRepository {
     /**
      * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정. 없으면 null.
      * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 5개만 읽고(비용 관리: limit),
-     * 그중 종료일이 오늘 이후인 첫 여정을 고른다.
+     * 그중 종료일이 오늘 이후이고 내가 "여정 마치기"를 누르지 않은 첫 여정을 고른다
+     * (마쳤는지는 내 멤버 문서의 finishedAt 으로 본다. 기간 안의 여정만 하나씩 확인해서 보통 읽기 1번이 더 든다).
      * 색인: firestore.indexes.json 의 journeys(memberIds 포함 + startDate 내림차순)을 쓴다.
      */
     suspend fun findOngoingJourney(uid: String, today: String): Journey? {
@@ -192,7 +194,28 @@ class JourneyRepository {
                     city = doc.getString("city").orEmpty(),
                 )
             }
-            .firstOrNull { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
+            .filter { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
+            .firstOrNull { !isFinishedByMe(it.id, uid) }
+    }
+
+    /** 내가 이 여정에서 "여정 마치기"를 눌렀는지(내 멤버 문서에 finishedAt 이 있는지) */
+    private suspend fun isFinishedByMe(journeyId: String, uid: String): Boolean =
+        db.collection("journeys").document(journeyId)
+            .collection("members").document(uid)
+            .get()
+            .await()
+            .get("finishedAt") != null
+
+    /**
+     * N01 "여정 마치기"(날짜 상자 옆 다운로드 모양 버튼): 나에게만 여정을 끝낸다.
+     * 내 멤버 문서에 finishedAt(서버 시각)을 넣는다. 보안 규칙이 "본인 문서, 한 번만, 서버 시각"을 확인한다.
+     * 다른 구성원은 종료일까지 계속 기록할 수 있다. 지금까지의 기록은 그대로 남는다(마이로그에서 다시 본다).
+     */
+    suspend fun finishJourney(journeyId: String, uid: String) {
+        db.collection("journeys").document(journeyId)
+            .collection("members").document(uid)
+            .update("finishedAt", FieldValue.serverTimestamp())
+            .await()
     }
 
     /**
@@ -208,13 +231,13 @@ class JourneyRepository {
         return snap.getLong("notifyIntervalHours")?.toInt()
     }
 
-    /** 구성원 닉네임(최대 limit 명). users/{uid} 를 한 명씩 동시에 읽는다. */
+    /** 구성원 닉네임·프로필 사진(최대 limit 명). users/{uid} 를 한 명씩 동시에 읽는다. */
     suspend fun loadMembers(memberIds: List<String>, limit: Int = 4): List<Member> = coroutineScope {
         memberIds.take(limit)
             .map { uid ->
                 async {
                     val snap = runCatching { db.collection("users").document(uid).get().await() }.getOrNull()
-                    Member(uid = uid, nickname = snap?.getString("nickname") ?: "?")
+                    Member(uid = uid, nickname = snap?.getString("nickname") ?: "?", photoUrl = snap?.getString("photoURL"))
                 }
             }
             .awaitAll()

@@ -17,7 +17,8 @@ rules_version = '2';
 //   users/{uid}: nickname 1~20자, photoURL(https 주소 500자 이하 또는 null), createdAt(서버 시각)
 //   users/{uid}/agreements/{termsVersion}: 약관 동의 기록. ageOver14·terms·location(모두 true 필수),
 //     notifyNewLogs(bool), agreedAt(서버 시각). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
-//   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정
+//   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정,
+//     finishedAt(여정 마치기, N01 다운로드 모양 버튼)은 본인이 한 번만 서버 시각으로 넣는다
 //   journeys/{journeyId}/logs/{logId}:
 //     authorId(본인 uid, 변경 불가), mediaType(photo|video|text), mediaPath(본인 폴더 경로 또는 null),
 //     body 0~500자, themes(테마 태그 0~3개, 각 1~20자, # 없이), taggedUids(구성원 uid 20개 이하),
@@ -176,11 +177,17 @@ service cloud.firestore {
 
       match /members/{memberId} {
         allow read: if isMember(journeyId);
-        // 본인 알림 주기만 바꾼다. role·joinedAt은 바꿀 수 없다.
+        // 본인 알림 주기만 바꾼다. role·joinedAt·inviteCode는 바꿀 수 없다.
+        // "여정 마치기"(N01): 본인 문서에 finishedAt 을 한 번만, 서버 시각으로 넣는다(나에게만 여정이 끝난다. 되돌릴 수 없음).
         allow update: if isOwner(memberId)
           && isMember(journeyId)
-          && changedKeys().hasOnly(['notifyIntervalHours'])
-          && isValidNotifyInterval(request.resource.data.notifyIntervalHours);
+          && (
+            (changedKeys().hasOnly(['notifyIntervalHours'])
+              && isValidNotifyInterval(request.resource.data.notifyIntervalHours))
+            || (changedKeys().hasOnly(['finishedAt'])
+              && !('finishedAt' in resource.data)
+              && isServerTime(request.resource.data.finishedAt))
+          );
         allow create, delete: if false;
       }
 

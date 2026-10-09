@@ -2,6 +2,7 @@ package com.logus.app.ui.home
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -54,6 +56,7 @@ import com.logus.app.ui.theme.Success
  * 여기에 넘긴다. 지금은 null 이라 "사진이 들어갈 자리" 그림을 보여 준다.
  * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는
  * "여정에 초대하기" 팝업(ui/journey/JourneyInviteDialog.kt)을 연다(MainScreen 이 연결).
+ * 카드의 나머지 부분을 누르면(onOpen) N01 기록 보기(ui/feed/JourneyFeedScreen.kt)를 연다.
  */
 @Composable
 fun JourneyCard(
@@ -62,6 +65,7 @@ fun JourneyCard(
     myNickname: String,
     coverPhoto: Any? = null,
     onInviteFriends: () -> Unit = {},
+    onOpen: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(20.dp)
@@ -70,7 +74,8 @@ fun JourneyCard(
             .fillMaxWidth()
             .clip(shape)
             .background(LogUsColors.card)
-            .border(1.dp, LogUsColors.line, shape),
+            .border(1.dp, LogUsColors.line, shape)
+            .clickable(role = Role.Button, onClickLabel = "오늘 기록 보기", onClick = onOpen),
     ) {
         // 대표 사진 자리
         Box(
