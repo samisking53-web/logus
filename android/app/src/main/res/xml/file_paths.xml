@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 가 다른 앱(카메라 앱)에 잠깐 열어 줄 수 있는 폴더: 프로필 사진 찍기용 임시 폴더만 -->
+<paths>
+    <cache-path name="profile_camera" path="profile_camera/" />
+</paths>

@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.logus.app.auth.Profile
 import com.logus.app.feed.JourneyFeedViewModel
 import com.logus.app.home.HomeUiState
+import com.logus.app.profile.ProfileEditViewModel
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.journey.Journey
@@ -35,6 +36,7 @@ import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.feed.JourneyFeedScreen
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
+import com.logus.app.ui.home.ProfileEditDialog
 import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.JourneyInviteDialog
@@ -61,6 +63,7 @@ fun MainScreen(
     uploadViewModel: LogUploadViewModel = viewModel(),
     locationPickerViewModel: LocationPickerViewModel = viewModel(),
     feedViewModel: JourneyFeedViewModel = viewModel(),
+    profileEditViewModel: ProfileEditViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -95,6 +98,14 @@ fun MainScreen(
     // N01 기록 보기를 보여 주는 중인지(S01-A 여정 카드를 누르면 연다. 하단 탭은 숨긴다)
     var viewingFeed by rememberSaveable { mutableStateOf(false) }
     val feedState by feedViewModel.state.collectAsStateWithLifecycle()
+    val profileEditState by profileEditViewModel.state.collectAsStateWithLifecycle()
+    // 프로필을 저장하면 팝업을 닫고 알려 준다
+    LaunchedEffect(profileEditState.saved) {
+        if (profileEditState.saved) {
+            profileEditViewModel.close()
+            Toast.makeText(context, "프로필을 바꿨어요", Toast.LENGTH_SHORT).show()
+        }
+    }
     // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
     LaunchedEffect(uploadState.done) {
         if (uploadState.done && capturing) {
@@ -268,6 +279,8 @@ fun MainScreen(
                     ) else HomeScreen(
                         profile = profile,
                         state = homeState,
+                        // S01·S01-A 프로필 상자 "사진 수정 ›" → 프로필 사진 수정 팝업(뒤는 지금 홈 그대로)
+                        onEditPhoto = { profileEditViewModel.open(profile) },
                         onRetry = { homeViewModel.load(uid, force = true) },
                         onNewJourney = {
                             newJourneyViewModel.reset()
@@ -294,6 +307,19 @@ fun MainScreen(
                 }
             }
             BottomTabBar(selected = tab, onSelect = { tab = it })
+        }
+        // 프로필 사진 수정 팝업. 저장하면 홈 프로필은 실시간으로 바뀐다(AuthViewModel 이 users/{uid} 를 지켜봄)
+        if (profileEditState.open && tab == MainTab.HOME) {
+            ProfileEditDialog(
+                state = profileEditState,
+                onNicknameChange = profileEditViewModel::updateNickname,
+                onTookPhoto = profileEditViewModel::tookPhoto,
+                onPickAlbum = profileEditViewModel::pickAlbum,
+                onUseDefault = profileEditViewModel::useDefault,
+                onError = profileEditViewModel::showError,
+                onSave = { profileEditViewModel.save(context, uid) },
+                onClose = profileEditViewModel::close,
+            )
         }
         if (joinState.dialogOpen) {
             JoinCodeDialog(

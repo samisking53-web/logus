@@ -47,6 +47,7 @@
 - 안드로이드 폰 세로 화면 기준. 하단 탭: 홈 / 탐색 / 마이로그(글자 없이 그림만, `ui/components/BottomTabBar.kt`)
 - 로고: 지구 모양(`res/drawable/ic_globe.xml`, 팀이 정한 그림: 원 + 세로 타원 + 원 끝까지 닿는 가로줄) + "LOG EARTH" 글자, 둘 다 primary-strong. 공통 부품 `ui/components/LogoMark.kt`(크기만 바꿔 쓴다)를 앱 시작 화면(크게)·첫 화면·P01·홈(S01·S01-A)·S04·S05·I01 위쪽(`LogoHeader`)에 쓴다(2026-10-08 팀 요청으로 앱 시작 화면·P01에도 지구 그림을 넣음). 앱 아이콘은 연보라 바탕(surface `#EEEAFB`) + primary 지구(`ic_launcher_foreground.xml`, `values/colors.xml`의 `ic_launcher_background`)
 - 기본 프로필: 사진을 고르지 않은 사람(`users.photoURL`이 null)은 지구본 로고(`ui/components/Avatar.kt`의 `DefaultProfileGlobe`, 동그라미 가운데 primary-strong 지구)를 프로필로 쓴다. 홈 프로필 상자·P01·P02, 사진을 불러오지 못했을 때도 같다(2026-10-09 팀 결정)
+- P03 프로필 사진 수정 팝업(`ui/home/ProfileEditDialog.kt`, 상태는 `profile/ProfileEditViewModel.kt`): S01·S01-A 프로필 상자의 "사진 수정 ›"을 누르면 뜬다(뒤는 그 홈 그대로). "프로필 사진 수정"·X → "가입할 때 정한 사진과 이름을 바꿀 수 있어요" → 동그란 사진+카메라 표시 → [사진 찍기](폰 카메라 앱, `FileProvider`·`res/xml/file_paths.xml`, 카메라 권한) [앨범에서](사진 선택 창) [기본 이미지](지구본)(고른 것은 primary 채움) → 닉네임 입력(1~20자, "그룹 멤버에게만 보여요"·"N / 20") → [취소] [저장]. 저장은 `AuthRepository.updateProfile`(새 사진은 줄여서 Storage `users/{uid}/`, `users/{uid}`의 nickname·photoURL만 고침, 예전에 올린 프로필 사진 파일은 지움). 홈은 프로필을 실시간으로 지켜봐서 바로 바뀐다
 - 홈 "보유 코인"은 `users/{uid}` 문서 하나를 실시간으로 지켜봐서(`auth/AuthViewModel.kt`의 `enterHome`, `AuthRepository.profileChanges`) 서버가 코인을 주면(`saveLogLocation` 위치 10코인, `joinJourney` 초대 30코인) 앱을 다시 켜지 않아도 바로 바뀐다. 로그아웃하면 멈춘다
 - 앱을 켤 때마다 앱 시작 화면(`ui/SplashScreen.kt`, 스토리보드 v4 1쪽)을 잠깐 보여 준 뒤 홈(또는 첫 화면)으로 간다
 - 홈은 오늘이 여행 기간(startDate~endDate) 안인 내 여정이 있으면 S01-A, 없으면 S01(`ui/home/HomeScreen.kt`, `home/HomeViewModel.kt`). S01-A에도 "지금 기록하기"(primary) 아래에 S01과 같은 "새 여정 시작하기"(primary-light, → S02)·"초대 코드로 참여"(흰 카드, → 초대 코드 입력 팝업)를 같은 크기로 둔다. S01-A 여정 카드의 여정 이름 오른쪽 위에는 친구 추가(사람+) 버튼을 둔다 → 여정에 초대하기 팝업(`ui/journey/JourneyInviteDialog.kt`, 뒤는 S01-A): 여정 이름·현재 함께하는 사람 수 → **내** 초대 코드(구성원마다 다르고 한 번 만들면 바뀌지 않음. 만든 사람은 `journeys.inviteCode`, 다른 구성원은 `members/{uid}.inviteCode`, 없으면 `getInviteCode` 함수가 만든다. `HomeViewModel.loadMyInviteCode`)·복사·"친구가 이 코드로 들어오면 나에게 30코인" 안내 → "초대 코드 공유"(안드로이드 공유 창으로 Gmail·메시지·카카오톡 등에 여정 이름·코드·참여 방법을 보낸다. 링크 아님). 팝업을 열 때 여정 문서를 다시 읽어 인원수를 새로 고친다(`HomeViewModel.refreshOngoing`). 여정 카드의 나머지 부분을 누르면 N01 기록 보기
@@ -73,7 +74,7 @@
   - 예외: 구글 로그인 버튼은 구글 디자인 가이드 색(흰 배경 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`)을 쓴다(Color.kt의 `Google*`)
 
 ## 화면 번호 (스토리보드 v3)
-- S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
+- S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기) / P03 프로필 사진 수정 팝업(홈 "사진 수정 ›" → 사진·닉네임 바꾸기)
 - S02 새 여정 만들기 / S03 여행 기간 달력 / 초대 코드 팝업(S02 "친구 초대하기" → 6자리 코드·코드 복사) / 여정에 초대하기 팝업(S01-A 여정 카드의 친구 추가 버튼 → 코드 복사·초대 코드 공유)
 - S04 앱 내 카메라(S01-A "지금 기록하기", 16:9 영상 10초) / S05 기록 올리기(위치 확인·위치 없이 저장·테마 태그 3개·여정에 올리기) / L01 위치 확인(S05 위 지도 팝업, 이 위치 사용 → S05에 주소 반영)
 - S06 우리 기록 = N01~N03 기록 보기(S01-A 여정 카드 → 오늘 기록을 시간대별로, 여정 마치기, `ui/feed/`) / S07 위치 저장(+10코인, 탐색 공개 선택)

@@ -36,6 +36,18 @@ sealed interface PhotoChoice {
     data object Default : PhotoChoice
 }
 
+/** 프로필 사진 수정 팝업에서 사진을 어떻게 바꿀지 */
+sealed interface ProfilePhotoChange {
+    /** 지금 사진 그대로 */
+    data object Keep : ProfilePhotoChange
+
+    /** 기본 이미지(지구본, photoURL null) */
+    data object Default : ProfilePhotoChange
+
+    /** 찍은 사진·앨범 사진(줄여서 올린다) */
+    data class Upload(val uri: Uri) : ProfilePhotoChange
+}
+
 /** Firestore users/{uid} 문서 (CLAUDE.md "데이터 모델") */
 data class Profile(
     val nickname: String,
@@ -143,6 +155,31 @@ class AuthRepository {
             .commit()
             .await()
         return Profile(nickname = nickname, photoUrl = photoUrl, coins = 0L)
+    }
+
+    /**
+     * 홈 "사진 수정"(프로필 사진 수정 팝업)의 "저장": 닉네임과 프로필 사진을 바꾼다.
+     * - 새 사진(찍은 사진·앨범 사진)은 줄여서 Storage users/{uid}/ 에 올리고 그 주소를 photoURL 에 넣는다.
+     * - 기본 이미지면 photoURL 을 null(지구본)로, 사진을 그대로 두면 photoURL 은 건드리지 않는다.
+     * - 보안 규칙: 본인 문서의 nickname·photoURL 만 고칠 수 있다(코인 등은 그대로).
+     * - 예전에 이 앱이 올린 프로필 사진(users/{uid}/…)은 바꾼 뒤 지운다(쓰지 않는 파일이 쌓이지 않게). 지우기에 실패해도 저장은 그대로다.
+     */
+    suspend fun updateProfile(context: Context, uid: String, nickname: String, photo: ProfilePhotoChange, oldPhotoUrl: String?) {
+        val updates = mutableMapOf<String, Any?>("nickname" to nickname)
+        when (photo) {
+            ProfilePhotoChange.Keep -> Unit
+            ProfilePhotoChange.Default -> updates["photoURL"] = null
+            is ProfilePhotoChange.Upload ->
+                updates["photoURL"] = safePhotoUrl(uploadProfilePhoto(uid, ProfilePhoto.toJpeg(context, photo.uri)))
+        }
+        db.collection("users").document(uid).update(updates).await()
+
+        if (photo != ProfilePhotoChange.Keep && oldPhotoUrl != null) {
+            runCatching {
+                val old = storage.getReferenceFromUrl(oldPhotoUrl)
+                if (old.path.trimStart('/').startsWith("users/$uid/")) old.delete().await()
+            }
+        }
     }
 
     /** 프로필 사진을 Storage 에 올리고 내려받기 주소를 돌려준다(보안 규칙: 본인 폴더, 이미지 5MB 미만). */
