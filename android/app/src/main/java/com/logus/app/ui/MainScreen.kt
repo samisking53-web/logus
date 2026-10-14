@@ -236,7 +236,6 @@ fun MainScreen(
                         capturing = false
                     },
                     onStart = { controller, withAudio -> captureViewModel.startRecording(context, controller, withAudio) },
-                    onStop = captureViewModel::stopRecording,
                 )
             }
         }

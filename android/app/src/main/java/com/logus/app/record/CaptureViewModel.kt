@@ -37,7 +37,7 @@ enum class CapturePhase {
 /** S04 앱 내 카메라 상태 */
 data class CaptureUiState(
     val phase: CapturePhase = CapturePhase.Ready,
-    /** 지금까지 찍은 시간(밀리초). 10초(MAX_VIDEO_MILLIS)까지 */
+    /** 지금까지 찍은 시간(밀리초). 3초(VIDEO_MILLIS)까지 */
     val elapsedMs: Long = 0,
     /** 촬영을 마친 영상 파일(폰 안 앱 전용 임시 폴더). 기록 올리기(S05)에서 올린다 */
     val videoFile: File? = null,
@@ -51,15 +51,19 @@ data class CaptureUiState(
     val notifyLoaded: Boolean = false,
 )
 
-/** 한 번에 찍을 수 있는 영상 길이(10초) */
-const val MAX_VIDEO_MILLIS = 10_000L
+/** 영상 길이: 늘 3초로 고정(2026-10-14 팀 결정). 중간에 멈출 수 없다 */
+const val VIDEO_MILLIS = 3_000L
+
+/** 저절로 멈춘 시점이 조금 일러도 3초 영상으로 본다(인코더가 마지막 몇 장면을 늦게 넘기는 경우) */
+private const val FULL_LENGTH_TOLERANCE_MILLIS = 300L
 
 /**
- * S04 앱 내 카메라: 영상 녹화(최대 10초)와 공통 알림 간격을 맡는다.
+ * S04 앱 내 카메라: 영상 녹화(3초 고정)와 공통 알림 간격을 맡는다.
  * - 카메라 미리보기·16:9 잘라 찍기는 화면(CaptureScreen)의 LifecycleCameraController 가 하고,
  *   여기서는 그 컨트롤러로 녹화를 시작·멈추고 진행 시간을 받는다.
  * - 영상은 폰 안 앱 전용 임시 폴더(cacheDir/captures)에 저장한다. 갤러리에는 저장하지 않는다.
- * - 10초가 되면 CameraX 가 저절로 멈춘다(FileOutputOptions.setDurationLimitMillis).
+ * - 3초가 되면 CameraX 가 저절로 멈춘다(FileOutputOptions.setDurationLimitMillis). 사용자가 중간에 멈추는 버튼은 없고,
+ *   앱을 내리는 등으로 3초 전에 끊긴 영상은 쓰지 않고 지운다(늘 3초짜리 영상만 S05 로 넘어간다).
  */
 class CaptureViewModel(
     private val repository: JourneyRepository = JourneyRepository(),
@@ -107,7 +111,7 @@ class CaptureViewModel(
         }
         recording = try {
             controller.startRecording(
-                FileOutputOptions.Builder(file).setDurationLimitMillis(MAX_VIDEO_MILLIS).build(),
+                FileOutputOptions.Builder(file).setDurationLimitMillis(VIDEO_MILLIS).build(),
                 AudioConfig.create(withAudio),
                 ContextCompat.getMainExecutor(context),
             ) { event -> onEvent(event, file) }
@@ -117,11 +121,6 @@ class CaptureViewModel(
             _state.update { it.copy(phase = CapturePhase.Ready, error = "카메라를 준비하는 중이에요. 잠시 후 다시 눌러 주세요.") }
             null
         }
-    }
-
-    /** 촬영 멈추기(10초 전에 멈출 때). 멈춘 뒤 Finalize 이벤트에서 촬영 완료가 된다 */
-    fun stopRecording() {
-        recording?.stop()
     }
 
     /** 뒤로 가기로 나갈 때(S04), S05 에서 뒤로 갈 때, 여정에 다 올렸을 때: 녹화 중이면 멈추고 영상 파일은 지운다 */
@@ -138,14 +137,19 @@ class CaptureViewModel(
         when (event) {
             is VideoRecordEvent.Status -> {
                 val ms = event.recordingStats.recordedDurationNanos / 1_000_000
-                if (!discardOnFinish) _state.update { it.copy(elapsedMs = ms.coerceAtMost(MAX_VIDEO_MILLIS)) }
+                if (!discardOnFinish) _state.update { it.copy(elapsedMs = ms.coerceAtMost(VIDEO_MILLIS)) }
             }
 
             is VideoRecordEvent.Finalize -> {
                 recording = null
-                val ms = (event.recordingStats.recordedDurationNanos / 1_000_000).coerceAtMost(MAX_VIDEO_MILLIS)
-                // 10초가 되어 저절로 멈춘 것도 정상 촬영이다
-                val ok = !event.hasError() || event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED
+                val recordedMs = event.recordingStats.recordedDurationNanos / 1_000_000
+                val ms = recordedMs.coerceAtMost(VIDEO_MILLIS)
+                // 3초가 되어 저절로 멈춘 것만 정상 촬영이다. 앱을 내리는 등으로 일찍 끊긴 영상은 쓰지 않는다
+                val ok = event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
+                    (!event.hasError() && recordedMs >= VIDEO_MILLIS - FULL_LENGTH_TOLERANCE_MILLIS)
+                val interrupted = !event.hasError() ||
+                    event.error == VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA ||
+                    event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE
                 when {
                     discardOnFinish -> {
                         file.delete()
@@ -155,10 +159,10 @@ class CaptureViewModel(
                     ok -> _state.update { it.copy(phase = CapturePhase.Done, elapsedMs = ms, videoFile = file) }
 
                     else -> {
-                        Log.w(TAG, "녹화 실패 (오류 ${event.error})", event.cause)
+                        Log.w(TAG, "녹화 실패 (오류 ${event.error}, ${recordedMs}ms)", event.cause)
                         file.delete()
-                        val message = if (event.error == VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA) {
-                            "영상이 너무 짧아요. 조금 더 길게 찍어 주세요."
+                        val message = if (interrupted) {
+                            "촬영이 중간에 멈췄어요. 다시 찍어 주세요."
                         } else {
                             "촬영하지 못했어요. 다시 시도해 주세요."
                         }

@@ -37,8 +37,8 @@ android/
    ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
    ├─ ui/feed/JourneyFeedScreen.kt  N01~N03 기록 보기(오늘 기록을 시간대별 카드로, 여정 마치기)
    ├─ feed/JourneyFeedViewModel.kt  기록 보기 상태(30개씩 읽기, 시간대 나누기, 여정 마치기)
-   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·10초 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
-   ├─ record/CaptureViewModel.kt 촬영 상태(촬영 전·녹화 중·완료), 10초 제한, 공통 알림 간격
+   ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·3초 고정 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
+   ├─ record/CaptureViewModel.kt 촬영 상태(촬영 전·녹화 중·완료), 3초 고정 촬영, 공통 알림 간격
    ├─ record/LogUploadViewModel.kt S05 상태(위치 없이 저장·테마 태그 3개·올리기)
    ├─ record/LogRepository.kt   영상을 Storage 에 올리고 logs 문서 만들기
    ├─ record/LocationPickerViewModel.kt  L01 위치 확인 상태(GPS·지도 가운데·주소)

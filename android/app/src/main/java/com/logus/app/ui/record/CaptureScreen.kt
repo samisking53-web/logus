@@ -76,7 +76,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.logus.app.record.CapturePhase
 import com.logus.app.record.CaptureUiState
-import com.logus.app.record.MAX_VIDEO_MILLIS
+import com.logus.app.record.VIDEO_MILLIS
 import com.logus.app.ui.components.ErrorMessage
 import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.theme.BackgroundDark
@@ -93,10 +93,10 @@ import java.time.LocalTime
  * - 맨 위: 뒤로 가기 + 여정 이름 / 그 아래: "● 여정 진행 중 · 14:30"(지금 시각, 1분마다 바뀐다)
  * - 카메라 미리보기: 화면 위쪽 절반 안에 들어가도록 가로로 긴 16:9 상자. 앱은 세로로 고정되어 있고(AndroidManifest),
  *   상자에 보이는 그대로(16:9) 영상이 저장된다(CameraX 가 미리보기 영역대로 잘라 녹화한다).
- * - 영상은 10초까지. "00:04 / 00:10"과 진행 막대로 보여 주고, 10초가 되면 저절로 멈춘다.
- * - 아래: 빨간 동그라미가 있는 "촬영" 버튼(녹화 중에는 동그라미가 깜빡이고 "촬영 멈추기"),
+ * - 영상은 늘 3초(2026-10-14 팀 결정). "00:02 / 00:03"과 진행 막대로 보여 주고, 3초가 되면 저절로 멈춘다.
+ * - 아래: 빨간 동그라미가 있는 "촬영" 버튼(녹화 중에는 동그라미가 깜빡이고 "촬영 중…". 중간에 멈출 수 없다),
  *   맨 아래 작게 "공통 알림 · 2시간마다"(여정을 만든 사람이 정한 간격).
- * - 촬영을 마치면(10초 또는 "촬영 멈추기") 영상은 폰 안 임시 폴더에 남고, MainScreen 이 S05 기록 올리기로 넘긴다.
+ * - 촬영을 마치면(3초) 영상은 폰 안 임시 폴더에 남고, MainScreen 이 S05 기록 올리기로 넘긴다.
  * - 처음 열 때 카메라·마이크 권한을 묻는다. 마이크를 거절하면 소리 없이 찍는다.
  */
 @Composable
@@ -105,7 +105,6 @@ fun CaptureScreen(
     state: CaptureUiState,
     onBack: () -> Unit,
     onStart: (controller: LifecycleCameraController, withAudio: Boolean) -> Unit,
-    onStop: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -160,9 +159,7 @@ fun CaptureScreen(
         onRequestPermission = {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
         },
-        onRecordClick = {
-            if (state.phase == CapturePhase.Recording) onStop() else onStart(controller, hasAudio)
-        },
+        onRecordClick = { onStart(controller, hasAudio) }, // 녹화 중에는 버튼이 꺼져 있다(3초 고정)
         cameraPreview = {
             AndroidView(
                 factory = { ctx ->
@@ -276,16 +273,16 @@ private fun CaptureContent(
             }
             Spacer(Modifier.height(12.dp))
 
-            // 10초 안내 + 시간
+            // 3초 안내 + 시간
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "영상 · 10초까지 담겨요",
+                    "영상 · 3초 동안 찍혀요",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    "${mmss(state.elapsedMs)} / ${mmss(MAX_VIDEO_MILLIS)}",
+                    "${mmss(state.elapsedMs)} / ${mmss(VIDEO_MILLIS)}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -293,7 +290,7 @@ private fun CaptureContent(
             }
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { (state.elapsedMs.toFloat() / MAX_VIDEO_MILLIS).coerceIn(0f, 1f) },
+                progress = { (state.elapsedMs.toFloat() / VIDEO_MILLIS).coerceIn(0f, 1f) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp),
@@ -312,10 +309,11 @@ private fun CaptureContent(
             Spacer(Modifier.height(24.dp))
         }
 
-        // 촬영 버튼: 빨간 동그라미 + 글자. 녹화 중에는 동그라미가 깜빡인다
+        // 촬영 버튼: 빨간 동그라미 + 글자. 녹화 중에는 동그라미가 깜빡이고, 3초가 될 때까지 눌리지 않는다
+        val defaultColors = ButtonDefaults.buttonColors()
         Button(
             onClick = onRecordClick,
-            enabled = hasCamera,
+            enabled = hasCamera && !recording,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp),
@@ -323,6 +321,9 @@ private fun CaptureContent(
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
+                // 녹화 중(눌리지 않을 때)에도 같은 보라 + 흰 글자로 보이게
+                disabledContainerColor = if (recording) MaterialTheme.colorScheme.primary else defaultColors.disabledContainerColor,
+                disabledContentColor = if (recording) MaterialTheme.colorScheme.onPrimary else defaultColors.disabledContentColor,
             ),
         ) {
             RecordDot(blinking = recording)
@@ -330,7 +331,7 @@ private fun CaptureContent(
             Text(
                 when (state.phase) {
                     CapturePhase.Ready -> "촬영"
-                    CapturePhase.Recording -> "촬영 멈추기"
+                    CapturePhase.Recording -> "촬영 중…"
                     CapturePhase.Done -> "다시 촬영"
                 },
                 fontSize = 18.sp,
@@ -446,7 +447,7 @@ private fun CaptureContentPreview() {
         CaptureContent(
             journeyName = "우리의 포르투",
             clock = "14:30",
-            state = CaptureUiState(elapsedMs = 4_000, phase = CapturePhase.Recording, notifyIntervalHours = 2, notifyLoaded = true),
+            state = CaptureUiState(elapsedMs = 2_000, phase = CapturePhase.Recording, notifyIntervalHours = 2, notifyLoaded = true),
             hasCamera = true,
             onBack = {},
             onRequestPermission = {},
