@@ -11,16 +11,17 @@ rules_version = '2';
 //   - journeys 문서와 members 문서 생성·참여 → createJourney, joinJourney
 //   - 기록의 location·placeName·isPublic → saveLogLocation
 //   - users.coins, coinLedger → saveLogLocation
-//   - invites, publicLogs, sharedRecaps, recaps → 서버 함수
+//   - invites, inviteAttempts, publicLogs, sharedRecaps, recaps → 서버 함수
 //
 // 클라이언트가 쓰는 문서 요약 (필드: 타입, 제한)
 //   users/{uid}: nickname 1~20자, photoURL(https 주소 500자 이하 또는 null), createdAt(서버 시각)
 //   users/{uid}/agreements/{termsVersion}: 약관 동의 기록. ageOver14·terms·location(모두 true 필수),
 //     notifyNewLogs(bool), agreedAt(서버 시각). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
-//   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정
+//   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정,
+//     finishedAt(여정 마치기, N01 다운로드 모양 버튼)은 본인이 한 번만 서버 시각으로 넣는다
 //   journeys/{journeyId}/logs/{logId}:
 //     authorId(본인 uid, 변경 불가), mediaType(photo|video|text), mediaPath(본인 폴더 경로 또는 null),
-//     body 0~500자, theme(20자 이하 또는 null), taggedUids(구성원 uid 20개 이하),
+//     body 0~500자, themes(테마 태그 0~3개, 각 1~20자, # 없이), taggedUids(구성원 uid 20개 이하),
 //     capturedAt(Timestamp), capturedTz 1~64자, location(생성 시 null), placeName(생성 시 null),
 //     isPublic(생성 시 false), createdAt(서버 시각)
 //   .../comments/{commentId}: authorId(본인), body 1~500자, createdAt(서버 시각)
@@ -57,10 +58,6 @@ service cloud.firestore {
       return value is string && value.size() >= minLen && value.size() <= maxLen;
     }
 
-    function isNullOrStringBetween(value, minLen, maxLen) {
-      return value == null || isStringBetween(value, minLen, maxLen);
-    }
-
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -94,10 +91,10 @@ service cloud.firestore {
     // 기록에서 클라이언트가 정하는 필드를 검증한다. 생성과 수정 모두 이 함수를 거친다.
     function isValidLog(data, journeyId) {
       return data.keys().hasOnly([
-          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'authorId', 'mediaType', 'mediaPath', 'body', 'themes', 'taggedUids',
           'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
         && data.keys().hasAll([
-          'authorId', 'mediaType', 'mediaPath', 'body', 'theme', 'taggedUids',
+          'authorId', 'mediaType', 'mediaPath', 'body', 'themes', 'taggedUids',
           'capturedAt', 'capturedTz', 'location', 'placeName', 'isPublic', 'createdAt'])
         && data.mediaType in ['photo', 'video', 'text']
         // 글 기록은 미디어가 없고, 사진·영상은 작성자 본인 폴더의 파일만 가리킨다.
@@ -106,7 +103,7 @@ service cloud.firestore {
               : (data.mediaPath is string && data.mediaPath.size() <= 300
                  && data.mediaPath.matches('^journeys/' + journeyId + '/' + data.authorId + '/[^/]+$')))
         && isStringBetween(data.body, 0, 500)
-        && isNullOrStringBetween(data.theme, 1, 20)
+        && isValidThemes(data.themes)
         // 태그는 20명 이하, 모두 이 여정의 구성원이어야 한다.
         && data.taggedUids is list && data.taggedUids.size() <= 20
         && data.taggedUids.toSet().difference(journeyData(journeyId).memberIds.toSet()).size() == 0
@@ -114,6 +111,14 @@ service cloud.firestore {
         && isStringBetween(data.capturedTz, 1, 64)
         && data.isPublic is bool
         && data.createdAt is timestamp;
+    }
+
+    // 테마 태그(S05, 인스타그램 해시태그처럼): 0~3개, 각각 1~20자 글자(# 없이 저장)
+    function isValidThemes(themes) {
+      return themes is list && themes.size() <= 3
+        && (themes.size() < 1 || isStringBetween(themes[0], 1, 20))
+        && (themes.size() < 2 || isStringBetween(themes[1], 1, 20))
+        && (themes.size() < 3 || isStringBetween(themes[2], 1, 20));
     }
 
     function isValidComment(data) {
@@ -172,11 +177,17 @@ service cloud.firestore {
 
       match /members/{memberId} {
         allow read: if isMember(journeyId);
-        // 본인 알림 주기만 바꾼다. role·joinedAt은 바꿀 수 없다.
+        // 본인 알림 주기만 바꾼다. role·joinedAt·inviteCode는 바꿀 수 없다.
+        // "여정 마치기"(N01): 본인 문서에 finishedAt 을 한 번만, 서버 시각으로 넣는다(나에게만 여정이 끝난다. 되돌릴 수 없음).
         allow update: if isOwner(memberId)
           && isMember(journeyId)
-          && changedKeys().hasOnly(['notifyIntervalHours'])
-          && isValidNotifyInterval(request.resource.data.notifyIntervalHours);
+          && (
+            (changedKeys().hasOnly(['notifyIntervalHours'])
+              && isValidNotifyInterval(request.resource.data.notifyIntervalHours))
+            || (changedKeys().hasOnly(['finishedAt'])
+              && !('finishedAt' in resource.data)
+              && isServerTime(request.resource.data.finishedAt))
+          );
         allow create, delete: if false;
       }
 
@@ -195,7 +206,7 @@ service cloud.firestore {
         // 작성자는 글·테마·태그만 고친다.
         allow update: if isMember(journeyId)
           && resource.data.authorId == request.auth.uid
-          && changedKeys().hasOnly(['body', 'theme', 'taggedUids'])
+          && changedKeys().hasOnly(['body', 'themes', 'taggedUids'])
           && isValidLog(request.resource.data, journeyId);
 
         allow delete: if isMember(journeyId) && resource.data.authorId == request.auth.uid;
@@ -230,12 +241,17 @@ service cloud.firestore {
       }
     }
 
-    // ---------- 공개 읽기 (서버만 쓴다) ----------
+    // ---------- 서버만 쓰는 문서 (일부는 공개 읽기) ----------
 
-    // 초대 화면용 요약. 코드를 아는 사람만 단건으로 읽는다(목록 조회 불가).
+    // 초대 요약. 초대 코드가 6자리라 누구나 읽게 두면 여러 코드를 넣어 보는 방식으로 다른 여정이 드러날 수 있다.
+    // 그래서 앱은 직접 읽지도 쓰지도 못하고, 서버 함수(createJourney·joinJourney)만 쓴다.
     match /invites/{inviteCode} {
-      allow get: if true;
-      allow list, write: if false;
+      allow read, write: if false;
+    }
+
+    // 초대 코드 입력 횟수(joinJourney 가 하루 횟수 제한에 쓴다). 서버만 쓴다.
+    match /inviteAttempts/{uid} {
+      allow read, write: if false;
     }
 
     // 탐색 화면용 공개 기록 사본

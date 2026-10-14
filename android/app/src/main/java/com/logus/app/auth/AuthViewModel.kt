@@ -13,9 +13,11 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.logus.app.legal.LegalDoc
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 /** 회원가입 안에서 지금 보여 줄 화면 */
@@ -44,7 +46,7 @@ sealed interface AuthUiState {
         val nickname: String,
         /** P01 에 보이는 확정된 사진 */
         val photo: PhotoChoice,
-        /** P02 에서 고르는 중인 사진("이 사진 사용"을 누르면 photo 가 된다) */
+        /** P02 에서 고르는 중인 사진("프로필 저장"을 누르면 photo 가 된다) */
         val photoDraft: PhotoChoice = photo,
         val saving: Boolean = false,
         val error: String? = null,
@@ -67,6 +69,9 @@ class AuthViewModel(
 
     private val _state = MutableStateFlow<AuthUiState>(AuthUiState.Checking)
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
+
+    /** 홈에 들어간 뒤 내 프로필(보유 코인 등)을 실시간으로 지켜보는 작업. 로그아웃하면 멈춘다 */
+    private var profileWatch: Job? = null
 
     init {
         // 이전에 로그인한 적이 있으면 Firebase 가 기억하고 있다 → 바로 프로필을 확인한다.
@@ -122,7 +127,7 @@ class AuthViewModel(
 
     fun pickDefaultPhoto() = updateSignup { it.copy(photoDraft = PhotoChoice.Default) }
 
-    /** P02 "이 사진 사용" */
+    /** P02 "프로필 저장" */
     fun confirmPhoto() = updateSignup { it.copy(photo = it.photoDraft, step = SignupStep.PROFILE) }
 
     /** P01 "가입 완료" */
@@ -143,14 +148,12 @@ class AuthViewModel(
                 _state.value = current.copy(saving = true, error = null)
                 val appContext = context.applicationContext
                 viewModelScope.launch {
-                    _state.value = try {
-                        AuthUiState.Ready(
-                            user.uid,
-                            repository.createProfile(appContext, user.uid, check.value, current.photo, current.agreements),
-                        )
+                    try {
+                        val profile = repository.createProfile(appContext, user.uid, check.value, current.photo, current.agreements)
+                        enterHome(user.uid, profile)
                     } catch (e: Exception) {
                         Log.w(TAG, "회원가입 실패 (보안 규칙 배포·Firestore·Storage 설정 확인)", e)
-                        current.copy(saving = false, error = "가입하지 못했어요. 잠시 후 다시 시도해 주세요.")
+                        _state.value = current.copy(saving = false, error = "가입하지 못했어요. 잠시 후 다시 시도해 주세요.")
                     }
                 }
             }
@@ -175,6 +178,7 @@ class AuthViewModel(
     }
 
     fun signOut(activity: Activity) {
+        profileWatch?.cancel()
         viewModelScope.launch {
             repository.signOut(activity)
             _state.value = AuthUiState.SignedOut()
@@ -190,24 +194,44 @@ class AuthViewModel(
     private fun checkProfile(user: FirebaseUser) {
         _state.value = AuthUiState.Checking
         viewModelScope.launch {
-            _state.value = try {
+            try {
                 val profile = repository.loadProfile(user.uid)
                 if (profile != null) {
-                    AuthUiState.Ready(user.uid, profile)
+                    enterHome(user.uid, profile)
                 } else {
-                    // 처음 온 사람: 약관 동의부터. 구글 사진이 있으면 그 사진을 기본으로 보여 준다.
-                    val googlePhoto = safePhotoUrl(user.photoUrl?.toString())
-                    AuthUiState.Signup(
+                    // 처음 온 사람: 약관 동의부터. 사진은 기본 프로필(지구본 로고)에서 시작한다.
+                    // 구글 사진은 P02 에서 "구글 프로필 사진 사용"을 직접 골랐을 때만 쓴다(2026-10-09 팀 결정).
+                    _state.value = AuthUiState.Signup(
                         email = user.email,
-                        googlePhotoUrl = googlePhoto,
+                        googlePhotoUrl = safePhotoUrl(user.photoUrl?.toString()),
                         nickname = suggestNickname(user.displayName),
-                        photo = googlePhoto?.let { PhotoChoice.Google(it) } ?: PhotoChoice.Default,
+                        photo = PhotoChoice.Default,
                     )
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "프로필 확인 실패", e)
-                AuthUiState.Failed(e.toKoreanMessage())
+                _state.value = AuthUiState.Failed(e.toKoreanMessage())
             }
+        }
+    }
+
+    /**
+     * 홈으로 들어가고, 내 프로필(users/{uid})을 실시간으로 지켜본다.
+     * 기록에 위치를 저장해 서버가 코인을 주면 홈의 "보유 코인"이 앱을 다시 켜지 않아도 바로 바뀐다.
+     * 인터넷이 끊기면 다시 연결될 때 새 값이 오고, 오류가 나면(보안 규칙 등) 마지막으로 받은 값을 그대로 보여 준다.
+     */
+    private fun enterHome(uid: String, profile: Profile) {
+        _state.value = AuthUiState.Ready(uid, profile)
+        profileWatch?.cancel()
+        profileWatch = viewModelScope.launch {
+            repository.profileChanges(uid)
+                .catch { Log.w(TAG, "프로필 실시간 갱신 실패", it) }
+                .collect { latest ->
+                    val current = _state.value as? AuthUiState.Ready ?: return@collect
+                    if (latest != null && current.uid == uid && current.profile != latest) {
+                        _state.value = current.copy(profile = latest)
+                    }
+                }
         }
     }
 

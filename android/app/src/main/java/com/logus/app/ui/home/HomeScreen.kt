@@ -1,9 +1,7 @@
 package com.logus.app.ui.home
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
@@ -44,6 +43,7 @@ import com.logus.app.home.HomeUiState
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ErrorMessage
+import com.logus.app.ui.components.LogoMark
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PrimaryStrong
@@ -52,8 +52,11 @@ import com.logus.app.ui.theme.PrimaryStrong
 /**
  * 홈 화면. 진행 중인 여정이 없으면 S01, 오늘이 여행 기간 안이면 S01-A 를 보여 준다.
  * - S01: 제목 → 프로필 상자 → "현재 진행중인 여정이 없어요!" → 새 여정 시작하기 / 초대 코드로 참여
- * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기
- * 버튼 동작(새 여정·초대·기록·사진 수정)은 다음 작업에서 화면을 만들며 연결한다. 지금은 눌러도 아무 일도 없다.
+ * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기(보라) → 새 여정 시작하기(조금 밝은 보라)
+ *   → 초대 코드로 참여(흰색). 세 버튼은 크기가 같고, 화면이 길어지면 아래로 스크롤된다.
+ * "새 여정 시작하기"는 S02, "초대 코드로 참여"는 6자리 초대 코드 입력 팝업(링크는 쓰지 않음)을 연다.
+ * 여정 카드의 친구 추가(사람+) 버튼은 "여정에 초대하기" 팝업을 연다(MainScreen 이 연결).
+ * "지금 기록하기"는 S04 앱 내 카메라를 연다(MainScreen 이 연결). "사진 수정"은 다음 작업에서 화면을 만들며 연결한다.
  */
 @Composable
 fun HomeScreen(
@@ -64,6 +67,8 @@ fun HomeScreen(
     onNewJourney: () -> Unit = {},
     onJoinWithCode: () -> Unit = {},
     onRecordNow: () -> Unit = {},
+    onInviteToJourney: () -> Unit = {},
+    onOpenJourney: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -79,7 +84,13 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
                 ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto)
                 Spacer(Modifier.height(32.dp))
-                JourneyCard(journey = state.journey, members = state.members, myNickname = profile.nickname)
+                JourneyCard(
+                    journey = state.journey,
+                    members = state.members,
+                    myNickname = profile.nickname,
+                    onInviteFriends = onInviteToJourney, // 여정에 초대하기 팝업(MainScreen)
+                    onOpen = onOpenJourney, // 카드를 누르면 N01 기록 보기(MainScreen)
+                )
                 Spacer(Modifier.height(36.dp))
                 ActionButton(
                     icon = painterResource(R.drawable.ic_camera),
@@ -87,6 +98,25 @@ fun HomeScreen(
                     subtitle = null,
                     filled = true,
                     onClick = onRecordNow,
+                )
+                Spacer(Modifier.height(12.dp))
+                // S01 과 같은 두 버튼. 새 여정은 조금 밝은 보라(그림 상자는 기본 보라)
+                ActionButton(
+                    icon = rememberVectorPainter(Icons.Filled.Add),
+                    title = "새 여정 시작하기",
+                    subtitle = "이름과 날짜만 정하면 돼요",
+                    filled = true,
+                    onClick = onNewJourney,
+                    containerColor = LogUsColors.primaryLight,
+                    iconBoxColor = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(12.dp))
+                ActionButton(
+                    icon = painterResource(R.drawable.ic_person_add),
+                    title = "초대 코드로 참여",
+                    subtitle = "받은 6자리 초대 코드로 들어가요",
+                    filled = false,
+                    onClick = onJoinWithCode,
                 )
             }
 
@@ -141,7 +171,7 @@ fun HomeScreen(
                         ActionButton(
                             icon = painterResource(R.drawable.ic_person_add),
                             title = "초대 코드로 참여",
-                            subtitle = "받은 초대 코드나 링크로 들어가요",
+                            subtitle = "받은 6자리 초대 코드로 들어가요",
                             filled = false,
                             onClick = onJoinWithCode,
                         )
@@ -155,48 +185,39 @@ fun HomeScreen(
 
 /** 화면 맨 위 로고: 지구 모양 + LOG EARTH (강조 보라) */
 @Composable
-private fun LogoHeader() {
-    Row(
+internal fun LogoHeader() {
+    LogoMark(
         Modifier
             .fillMaxWidth()
             .padding(top = 28.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painterResource(R.drawable.ic_globe),
-            contentDescription = null,
-            tint = LogUsColors.primaryStrong,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            "LOG EARTH",
-            color = LogUsColors.primaryStrong,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 3.sp,
-        )
-    }
+        iconSize = 24.dp,
+        fontSize = 20.sp,
+        letterSpacing = 3.sp,
+        gap = 10.dp,
+    )
 }
 
 /**
  * 큰 상자 버튼: 왼쪽 그림 상자 + 제목(+설명) + 오른쪽 ›.
  * filled = true 면 보라 채움(흰 글자), false 면 흰 카드(본문 글자)
+ * containerColor·iconBoxColor 로 채움색·그림 상자 색을 바꿀 수 있다(팔레트 색만, 채움이면 흰 글자 대비 4.5:1 이상)
+ * 버튼 높이는 76dp 로 모두 같다(설명 글이 있어도 그림 상자 44dp + 위아래 여백 안에 들어간다)
  */
 @Composable
-private fun ActionButton(
+internal fun ActionButton(
     icon: Painter,
     title: String,
     subtitle: String?,
     filled: Boolean,
     onClick: () -> Unit,
+    containerColor: Color? = null,
+    iconBoxColor: Color? = null,
 ) {
-    val container = if (filled) MaterialTheme.colorScheme.primary else LogUsColors.card
+    val container = containerColor ?: if (filled) MaterialTheme.colorScheme.primary else LogUsColors.card
     val titleColor = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     val subColor = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     // 보라 버튼 안 그림 상자는 한 단계 진한 보라, 흰 버튼 안은 연보라
-    val iconBox = if (filled) PrimaryStrong else MaterialTheme.colorScheme.surface
+    val iconBox = iconBoxColor ?: if (filled) PrimaryStrong else MaterialTheme.colorScheme.surface
     val iconTint = if (filled) MaterialTheme.colorScheme.onPrimary else LogUsColors.primaryStrong
 
     Surface(

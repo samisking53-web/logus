@@ -1,10 +1,14 @@
 // createJourney: 새 여정을 만든다 (S02 새 여정 만들기에서 호출)
-// 여정 문서, 만든 사람의 멤버 문서, 초대 화면용 요약(invites)을 한 트랜잭션으로 함께 만든다.
-import { FieldValue } from "firebase-admin/firestore";
+// 여정 문서, 만든 사람의 멤버 문서, 초대 요약(invites, 6자리 코드·여정이 끝나면 만료)을 한 트랜잭션으로 함께 만든다.
+// 이 코드는 만든 사람의 초대 코드다. 여정 문서(inviteCode)와 만든 사람의 멤버 문서(inviteCode)에 함께 저장한다(바뀌지 않는다).
+// 다른 구성원은 자기 코드를 따로 받는다(getInviteCode). 코드로 새 친구가 들어오면 코드 주인이 코인을 받는다(joinJourney).
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
 import {
   createInviteCode,
+  inviteExpiresAtMillis,
+  MAX_INVITE_CODE_TRIES,
   requireAuth,
   requireDate,
   requireNotifyInterval,
@@ -12,7 +16,12 @@ import {
   requireString,
 } from "./common";
 
-type CreateJourneyResult = { journeyId: string; inviteCode: string };
+type CreateJourneyResult = {
+  journeyId: string;
+  inviteCode: string;
+  /** 초대 코드 만료 시각(밀리초): 여정 종료일이 끝나는 때 */
+  inviteExpiresAt: number;
+};
 
 export const createJourney = onCall(async (request): Promise<CreateJourneyResult> => {
   const uid = requireAuth(request);
@@ -28,47 +37,60 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
   }
   const notifyIntervalHours = requireNotifyInterval(data.notifyIntervalHours);
 
-  const journeyRef = db.collection("journeys").doc();
-  const inviteCode = createInviteCode();
-  const inviteRef = db.collection("invites").doc(inviteCode);
   const userRef = db.collection("users").doc(uid);
+  const inviteExpiresAt = Timestamp.fromMillis(inviteExpiresAtMillis(endDate));
 
-  await db.runTransaction(async (tx) => {
-    // 트랜잭션에서는 읽기를 모두 끝낸 뒤 쓴다.
-    const userSnap = await tx.get(userRef);
-    const inviterName =
-      (userSnap.get("nickname") as string | undefined) ??
-      (request.auth?.token.name as string | undefined) ??
-      "친구";
+  // 6자리 코드는 드물게 겹칠 수 있어서, 이미 쓰는 코드면 새 코드로 다시 만든다.
+  for (let attempt = 0; attempt < MAX_INVITE_CODE_TRIES; attempt++) {
+    const journeyRef = db.collection("journeys").doc();
+    const inviteCode = createInviteCode();
+    const inviteRef = db.collection("invites").doc(inviteCode);
 
-    tx.create(journeyRef, {
-      name,
-      city,
-      country,
-      startDate,
-      endDate,
-      ownerId: uid,
-      memberIds: [uid],
-      memberCount: 1,
-      inviteCode,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    tx.create(journeyRef.collection("members").doc(uid), {
-      role: "owner",
-      notifyIntervalHours,
-      joinedAt: FieldValue.serverTimestamp(),
-    });
-    // create는 같은 코드가 이미 있으면 실패한다(겹칠 확률은 사실상 0).
-    tx.create(inviteRef, {
-      journeyId: journeyRef.id,
-      name,
-      city,
-      startDate,
-      endDate,
-      memberCount: 1,
-      inviterName: inviterName.slice(0, 20),
-    });
-  });
+    const created = await db.runTransaction(async (tx) => {
+      // 트랜잭션에서는 읽기를 모두 끝낸 뒤 쓴다.
+      const inviteSnap = await tx.get(inviteRef);
+      if (inviteSnap.exists) return false; // 이미 있는 코드 → 다시 시도
+      const userSnap = await tx.get(userRef);
+      const inviterName =
+        (userSnap.get("nickname") as string | undefined) ??
+        (request.auth?.token.name as string | undefined) ??
+        "친구";
 
-  return { journeyId: journeyRef.id, inviteCode };
+      tx.create(journeyRef, {
+        name,
+        city,
+        country,
+        startDate,
+        endDate,
+        ownerId: uid,
+        memberIds: [uid],
+        memberCount: 1,
+        inviteCode,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      tx.create(journeyRef.collection("members").doc(uid), {
+        role: "owner",
+        notifyIntervalHours,
+        inviteCode,
+        joinedAt: FieldValue.serverTimestamp(),
+      });
+      tx.create(inviteRef, {
+        journeyId: journeyRef.id,
+        name,
+        city,
+        startDate,
+        endDate,
+        memberCount: 1,
+        inviterId: uid,
+        inviterName: inviterName.slice(0, 20),
+        expiresAt: inviteExpiresAt,
+      });
+      return true;
+    });
+
+    if (created) {
+      return { journeyId: journeyRef.id, inviteCode, inviteExpiresAt: inviteExpiresAt.toMillis() };
+    }
+  }
+  throw new HttpsError("unavailable", "초대 코드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
 });

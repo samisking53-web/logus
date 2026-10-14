@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -40,10 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.logus.app.R
 import com.logus.app.ui.components.ErrorMessage
+import com.logus.app.ui.components.LogoMark
 import com.logus.app.ui.theme.GoogleButton
 import com.logus.app.ui.theme.GoogleLabel
 import com.logus.app.ui.theme.GoogleOutline
-import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PhotoFrame
 
@@ -66,22 +64,7 @@ fun WelcomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // 로고
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painterResource(R.drawable.ic_globe),
-                contentDescription = null,
-                tint = LogUsColors.primaryStrong,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "LOG EARTH",
-                color = LogUsColors.primaryStrong,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-            )
-        }
+        LogoMark()
         Spacer(Modifier.height(16.dp))
 
         // 앱 소개 사진: 흰 테두리 카드 3장을 살짝 겹쳐 부채꼴로 놓는다(글자 없음)

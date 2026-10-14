@@ -37,7 +37,7 @@ import com.logus.app.ui.theme.LogUsTheme
 
 /**
  * P02 프로필 사진 (스토리보드 v4 3쪽)
- * "앨범에서 선택"으로 사진을 고르면 원형으로 미리 보여 주고, "이 사진 사용"을 누르면 P01 로 돌아간다.
+ * "앨범에서 선택"으로 사진을 고르면 원형으로 미리 보여 주고, "프로필 저장"을 누르면 P01 로 돌아간다.
  * 앨범은 안드로이드 기본 사진 선택 창(Photo Picker)을 써서 저장공간 권한을 묻지 않는다.
  * 사진은 가입 완료를 누를 때 줄여서(최대 1024px JPEG) Storage 에 올린다.
  */
@@ -113,7 +113,7 @@ fun ProfilePhotoScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
-        ) { Text("이 사진 사용", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+        ) { Text("프로필 저장", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
     }
 }
 

@@ -13,11 +13,15 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.snapshots
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.storage
 import com.logus.app.R
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 /** 회원가입 때 고른 프로필 사진 */
@@ -30,6 +34,18 @@ sealed interface PhotoChoice {
 
     /** 기본 프로필 그림 */
     data object Default : PhotoChoice
+}
+
+/** 프로필 사진 수정 팝업에서 사진을 어떻게 바꿀지 */
+sealed interface ProfilePhotoChange {
+    /** 지금 사진 그대로 */
+    data object Keep : ProfilePhotoChange
+
+    /** 기본 이미지(지구본, photoURL null) */
+    data object Default : ProfilePhotoChange
+
+    /** 찍은 사진·앨범 사진(줄여서 올린다) */
+    data class Upload(val uri: Uri) : ProfilePhotoChange
 }
 
 /** Firestore users/{uid} 문서 (CLAUDE.md "데이터 모델") */
@@ -76,13 +92,22 @@ class AuthRepository {
     }
 
     /** 가입한 사람이면 프로필을, 아직 가입 전이면 null 을 돌려준다. */
-    suspend fun loadProfile(uid: String): Profile? {
-        val snap = db.collection("users").document(uid).get().await()
-        if (!snap.exists()) return null
+    suspend fun loadProfile(uid: String): Profile? =
+        db.collection("users").document(uid).get().await().toProfile()
+
+    /**
+     * 내 프로필(users/{uid})을 실시간으로 지켜본다. 서버가 코인을 주거나(saveLogLocation) 프로필이 바뀌면
+     * 새 값이 바로 온다(문서가 없으면 null). 문서 한 개만 듣는 리스너라 바뀔 때만 읽기 1회가 든다.
+     */
+    fun profileChanges(uid: String): Flow<Profile?> =
+        db.collection("users").document(uid).snapshots().map { it.toProfile() }
+
+    private fun DocumentSnapshot.toProfile(): Profile? {
+        if (!exists()) return null
         return Profile(
-            nickname = snap.getString("nickname") ?: "여행자",
-            photoUrl = snap.getString("photoURL"),
-            coins = snap.getLong("coins") ?: 0L,
+            nickname = getString("nickname") ?: "여행자",
+            photoUrl = getString("photoURL"),
+            coins = getLong("coins") ?: 0L,
         )
     }
 
@@ -130,6 +155,31 @@ class AuthRepository {
             .commit()
             .await()
         return Profile(nickname = nickname, photoUrl = photoUrl, coins = 0L)
+    }
+
+    /**
+     * 홈 "사진 수정"(프로필 사진 수정 팝업)의 "저장": 닉네임과 프로필 사진을 바꾼다.
+     * - 새 사진(찍은 사진·앨범 사진)은 줄여서 Storage users/{uid}/ 에 올리고 그 주소를 photoURL 에 넣는다.
+     * - 기본 이미지면 photoURL 을 null(지구본)로, 사진을 그대로 두면 photoURL 은 건드리지 않는다.
+     * - 보안 규칙: 본인 문서의 nickname·photoURL 만 고칠 수 있다(코인 등은 그대로).
+     * - 예전에 이 앱이 올린 프로필 사진(users/{uid}/…)은 바꾼 뒤 지운다(쓰지 않는 파일이 쌓이지 않게). 지우기에 실패해도 저장은 그대로다.
+     */
+    suspend fun updateProfile(context: Context, uid: String, nickname: String, photo: ProfilePhotoChange, oldPhotoUrl: String?) {
+        val updates = mutableMapOf<String, Any?>("nickname" to nickname)
+        when (photo) {
+            ProfilePhotoChange.Keep -> Unit
+            ProfilePhotoChange.Default -> updates["photoURL"] = null
+            is ProfilePhotoChange.Upload ->
+                updates["photoURL"] = safePhotoUrl(uploadProfilePhoto(uid, ProfilePhoto.toJpeg(context, photo.uri)))
+        }
+        db.collection("users").document(uid).update(updates).await()
+
+        if (photo != ProfilePhotoChange.Keep && oldPhotoUrl != null) {
+            runCatching {
+                val old = storage.getReferenceFromUrl(oldPhotoUrl)
+                if (old.path.trimStart('/').startsWith("users/$uid/")) old.delete().await()
+            }
+        }
     }
 
     /** 프로필 사진을 Storage 에 올리고 내려받기 주소를 돌려준다(보안 규칙: 본인 폴더, 이미지 5MB 미만). */

@@ -58,6 +58,18 @@ object LogUsColors {
     /** 구분선 */
     val line: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BorderDark else Line
+    /** 조금 밝은 보라 버튼 채움(S01-A "새 여정 시작하기"). 다크 모드는 primary 와 같은 #6B4FE0(흰 글자 대비를 지키는 가장 밝은 보라) */
+    val primaryLight: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) PrimaryDark else PrimaryLight
+    /**
+     * 카드·팝업 안의 연보라 칸(그림 동그라미, 친구 추가 버튼, 초대 코드 상자): 라이트는 연보라(surface),
+     * 다크는 바탕색(카드와 같은 색이면 칸이 안 보여서)
+     */
+    val iconCircle: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Surface
+    /** 주의 글자(N03 저장 팝업 "저장한 뒤에는 …"): 라이트는 warning #A8620A, 다크는 앰버 #E0930F(어두운 카드 위 대비 4.5:1 이상) */
+    val warning: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) AmberTextDark else Warning
     /** 프로필 상자 안 코인 상자: 라이트는 흰색, 다크는 바탕색(상자보다 어둡게) */
     val coinChip: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Card

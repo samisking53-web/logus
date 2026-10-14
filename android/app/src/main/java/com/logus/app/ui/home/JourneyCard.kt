@@ -2,6 +2,7 @@ package com.logus.app.ui.home
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -28,6 +33,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.logus.app.R
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.theme.LogUsColors
@@ -47,6 +54,9 @@ import com.logus.app.ui.theme.Success
  * S01-A 진행 중인 여정 카드: 위쪽 대표 사진 + "진행 중" 표시, 아래쪽 여정 이름·구성원·기간.
  * coverPhoto: 여행 중 기록한 사진·영상 장면 중 대표로 고른 사진(주소). 대표 사진을 고르는 기능을 만들면
  * 여기에 넘긴다. 지금은 null 이라 "사진이 들어갈 자리" 그림을 보여 준다.
+ * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는
+ * "여정에 초대하기" 팝업(ui/journey/JourneyInviteDialog.kt)을 연다(MainScreen 이 연결).
+ * 카드의 나머지 부분을 누르면(onOpen) N01 기록 보기(ui/feed/JourneyFeedScreen.kt)를 연다.
  */
 @Composable
 fun JourneyCard(
@@ -54,6 +64,8 @@ fun JourneyCard(
     members: List<Member>,
     myNickname: String,
     coverPhoto: Any? = null,
+    onInviteFriends: () -> Unit = {},
+    onOpen: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(20.dp)
@@ -62,7 +74,8 @@ fun JourneyCard(
             .fillMaxWidth()
             .clip(shape)
             .background(LogUsColors.card)
-            .border(1.dp, LogUsColors.line, shape),
+            .border(1.dp, LogUsColors.line, shape)
+            .clickable(role = Role.Button, onClickLabel = "오늘 기록 보기", onClick = onOpen),
     ) {
         // 대표 사진 자리
         Box(
@@ -88,16 +101,35 @@ fun JourneyCard(
             )
         }
 
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            Text(
-                journey.name,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(10.dp))
+        Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 16.dp)) {
+            // 여정 이름 + 오른쪽 위 친구 추가 버튼
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    journey.name,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                FilledTonalIconButton(
+                    onClick = onInviteFriends,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = LogUsColors.iconCircle, // 라이트 연보라, 다크는 바탕색(카드와 구분)
+                        contentColor = LogUsColors.primaryStrong,
+                    ),
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_person_add),
+                        contentDescription = "이 여정에 친구 초대하기",
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 MemberDots(members)
                 Spacer(Modifier.width(10.dp))
@@ -169,7 +201,7 @@ private fun MemberDots(members: List<Member>) {
  * "여기에 대표 사진이 들어간다"는 자리 표시용이다.
  */
 @Composable
-private fun CoverPlaceholder(modifier: Modifier = Modifier) {
+internal fun CoverPlaceholder(modifier: Modifier = Modifier) {
     val fill = LogUsColors.card
     val wave = LogUsColors.border
     Canvas(modifier.semantics { contentDescription = "대표 사진이 들어갈 자리" }) {

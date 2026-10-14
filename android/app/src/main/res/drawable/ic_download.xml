@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 다운로드 모양(아래 화살표 + 바닥 줄). N01 "여정 마치기" 버튼. 색은 코드에서 tint 로 정한다(팔레트 primary-strong) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,4v11 M7,10.5l5,5l5,-5 M5,20h14" />
+</vector>

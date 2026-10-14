@@ -1,11 +1,11 @@
-// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 30코인을 준다 (S07)
+// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 10코인을 준다 (S05·S07, 화면 문구 "+10P")
 // 코인은 users/{uid}/coinLedger/{logId} 문서가 없을 때만 준다 → 같은 기록으로 두 번 받을 수 없다.
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
 import { requireAuth, requireObject, requireString } from "./common";
 
-export const LOCATION_REWARD_COINS = 30;
+export const LOCATION_REWARD_COINS = 10;
 
 type Location = { lat: number; lng: number };
 type SaveLogLocationResult = { coinsGranted: number };
@@ -33,7 +33,7 @@ export const saveLogLocation = onCall(async (request): Promise<SaveLogLocationRe
   const journeyId = requireString(data.journeyId, "journeyId", 1, 128);
   const logId = requireString(data.logId, "logId", 1, 128);
   const location = parseLocation(data.location);
-  // 장소 이름은 사용자가 입력한 글자만 저장한다. 위치가 없으면 장소 이름도 지운다.
+  // 장소 이름은 사용자가 입력한 글자나 오픈스트리트맵(L01 위치 확인)이 알려준 이름만 저장한다. 위치가 없으면 장소 이름도 지운다.
   const placeName =
     location && data.placeName != null ? requireString(data.placeName, "장소 이름", 1, 100) : null;
   if (data.isPublic !== undefined && typeof data.isPublic !== "boolean") {
