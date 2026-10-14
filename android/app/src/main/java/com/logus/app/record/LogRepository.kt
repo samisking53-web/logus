@@ -117,19 +117,24 @@ class LogRepository {
             .limit(limit)
         if (after != null) query = query.startAfter(after)
         val snap = query.get().await()
-        val logs = snap.documents.mapNotNull { doc ->
-            FeedLog(
-                id = doc.id,
-                authorId = doc.getString("authorId") ?: return@mapNotNull null,
-                mediaType = doc.getString("mediaType") ?: return@mapNotNull null,
-                mediaPath = doc.getString("mediaPath"),
-                capturedAtMillis = doc.getTimestamp("capturedAt")?.toDate()?.time ?: return@mapNotNull null,
-                placeName = doc.getString("placeName"),
-            )
-        }
+        val logs = snap.documents.mapNotNull { it.toFeedLog() }
         val last = if (snap.size() < limit) null else snap.documents.lastOrNull()
         return LogPage(logs, last)
     }
+
+    /**
+     * S14 마이로그 여정 목록의 대표 사진: 이 여정에서 가장 먼저 찍은 기록 1개(없으면 null).
+     * 한 개만 읽는다(비용 관리). 대표 화면 주소는 previewUrl 로 받는다.
+     */
+    suspend fun loadFirstLog(journeyId: String): FeedLog? =
+        db.collection("journeys").document(journeyId).collection("logs")
+            .orderBy("capturedAt", Query.Direction.ASCENDING)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .firstOrNull()
+            ?.toFeedLog()
 
     /**
      * 이 여정에 올라온 기록 수(모든 구성원, N03 저장 팝업의 "기록 N개").
@@ -182,6 +187,18 @@ class LogRepository {
 private const val PAGE_SIZE = 30L
 
 private const val TAG = "LogRepository"
+
+/** logs 문서 → FeedLog. 꼭 있어야 하는 칸(작성자·종류·찍은 시각)이 없으면 null */
+private fun DocumentSnapshot.toFeedLog(): FeedLog? {
+    return FeedLog(
+        id = id,
+        authorId = getString("authorId") ?: return null,
+        mediaType = getString("mediaType") ?: return null,
+        mediaPath = getString("mediaPath"),
+        capturedAtMillis = getTimestamp("capturedAt")?.toDate()?.time ?: return null,
+        placeName = getString("placeName"),
+    )
+}
 
 /** 영상 경로 journeys/…/{logId}.mp4 → 대표 화면(썸네일) 경로 journeys/…/{logId}.jpg */
 internal fun thumbnailPath(videoPath: String): String = videoPath.substringBeforeLast('.') + ".jpg"

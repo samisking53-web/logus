@@ -1,6 +1,7 @@
 package com.logus.app.journey
 
 import com.google.firebase.Firebase
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.firestore
@@ -43,6 +44,9 @@ data class InvitePreview(
     val notifyIntervalHours: Int?,
     val alreadyMember: Boolean,
 )
+
+/** 여정 한 쪽(페이지): 여정들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
+data class JourneyPage(val journeys: List<Journey>, val last: DocumentSnapshot?)
 
 /** 여정 구성원 한 명(홈의 동그란 이름 표시, 기록 보기의 작은 프로필). photoUrl 이 null 이면 기본 프로필(지구본) */
 data class Member(val uid: String, val nickname: String, val photoUrl: String? = null)
@@ -152,17 +156,7 @@ class JourneyRepository {
     /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */
     suspend fun loadJourney(journeyId: String): Journey? {
         val doc = db.collection("journeys").document(journeyId).get().await()
-        return Journey(
-            id = doc.id,
-            name = doc.getString("name") ?: return null,
-            startDate = doc.getString("startDate") ?: return null,
-            endDate = doc.getString("endDate") ?: return null,
-            memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
-            memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
-            inviteCode = doc.getString("inviteCode"),
-            ownerId = doc.getString("ownerId"),
-            city = doc.getString("city").orEmpty(),
-        )
+        return doc.toJourney()
     }
 
     /**
@@ -181,21 +175,30 @@ class JourneyRepository {
             .get()
             .await()
         return snap.documents
-            .mapNotNull { doc ->
-                Journey(
-                    id = doc.id,
-                    name = doc.getString("name") ?: return@mapNotNull null,
-                    startDate = doc.getString("startDate") ?: return@mapNotNull null,
-                    endDate = doc.getString("endDate") ?: return@mapNotNull null,
-                    memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
-                    memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
-                    inviteCode = doc.getString("inviteCode"),
-                    ownerId = doc.getString("ownerId"),
-                    city = doc.getString("city").orEmpty(),
-                )
-            }
+            .mapNotNull { it.toJourney() }
             .filter { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
             .firstOrNull { !isFinishedByMe(it.id, uid) }
+    }
+
+    /**
+     * S14 마이로그 여정 목록: 나에게 끝난 지난 여정을 최근 시작한 순서로 limit 개씩 읽는다(비용 관리: 한 번에 다 읽지 않는다).
+     * "지난 여정" = 종료일이 오늘 이전이거나, 내가 N03 에서 "저장"(여정 마치기)을 눌러 finishedAt 이 있는 여정.
+     * 기간이 남은 여정만 내 멤버 문서를 한 번 더 읽어 끝냈는지 확인한다.
+     * after 를 넘기면 그 문서 다음부터 이어서 읽는다. 색인은 홈과 같은 journeys(memberIds + startDate 내림차순)을 쓴다.
+     */
+    suspend fun loadPastJourneys(uid: String, today: String, after: DocumentSnapshot?, limit: Long = 10): JourneyPage {
+        var query = db.collection("journeys")
+            .whereArrayContains("memberIds", uid)
+            .whereLessThanOrEqualTo("startDate", today) // 아직 시작하지 않은 여정은 끝났을 수 없다
+            .orderBy("startDate", Query.Direction.DESCENDING)
+            .limit(limit)
+        if (after != null) query = query.startAfter(after)
+        val snap = query.get().await()
+        val past = snap.documents
+            .mapNotNull { it.toJourney() }
+            .filter { it.endDate < today || isFinishedByMe(it.id, uid) } // "YYYY-MM-DD" 글자 순서 = 날짜 순서
+        val last = if (snap.size() < limit) null else snap.documents.lastOrNull()
+        return JourneyPage(past, last)
     }
 
     /** 내가 이 여정에서 "여정 마치기"를 눌렀는지(내 멤버 문서에 finishedAt 이 있는지) */
@@ -242,4 +245,19 @@ class JourneyRepository {
             }
             .awaitAll()
     }
+}
+
+/** journeys 문서 → Journey. 꼭 있어야 하는 칸(이름·기간)이 없으면 null */
+private fun DocumentSnapshot.toJourney(): Journey? {
+    return Journey(
+        id = id,
+        name = getString("name") ?: return null,
+        startDate = getString("startDate") ?: return null,
+        endDate = getString("endDate") ?: return null,
+        memberIds = (get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+        memberCount = getLong("memberCount")?.toInt() ?: 1,
+        inviteCode = getString("inviteCode"),
+        ownerId = getString("ownerId"),
+        city = getString("city").orEmpty(),
+    )
 }

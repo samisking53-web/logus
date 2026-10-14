@@ -24,6 +24,7 @@ import com.logus.app.home.HomeUiState
 import com.logus.app.profile.ProfileEditViewModel
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
+import com.logus.app.mylog.MyLogViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.record.CapturePhase
@@ -55,7 +56,8 @@ import java.time.LocalDate
 fun MainScreen(
     uid: String,
     profile: Profile,
-    onSignOut: () -> Unit,
+    // 로그아웃: 지금은 쓰는 화면이 없다(2026-10-14 마이로그에서 뺌). 홈 화면에 로그아웃을 만들 때 연결한다
+    @Suppress("UNUSED_PARAMETER") onSignOut: () -> Unit,
     homeViewModel: HomeViewModel = viewModel(),
     newJourneyViewModel: NewJourneyViewModel = viewModel(),
     joinViewModel: JoinViewModel = viewModel(),
@@ -64,6 +66,7 @@ fun MainScreen(
     locationPickerViewModel: LocationPickerViewModel = viewModel(),
     feedViewModel: JourneyFeedViewModel = viewModel(),
     profileEditViewModel: ProfileEditViewModel = viewModel(),
+    myLogViewModel: MyLogViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -99,6 +102,11 @@ fun MainScreen(
     var viewingFeed by rememberSaveable { mutableStateOf(false) }
     val feedState by feedViewModel.state.collectAsStateWithLifecycle()
     val profileEditState by profileEditViewModel.state.collectAsStateWithLifecycle()
+    val myLogState by myLogViewModel.state.collectAsStateWithLifecycle()
+    // S14 마이로그 여정 목록: 탭을 처음 열 때 지난 여정을 읽는다(그 뒤로는 탭을 오가도 다시 읽지 않는다)
+    LaunchedEffect(tab, uid) {
+        if (tab == MainTab.MY_LOG) myLogViewModel.load(uid)
+    }
     // 프로필을 저장하면 팝업을 닫고 알려 준다
     LaunchedEffect(profileEditState.saved) {
         if (profileEditState.saved) {
@@ -146,6 +154,7 @@ fun MainScreen(
         if (feedState.finished) {
             feedViewModel.consumeFinished()
             viewingFeed = false
+            myLogViewModel.load(uid, force = true) // 방금 저장한 여정이 마이로그 여정 목록에 보이게 다시 읽는다
             tab = MainTab.MY_LOG
             homeViewModel.load(uid, force = true)
             Toast.makeText(context, "여정을 저장했어요. 마이로그로 옮겼어요.", Toast.LENGTH_LONG).show()
@@ -302,7 +311,18 @@ fun MainScreen(
                         },
                     )
                     MainTab.EXPLORE -> ExploreScreen()
-                    MainTab.MY_LOG -> MyLogScreen(onSignOut = onSignOut)
+                    // S14 마이로그 여정 목록. 뒤로 가기 → 홈 탭
+                    MainTab.MY_LOG -> MyLogScreen(
+                        state = myLogState,
+                        onBack = { tab = MainTab.HOME },
+                        // 여정 상세(S15~S17)는 아직 없다. 만들면 여기서 연다
+                        onOpenJourney = {
+                            Toast.makeText(context, "여정 상세 화면은 준비 중이에요", Toast.LENGTH_SHORT).show()
+                        },
+                        onLoadMore = myLogViewModel::loadMore,
+                        onRetry = { myLogViewModel.load(uid, force = true) },
+                        coverUrl = myLogViewModel::coverUrl,
+                    )
                 }
             }
             BottomTabBar(selected = tab, onSelect = { tab = it })
