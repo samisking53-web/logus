@@ -33,6 +33,8 @@ data class FeedLog(
     val capturedAtMillis: Long,
     /** 장소 이름(위치 없이 올렸으면 null) */
     val placeName: String?,
+    /** 기록 위치(위치 없이 올렸거나 (0,0)이면 null). 여정 상세 S16 추억 지도의 핀 */
+    val location: GeoPoint? = null,
 )
 
 /** 기록 한 쪽(페이지): 기록들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
@@ -197,6 +199,12 @@ private fun DocumentSnapshot.toFeedLog(): FeedLog? {
         mediaPath = getString("mediaPath"),
         capturedAtMillis = getTimestamp("capturedAt")?.toDate()?.time ?: return null,
         placeName = getString("placeName"),
+        location = (get("location") as? Map<*, *>)?.let { map ->
+            val lat = (map["lat"] as? Number)?.toDouble()
+            val lng = (map["lng"] as? Number)?.toDouble()
+            // 좌표 (0,0)은 결측으로 본다(CLAUDE.md 데이터 원칙)
+            if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) null else GeoPoint(lat, lng)
+        },
     )
 }
 

@@ -269,6 +269,8 @@ fun MainScreen(
                 onMoveDay = detailViewModel::moveDay,
                 onLoadMore = detailViewModel::loadMore,
                 onRetry = detailViewModel::retry,
+                onShowMap = detailViewModel::showMap,
+                onRetryMap = detailViewModel::retryMap,
                 previewUrl = detailViewModel::previewUrl,
             )
         }

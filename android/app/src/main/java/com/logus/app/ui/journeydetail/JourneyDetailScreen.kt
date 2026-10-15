@@ -1,6 +1,9 @@
 package com.logus.app.ui.journeydetail
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -64,6 +68,7 @@ import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.record.RecordTopBar
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
+import com.logus.app.ui.theme.MemberColors
 import com.logus.app.ui.theme.OnPrimary
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -78,7 +83,9 @@ enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"
  * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → 날짜·지역 상자("9.24 포르투 · 1일째 / 3일", 양옆 ‹ › 로 하루씩 넘김)
  *   → 탭 버튼 [기록] [추억 지도] [추억 영상](한 화면 안에서 버튼으로 바꿔 본다)
  * - S15 기록: 고른 날의 기록을 N01 기록 보기와 같은 시간대 카드로 보여 준다. 아래로 내리면 30개씩 더 읽는다.
- * - S16 추억 지도 · S17 추억 영상: 아직 만들지 않아 "준비 중" 안내만 보여 준다(다음 작업).
+ * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
+ *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
+ * - S17 추억 영상: 아직 만들지 않아 "준비 중" 안내만 보여 준다(다음 작업).
  */
 @Composable
 fun JourneyDetailScreen(
@@ -87,9 +94,15 @@ fun JourneyDetailScreen(
     onMoveDay: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
+    /** 추억 지도 탭을 보거나 지도 탭에서 날짜를 바꿨을 때(그날 위치 읽기) */
+    onShowMap: () -> Unit,
+    onRetryMap: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
 ) {
     var tab by rememberSaveable { mutableStateOf(DetailTab.RECORDS) }
+    LaunchedEffect(tab, state.dayIndex) {
+        if (tab == DetailTab.MAP) onShowMap()
+    }
     val listState = rememberLazyListState()
 
     // 날짜를 바꾸면 목록을 맨 위로
@@ -113,6 +126,7 @@ fun JourneyDetailScreen(
         onSelectTab = { tab = it },
         onMoveDay = onMoveDay,
         onRetry = onRetry,
+        onRetryMap = onRetryMap,
         previewUrl = previewUrl,
     )
 }
@@ -127,6 +141,7 @@ private fun JourneyDetailContent(
     onSelectTab: (DetailTab) -> Unit,
     onMoveDay: (Int) -> Unit,
     onRetry: () -> Unit,
+    onRetryMap: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
 ) {
     val journey = state.journey ?: return
@@ -150,10 +165,7 @@ private fun JourneyDetailContent(
 
         when (tab) {
             DetailTab.RECORDS -> RecordsTab(state = state, listState = listState, onRetry = onRetry, previewUrl = previewUrl)
-            DetailTab.MAP -> ComingSoonTab(
-                icon = R.drawable.ic_globe,
-                text = "추억 지도는 준비 중이에요.\n구성원별 핀과 이동 경로가 여기에 나와요.",
-            )
+            DetailTab.MAP -> MapTab(state = state, city = journey.city, onRetry = onRetryMap)
             DetailTab.RECAP -> ComingSoonTab(
                 icon = R.drawable.ic_camera,
                 text = "추억 영상은 준비 중이에요.\n그날의 DAY RECAP 영상이 여기에 나와요.",
@@ -314,6 +326,120 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordsTab(
     }
 }
 
+/**
+ * S16 추억 지도: "포르투 · 기록 경로 · N곳" → 지도(구성원별 번호 핀과 선) → "지도 © OpenStreetMap" → 범례 → 안내.
+ * 위치를 남긴 기록이 없으면 지도 대신 안내 글을 보여 준다.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: JourneyDetailUiState, city: String, onRetry: () -> Unit) {
+    val placeCount = state.routes.sumOf { it.points.size }
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, LogUsColors.border, RoundedCornerShape(20.dp)),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                listOfNotNull(city.ifBlank { null }, "기록 경로").joinToString(" · "),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() },
+            )
+            if (!state.mapLoading && state.mapError == null) {
+                Text("${placeCount}곳", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+        }
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(LogUsColors.card),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                state.mapLoading || state.mapDayIndex != state.dayIndex ->
+                    CircularProgressIndicator(color = LogUsColors.primaryStrong)
+                state.mapError != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.mapError, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                    TextButton(onClick = onRetry) { Text("다시 불러오기", color = LogUsColors.primaryStrong) }
+                }
+                state.routes.isEmpty() -> Text(
+                    "이날은 위치를 남긴 기록이 없어요.\n기록을 올릴 때 위치를 고르면\n지도에 핀이 찍혀요.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp),
+                )
+                else -> RouteMap(routes = state.routes, modifier = Modifier.fillMaxSize())
+            }
+        }
+        if (state.routes.isNotEmpty()) {
+            Text(
+                "지도 © OpenStreetMap",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                textAlign = TextAlign.End,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+            )
+            // 범례: 색만으로 구분하지 않게 이름 첫 글자와 이름을 함께
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                state.routes.forEach { route ->
+                    val name = state.members[route.uid]?.nickname ?: "구성원"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(22.dp)
+                                .background(MemberColors[route.colorIndex % MemberColors.size], CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(name.take(1), color = OnPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text("$name · ${route.points.size}곳", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+        val notes = listOfNotNull(
+            state.unlocatedCount.takeIf { it > 0 }?.let { "위치 없이 올린 기록 ${it}개는 지도에 없어요." },
+            "기록이 많아 앞의 100개만 지도에 찍었어요.".takeIf { state.mapTruncated },
+        )
+        notes.forEach {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
 /** S16·S17 자리: 연보라 동그라미 그림 + 준비 중 안내 */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.ComingSoonTab(icon: Int, text: String) {
@@ -376,6 +502,7 @@ private fun JourneyDetailPreview() {
             onSelectTab = {},
             onMoveDay = {},
             onRetry = {},
+            onRetryMap = {},
             previewUrl = { null },
         )
     }
