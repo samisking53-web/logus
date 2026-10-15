@@ -17,15 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,9 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -49,11 +41,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.logus.app.R
 import com.logus.app.journey.Journey
 import com.logus.app.mylog.MyLogUiState
 import com.logus.app.ui.home.CoverPlaceholder
-import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -62,7 +52,7 @@ import kotlinx.coroutines.flow.filter
 // S14 마이로그 여정 목록 (스토리보드 v5 23쪽 수정본. 2026-10-14 팀 결정으로 S10 → S14)
 /**
  * 하단 탭 "마이로그". 나에게 끝난 지난 여정을 최근 시작한 순서로 보여 준다(하단 탭은 그대로 보인다).
- * - 위: LOG EARTH → 뒤로 가기(홈 탭으로) + 마이로그 아이콘(하단 탭과 같은 책 모양) 상자
+ * - 위: 가운데 "마이로그" 제목(2026-10-15 팀 결정, 예전 준비 중 화면과 같은 모양). 폰의 뒤로 가기는 홈 탭으로(MainScreen)
  * - 여정 카드: 왼쪽 대표 사진(가장 먼저 찍은 기록의 대표 화면, 없으면 보라 그림) + 여정 이름 · "9.24~26 · 3명" · "지난 여정 ›"
  *   카드를 누르면 onOpenJourney(여정 상세 S15~S17, MainScreen 이 연결)
  * - 아래로 내려 끝에 가까워지면 다음 여정을 읽는다(10개씩)
@@ -70,7 +60,6 @@ import kotlinx.coroutines.flow.filter
 @Composable
 fun MyLogScreen(
     state: MyLogUiState,
-    onBack: () -> Unit,
     onOpenJourney: (Journey) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
@@ -90,12 +79,18 @@ fun MyLogScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        // 위에 고정되는 부분
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            LogoHeader()
-            MyLogTopBar(onBack = onBack)
-            Spacer(Modifier.height(16.dp))
-        }
+        // 위에 고정되는 제목
+        Text(
+            "마이로그",
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp, bottom = 20.dp)
+                .semantics { heading() },
+        )
 
         LazyColumn(
             state = listState,
@@ -139,41 +134,6 @@ fun MyLogScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-/** 뒤로 가기(동그라미) + 마이로그 아이콘 상자 */
-@Composable
-private fun MyLogTopBar(onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(shape = CircleShape, color = LogUsColors.card, modifier = Modifier.size(48.dp)) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "뒤로 가기",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        Box(
-            Modifier
-                .weight(1f)
-                .height(48.dp)
-                .background(LogUsColors.card, RoundedCornerShape(50))
-                .semantics {
-                    heading()
-                    contentDescription = "마이로그 여정 목록"
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_nav_mylog),
-                contentDescription = null, // 위 상자가 "마이로그 여정 목록"으로 읽힌다
-                tint = LogUsColors.primaryStrong,
-                modifier = Modifier.size(28.dp),
-            )
         }
     }
 }
@@ -281,7 +241,6 @@ private fun MyLogScreenPreview() {
                     journey("b", "포르투 산책", "2026-09-12", "2026-09-12"),
                 ),
             ),
-            onBack = {},
             onOpenJourney = {},
             onLoadMore = {},
             onRetry = {},

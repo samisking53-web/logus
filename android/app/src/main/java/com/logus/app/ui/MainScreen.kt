@@ -311,10 +311,9 @@ fun MainScreen(
                         },
                     )
                     MainTab.EXPLORE -> ExploreScreen()
-                    // S14 마이로그 여정 목록. 뒤로 가기 → 홈 탭
+                    // S14 마이로그 여정 목록(폰의 뒤로 가기 → 홈 탭, 위 BackHandler)
                     MainTab.MY_LOG -> MyLogScreen(
                         state = myLogState,
-                        onBack = { tab = MainTab.HOME },
                         // 여정 상세(S15~S17)는 아직 없다. 만들면 여기서 연다
                         onOpenJourney = {
                             Toast.makeText(context, "여정 상세 화면은 준비 중이에요", Toast.LENGTH_SHORT).show()
