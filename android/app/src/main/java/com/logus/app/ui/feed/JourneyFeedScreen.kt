@@ -293,7 +293,7 @@ private fun JourneyFeedContent(
 
 /** "09:20 ~ 11:20 시간" + 오른쪽 "3개" */
 @Composable
-private fun WindowHeader(window: FeedWindow) {
+internal fun WindowHeader(window: FeedWindow) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -318,7 +318,7 @@ private fun WindowHeader(window: FeedWindow) {
  * 왼쪽 위 작은 동그란 프로필(사진이 없으면 지구본), 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름(있을 때).
  */
 @Composable
-private fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog) -> String?) {
+internal fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog) -> String?) {
     val url by produceState<String?>(initialValue = null, log.id) { value = previewUrl(log) }
     val time = clockLabel(log.capturedAtMillis)
     val name = author?.nickname ?: "구성원"

@@ -25,6 +25,7 @@ import com.logus.app.profile.ProfileEditViewModel
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
+import com.logus.app.journeydetail.JourneyDetailViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.record.CapturePhase
@@ -43,6 +44,7 @@ import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.JourneyInviteDialog
 import com.logus.app.ui.journey.NewJourneyFlow
 import com.logus.app.ui.mylog.MyLogScreen
+import com.logus.app.ui.journeydetail.JourneyDetailScreen
 import com.logus.app.ui.record.CaptureScreen
 import com.logus.app.ui.record.LocationPickerSheet
 import com.logus.app.ui.record.LogUploadScreen
@@ -67,6 +69,7 @@ fun MainScreen(
     feedViewModel: JourneyFeedViewModel = viewModel(),
     profileEditViewModel: ProfileEditViewModel = viewModel(),
     myLogViewModel: MyLogViewModel = viewModel(),
+    detailViewModel: JourneyDetailViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -103,6 +106,9 @@ fun MainScreen(
     val feedState by feedViewModel.state.collectAsStateWithLifecycle()
     val profileEditState by profileEditViewModel.state.collectAsStateWithLifecycle()
     val myLogState by myLogViewModel.state.collectAsStateWithLifecycle()
+    // S15~S17 여정 상세를 보여 주는 중인지(마이로그 여정 카드를 누르면 연다. 하단 탭은 숨긴다)
+    var viewingDetail by rememberSaveable { mutableStateOf(false) }
+    val detailState by detailViewModel.state.collectAsStateWithLifecycle()
     // S14 마이로그 여정 목록: 탭을 처음 열 때 지난 여정을 읽는다(그 뒤로는 탭을 오가도 다시 읽지 않는다)
     LaunchedEffect(tab, uid) {
         if (tab == MainTab.MY_LOG) myLogViewModel.load(uid)
@@ -248,6 +254,24 @@ fun MainScreen(
                 )
             }
         }
+    } else if (viewingDetail && detailState.journey != null) {
+        // S15~S17 여정 상세(전체 화면, 하단 탭 없음). 뒤로 가기 → 마이로그
+        BackHandler { viewingDetail = false }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            JourneyDetailScreen(
+                state = detailState,
+                onBack = { viewingDetail = false },
+                onMoveDay = detailViewModel::moveDay,
+                onLoadMore = detailViewModel::loadMore,
+                onRetry = detailViewModel::retry,
+                previewUrl = detailViewModel::previewUrl,
+            )
+        }
     } else if (viewingFeed && ongoing != null) {
         // N01~N03 기록 보기(전체 화면, 하단 탭 없음). 뒤로 가기 → S01-A
         BackHandler { viewingFeed = false }
@@ -314,9 +338,10 @@ fun MainScreen(
                     // S14 마이로그 여정 목록(폰의 뒤로 가기 → 홈 탭, 위 BackHandler)
                     MainTab.MY_LOG -> MyLogScreen(
                         state = myLogState,
-                        // 여정 상세(S15~S17)는 아직 없다. 만들면 여기서 연다
-                        onOpenJourney = {
-                            Toast.makeText(context, "여정 상세 화면은 준비 중이에요", Toast.LENGTH_SHORT).show()
+                        // 여정 카드 → S15~S17 여정 상세(첫날 기록부터)
+                        onOpenJourney = { journey ->
+                            detailViewModel.open(journey)
+                            viewingDetail = true
                         },
                         onLoadMore = myLogViewModel::loadMore,
                         onRetry = { myLogViewModel.load(uid, force = true) },
