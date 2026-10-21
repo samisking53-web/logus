@@ -163,6 +163,12 @@ class LogRepository {
         return storage.reference.child(path).downloadUrl.await().toString()
     }
 
+    /** 영상 기록의 재생 주소(Storage 다운로드 주소). 보안 규칙상 여정 구성원만 받을 수 있다. S17 추억 영상이 쓴다 */
+    suspend fun videoUrl(log: FeedLog): String {
+        val path = log.mediaPath?.takeIf { log.mediaType == "video" } ?: error("영상이 없는 기록이에요")
+        return storage.reference.child(path).downloadUrl.await().toString()
+    }
+
     /**
      * 기록에 위치를 저장한다: 서버 함수 saveLogLocation 이 위치·장소 이름을 채우고 10코인을 준다
      * (같은 기록으로는 한 번만, 코인 내역 users/{uid}/coinLedger/{logId}). 탐색 공개(isPublic)는 아직 false.

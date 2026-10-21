@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -85,7 +86,8 @@ enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"
  * - S15 기록: 고른 날의 기록을 N01 기록 보기와 같은 시간대 카드로 보여 준다. 아래로 내리면 30개씩 더 읽는다.
  * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
  *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
- * - S17 추억 영상: 아직 만들지 않아 "준비 중" 안내만 보여 준다(다음 작업).
+ * - S17 추억 영상(DAY RECAP): 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
+ *   (RecapPlayer, 1단계). 장면 사이 지도 이동은 2단계에서 끼워 넣는다. 아래 "영상 저장하기"는 흐리게(준비 중).
  */
 @Composable
 fun JourneyDetailScreen(
@@ -94,14 +96,15 @@ fun JourneyDetailScreen(
     onMoveDay: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
-    /** 추억 지도 탭을 보거나 지도 탭에서 날짜를 바꿨을 때(그날 위치 읽기) */
-    onShowMap: () -> Unit,
-    onRetryMap: () -> Unit,
+    /** 추억 지도·추억 영상 탭을 보거나 그 탭에서 날짜를 바꿨을 때(그날 기록 한 번에 읽기) */
+    onLoadDayAll: () -> Unit,
+    onRetryDayAll: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
+    videoUrl: suspend (FeedLog) -> String?,
 ) {
     var tab by rememberSaveable { mutableStateOf(DetailTab.RECORDS) }
     LaunchedEffect(tab, state.dayIndex) {
-        if (tab == DetailTab.MAP) onShowMap()
+        if (tab == DetailTab.MAP || tab == DetailTab.RECAP) onLoadDayAll()
     }
     val listState = rememberLazyListState()
 
@@ -126,8 +129,9 @@ fun JourneyDetailScreen(
         onSelectTab = { tab = it },
         onMoveDay = onMoveDay,
         onRetry = onRetry,
-        onRetryMap = onRetryMap,
+        onRetryDayAll = onRetryDayAll,
         previewUrl = previewUrl,
+        videoUrl = videoUrl,
     )
 }
 
@@ -141,8 +145,9 @@ private fun JourneyDetailContent(
     onSelectTab: (DetailTab) -> Unit,
     onMoveDay: (Int) -> Unit,
     onRetry: () -> Unit,
-    onRetryMap: () -> Unit,
+    onRetryDayAll: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
+    videoUrl: suspend (FeedLog) -> String?,
 ) {
     val journey = state.journey ?: return
     Column(Modifier.fillMaxSize()) {
@@ -165,11 +170,8 @@ private fun JourneyDetailContent(
 
         when (tab) {
             DetailTab.RECORDS -> RecordsTab(state = state, listState = listState, onRetry = onRetry, previewUrl = previewUrl)
-            DetailTab.MAP -> MapTab(state = state, city = journey.city, onRetry = onRetryMap)
-            DetailTab.RECAP -> ComingSoonTab(
-                icon = R.drawable.ic_camera,
-                text = "추억 영상은 준비 중이에요.\n그날의 DAY RECAP 영상이 여기에 나와요.",
-            )
+            DetailTab.MAP -> MapTab(state = state, city = journey.city, onRetry = onRetryDayAll)
+            DetailTab.RECAP -> RecapTab(state = state, onRetry = onRetryDayAll, previewUrl = previewUrl, videoUrl = videoUrl)
         }
     }
 }
@@ -358,7 +360,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
                     .weight(1f)
                     .semantics { heading() },
             )
-            if (!state.mapLoading && state.mapError == null) {
+            if (!state.dayAllLoading && state.dayAllError == null) {
                 Text("${placeCount}곳", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             }
         }
@@ -372,10 +374,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
             contentAlignment = Alignment.Center,
         ) {
             when {
-                state.mapLoading || state.mapDayIndex != state.dayIndex ->
+                state.dayAllLoading || state.dayAllIndex != state.dayIndex ->
                     CircularProgressIndicator(color = LogUsColors.primaryStrong)
-                state.mapError != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.mapError, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                state.dayAllError != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.dayAllError, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                     TextButton(onClick = onRetry) { Text("다시 불러오기", color = LogUsColors.primaryStrong) }
                 }
                 state.routes.isEmpty() -> Text(
@@ -426,7 +428,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
         }
         val notes = listOfNotNull(
             state.unlocatedCount.takeIf { it > 0 }?.let { "위치 없이 올린 기록 ${it}개는 지도에 없어요." },
-            "기록이 많아 앞의 100개만 지도에 찍었어요.".takeIf { state.mapTruncated },
+            "기록이 많아 앞의 100개만 지도에 찍었어요.".takeIf { state.dayAllTruncated },
         )
         notes.forEach {
             Text(
@@ -440,34 +442,76 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
     }
 }
 
-/** S16·S17 자리: 연보라 동그라미 그림 + 준비 중 안내 */
+/**
+ * S17 추억 영상(DAY RECAP): 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 저장하기 · 준비 중"(흐리게, 2026-10-21 팀 결정).
+ * 그날 영상 기록이 없으면 안내 글.
+ */
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.ComingSoonTab(icon: Int, text: String) {
+private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
+    state: JourneyDetailUiState,
+    onRetry: () -> Unit,
+    previewUrl: suspend (FeedLog) -> String?,
+    videoUrl: suspend (FeedLog) -> String?,
+) {
     Column(
         Modifier
             .weight(1f)
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
     ) {
         Box(
             Modifier
-                .size(64.dp)
-                .background(LogUsColors.iconCircle, CircleShape),
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, LogUsColors.border, RoundedCornerShape(20.dp))
+                .padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(painterResource(icon), contentDescription = null, tint = LogUsColors.primaryStrong, modifier = Modifier.size(30.dp))
+            when {
+                state.dayAllLoading || state.dayAllIndex != state.dayIndex ->
+                    CircularProgressIndicator(color = LogUsColors.primaryStrong)
+                state.dayAllError != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.dayAllError, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                    TextButton(onClick = onRetry) { Text("다시 불러오기", color = LogUsColors.primaryStrong) }
+                }
+                state.recapScenes.isEmpty() -> Text(
+                    "이날은 영상 기록이 없어서\n추억 영상을 만들 수 없어요.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Center,
+                )
+                else -> RecapPlayer(
+                    scenes = state.recapScenes,
+                    members = state.members,
+                    dayKey = state.dayIndex,
+                    videoUrl = videoUrl,
+                    previewUrl = previewUrl,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        if (state.dayAllTruncated) {
+            Text(
+                "기록이 많아 앞의 100개로 만들었어요.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
         Spacer(Modifier.height(12.dp))
-        Text(
-            text,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 15.sp,
-            lineHeight = 22.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.semantics { heading() },
-        )
+        // mp4 로 만들어 저장하는 기능은 아직 범위 밖이라 흐리게 둔다(CLAUDE.md "지금 범위 밖")
+        OutlinedButton(
+            onClick = {},
+            enabled = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+        ) {
+            Text("영상 저장하기 · 준비 중", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -502,8 +546,9 @@ private fun JourneyDetailPreview() {
             onSelectTab = {},
             onMoveDay = {},
             onRetry = {},
-            onRetryMap = {},
+            onRetryDayAll = {},
             previewUrl = { null },
+            videoUrl = { null },
         )
     }
 }
