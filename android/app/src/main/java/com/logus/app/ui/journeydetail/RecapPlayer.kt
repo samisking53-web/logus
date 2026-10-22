@@ -132,12 +132,16 @@ fun RecapPlayer(
             it.clearMediaItems()
         }
         // 이 장면 영상 주소를 한꺼번에 받는다(못 받은 영상은 대표 화면만 보인다)
-        val urls = coroutineScope { scene.clips.map { clip -> async { videoUrl(clip.log) } }.awaitAll() }
+        // 영상이 없는 칸(검은 화면)은 건너뛴다
+        val urls = coroutineScope { scene.clips.map { clip -> async { clip.log?.let { videoUrl(it) } } }.awaitAll() }
+        var soundGiven = false
         val active = scene.clips.indices.mapNotNull { i ->
             val url = urls[i] ?: return@mapNotNull null
             players[i].apply {
                 setMediaItem(MediaItem.fromUri(url))
-                volume = if (i == 0) 1f else 0f
+                // 소리는 영상이 있는 칸 중 맨 위 하나만
+                volume = if (soundGiven) 0f else 1f
+                soundGiven = true
                 prepare()
             }
         }
@@ -201,7 +205,7 @@ fun RecapPlayer(
                 scene.clips.forEachIndexed { i, clip ->
                     RecapClipView(
                         clip = clip,
-                        author = members[clip.log.authorId],
+                        author = members[clip.uid],
                         player = players.getOrNull(i),
                         showVideo = playing,
                         previewUrl = previewUrl,
@@ -262,6 +266,7 @@ fun RecapPlayer(
 /**
  * 영상 칸 하나: 대표 화면(첫 장면) 위에 재생 중이면 영상, 왼쪽 위 작은 프로필(구성원 색 테두리), 왼쪽 아래 장소 이름.
  * 영상은 16:9 로 찍혀 있어서 칸을 꽉 채우도록 가운데를 잘라 보여 준다.
+ * 이 차례에 그 사람 영상이 없으면(clip.log == null) 검은 화면에 작은 프로필만 둔다(누구 자리인지 알 수 있게).
  */
 @Composable
 private fun RecapClipView(
@@ -273,18 +278,24 @@ private fun RecapClipView(
     modifier: Modifier = Modifier,
 ) {
     val log = clip.log
-    val poster by produceState<String?>(initialValue = null, log.id) { value = previewUrl(log) }
+    val poster by produceState<String?>(initialValue = null, log?.id) { value = log?.let { previewUrl(it) } }
     val name = author?.nickname ?: "구성원"
     Box(
         modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)))
-            .clearAndSetSemantics { contentDescription = listOfNotNull("$name 님의 영상", log.placeName).joinToString(", ") },
+            .background(
+                if (log == null) Brush.linearGradient(listOf(BackgroundDark, BackgroundDark))
+                else Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)),
+            )
+            .clearAndSetSemantics {
+                contentDescription = if (log == null) "$name 님은 이 차례에 영상이 없어요"
+                else listOfNotNull("$name 님의 영상", log.placeName).joinToString(", ")
+            },
     ) {
         if (poster != null) {
             AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
-        if (showVideo && player != null) {
+        if (showVideo && player != null && log != null) {
             // 16:9 영상을 칸보다 크거나 같게 키워 가운데에 두면, 둥근 칸 밖으로 나간 부분이 잘려 "꽉 채우기"가 된다
             BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val byWidth = maxWidth * 9f / 16f
@@ -297,7 +308,7 @@ private fun RecapClipView(
                 )
             }
         }
-        if (log.placeName != null) {
+        if (log?.placeName != null) {
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)

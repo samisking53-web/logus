@@ -58,7 +58,10 @@ data class JourneyDetailUiState(
     val recapScenes: List<RecapScene> = emptyList(),
 )
 
-/** S17 DAY RECAP 의 한 장면: 한 시간대에 구성원별 첫 영상(먼저 찍은 3명까지)을 위·가운데·아래로 동시에 튼다 */
+/**
+ * S17 DAY RECAP 의 한 장면(한 차례): 한 시간대 안에서 구성원 칸(최대 3칸)마다 n번째 영상을 위·가운데·아래로 동시에 튼다.
+ * 한 시간대는 가장 많이 올린 사람의 영상 개수만큼 장면(차례)이 생긴다.
+ */
 data class RecapScene(
     /** 시간대 시작·끝(그날 0시부터 분). 화면 위 "11:00" */
     val startMinute: Int,
@@ -66,8 +69,11 @@ data class RecapScene(
     val clips: List<RecapClip>,
 )
 
-/** 장면 속 영상 하나: 기록과 그 사람의 구성원 구분색 번호(추억 지도와 같은 색) */
-data class RecapClip(val log: FeedLog, val colorIndex: Int)
+/**
+ * 장면 속 칸 하나: 그 칸의 구성원, 구성원 구분색 번호(추억 지도와 같은 색), 이번 차례에 틀 영상.
+ * log 가 null 이면 그 사람은 이 차례에 올린 영상이 없어서 검은 화면을 보여 준다.
+ */
+data class RecapClip(val uid: String, val colorIndex: Int, val log: FeedLog?)
 
 /**
  * S16 추억 지도의 한 구성원 경로: 그날 위치를 남긴 기록을 찍은 순서대로(핀 번호 1, 2, 3 …).
@@ -285,21 +291,32 @@ fun buildRoutes(logs: List<FeedLog>, memberIds: List<String>): List<MemberRoute>
 const val RECAP_MAX_CLIPS = 3
 
 /**
- * 기록들 → DAY RECAP 장면들(S17). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고, N01 과 같은 시간대로 나눈 뒤
- * 시간대마다 최대 3개를 고른다: 먼저 구성원마다 첫 영상 하나씩(여러 사람이 고루 나오게), 칸이 남으면 남은 영상을
- * 찍은 순서로 채운다(혼자 두 개 찍었으면 둘 다 나온다, 2026-10-22). 고른 영상은 찍은 순서로 위에서부터 놓는다.
+ * 기록들 → DAY RECAP 장면들(S17, 2026-10-22 팀 결정). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고,
+ * N01 과 같은 시간대로 나눈다(영상이 없는 시간대는 건너뜀). 시간대마다:
+ * - 칸 = 여정 구성원 전원(memberIds 순서, 혼자면 한 칸). 4명 이상이면 그 시간대에 영상을 많이 올린 3명(같으면 구성원 순서)
+ * - 장면(차례) 수 = 그 시간대에 가장 많이 올린 사람의 영상 개수. n번째 장면에는 칸마다 그 사람의 n번째 영상(찍은 순서)
+ * - 영상이 모자라거나 없는 사람의 칸은 log = null(검은 화면)
+ * 색 번호는 구성원 순서(추억 지도와 같은 색). memberIds 에 없는 사람(나간 구성원)의 영상도 뒤에 붙여 보여 준다.
  * logs 는 찍은 시각 순서여야 한다.
- * 색 번호는 추억 지도와 같게 memberIds 순서로 정한다.
  */
 fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours: Int, zone: ZoneId): List<RecapScene> {
     val videos = logs.filter { it.mediaType == "video" && it.mediaPath != null }
-    return groupByWindows(videos, intervalHours, zone).map { window ->
-        RecapScene(
-            startMinute = window.startMinute,
-            endMinute = window.endMinute,
-            clips = pickRecapClips(window.logs)
-                .map { log -> RecapClip(log, memberIds.indexOf(log.authorId).takeIf { it >= 0 } ?: memberIds.size) },
-        )
+    val people = memberIds + videos.map { it.authorId }.distinct().filterNot { it in memberIds }
+    return groupByWindows(videos, intervalHours, zone).flatMap { window ->
+        val byAuthor = window.logs.groupBy { it.authorId }
+        val count = { uid: String -> byAuthor[uid]?.size ?: 0 }
+        val lanes = people.withIndex()
+            .sortedWith(compareByDescending<IndexedValue<String>> { count(it.value) }.thenBy { it.index })
+            .take(RECAP_MAX_CLIPS)
+            .sortedBy { it.index }
+        val rounds = lanes.maxOfOrNull { count(it.value) } ?: 0
+        (0 until rounds).map { round ->
+            RecapScene(
+                startMinute = window.startMinute,
+                endMinute = window.endMinute,
+                clips = lanes.map { (index, uid) -> RecapClip(uid, index, byAuthor[uid]?.getOrNull(round)) },
+            )
+        }
     }
 }
 
@@ -319,10 +336,3 @@ internal fun journeyDays(startDate: String, endDate: String): List<LocalDate> {
 /** 그날 0시 ~ 다음 날 0시(폰 시간대, N01 기록 보기와 같은 기준) */
 internal fun dayRange(day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Pair<Date, Date> =
     Date.from(day.atStartOfDay(zone).toInstant()) to Date.from(day.plusDays(1).atStartOfDay(zone).toInstant())
-
-/** 한 시간대 영상들 중 DAY RECAP 에 쓸 최대 3개: 구성원별 첫 영상 먼저, 남는 칸은 나머지 영상으로. 찍은 순서로 돌려준다 */
-internal fun pickRecapClips(videos: List<FeedLog>): List<FeedLog> {
-    val firstPerAuthor = videos.distinctBy { it.authorId }.take(RECAP_MAX_CLIPS)
-    val rest = videos.filterNot { it in firstPerAuthor }.take(RECAP_MAX_CLIPS - firstPerAuthor.size)
-    return (firstPerAuthor + rest).sortedBy { it.capturedAtMillis }
-}
