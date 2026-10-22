@@ -82,7 +82,7 @@ private const val SCENE_TIMEOUT_MS = 15_000L
 private const val POSTER_ONLY_MS = 3_000L
 
 /**
- * S17 추억 영상(DAY RECAP) 재생기 — 1단계: 영상 3분할 재생(장면 사이 지도 이동은 2단계에서 끼워 넣는다).
+ * S17 DAY RECAP 재생기 — 1단계: 영상 3분할 재생(장면 사이 지도 이동은 2단계에서 끼워 넣는다).
  * - 위 "11:00"·"장면 1 / 4" → 영상 칸(구성원 수만큼 위·가운데·아래로 나눔, 1명이면 가득) → 장면 진행 막대.
  * - ▶ 를 누르면 그 장면 영상들을 동시에 틀고, 모두 끝나면 다음 장면으로 저절로 넘어간다. 마지막 장면이 끝나면 처음으로.
  * - 재생 중 영상을 누르면 멈춘다(다시 ▶ 를 누르면 그 장면 처음부터). 앱을 내리면 멈춘다.
@@ -195,7 +195,7 @@ fun RecapPlayer(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .clickable(enabled = playing, role = Role.Button, onClickLabel = "추억 영상 멈추기") { playing = false },
+                    .clickable(enabled = playing, role = Role.Button, onClickLabel = "DAY RECAP 멈추기") { playing = false },
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 scene.clips.forEachIndexed { i, clip ->
@@ -222,7 +222,7 @@ fun RecapPlayer(
                         .size(58.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = "추억 영상 재생", tint = Primary, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "DAY RECAP 재생", tint = Primary, modifier = Modifier.size(32.dp))
                     }
                 }
             }

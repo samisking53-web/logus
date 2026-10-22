@@ -163,7 +163,7 @@ class LogRepository {
         return storage.reference.child(path).downloadUrl.await().toString()
     }
 
-    /** 영상 기록의 재생 주소(Storage 다운로드 주소). 보안 규칙상 여정 구성원만 받을 수 있다. S17 추억 영상이 쓴다 */
+    /** 영상 기록의 재생 주소(Storage 다운로드 주소). 보안 규칙상 여정 구성원만 받을 수 있다. S17 DAY RECAP이 쓴다 */
     suspend fun videoUrl(log: FeedLog): String {
         val path = log.mediaPath?.takeIf { log.mediaType == "video" } ?: error("영상이 없는 기록이에요")
         return storage.reference.child(path).downloadUrl.await().toString()

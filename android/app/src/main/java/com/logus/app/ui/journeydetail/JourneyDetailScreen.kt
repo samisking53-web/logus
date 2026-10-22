@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.logus.app.R
 import com.logus.app.journey.Journey
+import com.logus.app.journey.Member
+import com.logus.app.ui.components.ProfileDialog
 import com.logus.app.journeydetail.JourneyDetailUiState
 import com.logus.app.record.FeedLog
 import com.logus.app.ui.feed.LogCard
@@ -75,18 +77,18 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import java.time.LocalDate
 
-/** 여정 상세의 탭 버튼 세 개(스토리보드 번호: 기록 S15 · 추억 지도 S16 · 추억 영상 S17) */
-enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"), RECAP("추억 영상") }
+/** 여정 상세의 탭 버튼 세 개(스토리보드 번호: 기록 S15 · 추억 지도 S16 · DAY RECAP S17) */
+enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"), RECAP("DAY RECAP") }
 
 // S15·S16·S17 여정 상세 (스토리보드 v5 17·23쪽 수정본, 2026-10-14 팀 결정 번호)
 /**
  * 마이로그(S14)에서 여정 카드를 누르면 여는 화면. 하단 탭은 숨긴다.
  * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → 날짜·지역 상자("9.24 포르투 · 1일째 / 3일", 양옆 ‹ › 로 하루씩 넘김)
- *   → 탭 버튼 [기록] [추억 지도] [추억 영상](한 화면 안에서 버튼으로 바꿔 본다)
+ *   → 탭 버튼 [기록] [추억 지도] [DAY RECAP](한 화면 안에서 버튼으로 바꿔 본다)
  * - S15 기록: 고른 날의 기록을 N01 기록 보기와 같은 시간대 카드로 보여 준다. 아래로 내리면 30개씩 더 읽는다.
  * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
  *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
- * - S17 추억 영상(DAY RECAP): 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
+ * - S17 DAY RECAP: 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
  *   (RecapPlayer, 1단계). 장면 사이 지도 이동은 2단계에서 끼워 넣는다. 아래 "영상 저장하기"는 흐리게(준비 중).
  */
 @Composable
@@ -96,7 +98,7 @@ fun JourneyDetailScreen(
     onMoveDay: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
-    /** 추억 지도·추억 영상 탭을 보거나 그 탭에서 날짜를 바꿨을 때(그날 기록 한 번에 읽기) */
+    /** 추억 지도·DAY RECAP 탭을 보거나 그 탭에서 날짜를 바꿨을 때(그날 기록 한 번에 읽기) */
     onLoadDayAll: () -> Unit,
     onRetryDayAll: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
@@ -220,7 +222,7 @@ private fun DayBox(day: LocalDate?, city: String, index: Int, total: Int, onMove
     }
 }
 
-/** 탭 버튼 [기록] [추억 지도] [추억 영상]: 고른 것은 보라 채움(흰 글자), 나머지는 흰 카드 */
+/** 탭 버튼 [기록] [추억 지도] [DAY RECAP]: 고른 것은 보라 채움(흰 글자), 나머지는 흰 카드 */
 @Composable
 private fun TabButtons(selected: DetailTab, onSelect: (DetailTab) -> Unit) {
     Row(
@@ -261,6 +263,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordsTab(
     val showHint by remember(state.windows, state.endReached) {
         derivedStateOf { state.windows.isNotEmpty() && (listState.canScrollForward || !state.endReached) }
     }
+    // 기록 카드의 작은 프로필을 누르면 뜨는 프로필 팝업(N01 과 같다)
+    var profileOf by remember { mutableStateOf<Member?>(null) }
+    profileOf?.let { ProfileDialog(member = it, onDismiss = { profileOf = null }) }
     LazyColumn(
         state = listState,
         modifier = Modifier
@@ -293,7 +298,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordsTab(
             else -> state.windows.forEach { window ->
                 item(key = "w${window.startMinute}") { WindowHeader(window) }
                 items(window.logs, key = { it.id }) { log ->
-                    LogCard(log = log, author = state.members[log.authorId], previewUrl = previewUrl)
+                    LogCard(
+                        log = log,
+                        author = state.members[log.authorId],
+                        previewUrl = previewUrl,
+                        onProfileClick = { profileOf = it },
+                    )
                     Spacer(Modifier.height(10.dp))
                 }
                 item(key = "gap${window.startMinute}") { Spacer(Modifier.height(18.dp)) }
@@ -443,7 +453,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
 }
 
 /**
- * S17 추억 영상(DAY RECAP): 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 저장하기 · 준비 중"(흐리게, 2026-10-21 팀 결정).
+ * S17 DAY RECAP: 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 저장하기 · 준비 중"(흐리게, 2026-10-21 팀 결정).
  * 그날 영상 기록이 없으면 안내 글.
  */
 @Composable
@@ -477,7 +487,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
                     TextButton(onClick = onRetry) { Text("다시 불러오기", color = LogUsColors.primaryStrong) }
                 }
                 state.recapScenes.isEmpty() -> Text(
-                    "이날은 영상 기록이 없어서\n추억 영상을 만들 수 없어요.",
+                    "이날은 영상 기록이 없어서\nDAY RECAP을 만들 수 없어요.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,

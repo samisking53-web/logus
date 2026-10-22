@@ -159,6 +159,8 @@ private fun PastJourneyCard(journey: Journey, coverUrl: suspend (String) -> Stri
                 .clip(RoundedCornerShape(14.dp))
                 .background(LogUsColors.border),
         ) {
+            // 보라 그림을 먼저 깔고, 대표 사진을 받으면 그 위에 덮는다(받는 중이거나 사진이 없어도 빈 칸으로 보이지 않게)
+            CoverPlaceholder(Modifier.fillMaxSize())
             if (url != null) {
                 AsyncImage(
                     model = url,
@@ -166,8 +168,6 @@ private fun PastJourneyCard(journey: Journey, coverUrl: suspend (String) -> Stri
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-            } else {
-                CoverPlaceholder(Modifier.fillMaxSize())
             }
         }
         Spacer(Modifier.width(16.dp))

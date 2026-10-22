@@ -44,7 +44,7 @@ data class JourneyDetailUiState(
     val endReached: Boolean = false,
     val error: String? = null,
     /**
-     * S16 추억 지도·S17 추억 영상이 함께 쓰는 "그날 기록 한 번에 읽기"(최대 DAY_LIMIT 개):
+     * S16 추억 지도·S17 DAY RECAP이 함께 쓰는 "그날 기록 한 번에 읽기"(최대 DAY_LIMIT 개):
      * 읽은 날짜(null = 아직 안 읽음), 읽는 중, 오류, 기록이 너무 많아 앞의 것만 썼는지
      */
     val dayAllIndex: Int? = null,
@@ -81,9 +81,9 @@ data class MemberRoute(
 )
 
 /**
- * 여정 상세(스토리보드 v5 17·23쪽, S15 기록 · S16 추억 지도 · S17 추억 영상) 상태 관리.
+ * 여정 상세(스토리보드 v5 17·23쪽, S15 기록 · S16 추억 지도 · S17 DAY RECAP) 상태 관리.
  * - S15 기록: 고른 날짜(폰 시간대 기준 하루)의 기록을 찍은 순서로 30개씩 읽고, N01 과 같은 방식으로 시간대를 나눈다.
- * - S16 추억 지도·S17 추억 영상: 그날 기록을 한 번에 최대 DAY_LIMIT 개 읽어(loadDayAll) 경로와 DAY RECAP 장면을 만든다.
+ * - S16 추억 지도·S17 DAY RECAP: 그날 기록을 한 번에 최대 DAY_LIMIT 개 읽어(loadDayAll) 경로와 DAY RECAP 장면을 만든다.
  * 실시간 리스너 대신 한 번 읽기(get)를 쓴다.
  */
 class JourneyDetailViewModel(
@@ -107,7 +107,7 @@ class JourneyDetailViewModel(
 
     /** 마이로그에서 여정 카드를 눌렀을 때: 첫날 기록부터 보여 준다 */
     fun open(journey: Journey) {
-        val days = daysOf(journey)
+        val days = journeyDays(journey.startDate, journey.endDate)
         loadJob?.cancel() // 전에 보던 여정의 읽기가 늦게 끝나 덮어쓰지 않게
         mapJob?.cancel()
         _state.value = JourneyDetailUiState(journey = journey, days = days)
@@ -195,7 +195,7 @@ class JourneyDetailViewModel(
     }
 
     /**
-     * S16 추억 지도·S17 추억 영상 탭을 보거나 그 탭에서 날짜를 바꿨을 때: 그날 기록을 한 번에 최대 DAY_LIMIT 개 읽어
+     * S16 추억 지도·S17 DAY RECAP 탭을 보거나 그 탭에서 날짜를 바꿨을 때: 그날 기록을 한 번에 최대 DAY_LIMIT 개 읽어
      * 구성원별 경로(위치가 있는 것만)와 DAY RECAP 장면(영상만)을 만든다. 같은 날을 이미 읽었으면 다시 읽지 않는다(비용 절약).
      */
     fun loadDayAll() {
@@ -231,7 +231,7 @@ class JourneyDetailViewModel(
         }
     }
 
-    /** 지도·추억 영상 오류 뒤 "다시 불러오기" */
+    /** 지도·DAY RECAP 오류 뒤 "다시 불러오기" */
     fun retryDayAll() {
         _state.update { it.copy(dayAllIndex = null) }
         loadDayAll()
@@ -256,30 +256,11 @@ class JourneyDetailViewModel(
     private companion object {
         const val TAG = "JourneyDetailViewModel"
 
-        /** 지도·추억 영상에 쓸 하루 기록 수 상한(비용 관리: limit) */
+        /** 지도·DAY RECAP에 쓸 하루 기록 수 상한(비용 관리: limit) */
         const val DAY_LIMIT = 100L
 
         /** 프로필을 읽어 올 최대 구성원 수(N01 과 같다) */
         const val MAX_MEMBERS = 30
-
-        /** 날짜 상자로 넘겨 볼 수 있는 최대 일수(날짜가 잘못 저장돼도 목록이 끝없이 길어지지 않게) */
-        const val MAX_DAYS = 366
-    }
-
-    /** 여정의 날짜들: 시작일부터 종료일까지 하루씩. 날짜를 읽을 수 없으면 시작일 하루만 */
-    private fun daysOf(journey: Journey): List<LocalDate> {
-        val start = runCatching { LocalDate.parse(journey.startDate) }.getOrNull() ?: return emptyList()
-        val end = runCatching { LocalDate.parse(journey.endDate) }.getOrNull()?.takeIf { !it.isBefore(start) } ?: start
-        return generateSequence(start) { it.plusDays(1) }
-            .takeWhile { !it.isAfter(end) }
-            .take(MAX_DAYS)
-            .toList()
-    }
-
-    /** 그날 0시 ~ 다음 날 0시(폰 시간대, N01 기록 보기와 같은 기준) */
-    private fun dayRange(day: LocalDate): Pair<Date, Date> {
-        val zone = ZoneId.systemDefault()
-        return Date.from(day.atStartOfDay(zone).toInstant()) to Date.from(day.plusDays(1).atStartOfDay(zone).toInstant())
     }
 }
 
@@ -305,7 +286,9 @@ const val RECAP_MAX_CLIPS = 3
 
 /**
  * 기록들 → DAY RECAP 장면들(S17). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고, N01 과 같은 시간대로 나눈 뒤
- * 시간대마다 구성원별 첫 영상을 먼저 찍은 순서로 최대 3개 고른다. logs 는 찍은 시각 순서여야 한다.
+ * 시간대마다 최대 3개를 고른다: 먼저 구성원마다 첫 영상 하나씩(여러 사람이 고루 나오게), 칸이 남으면 남은 영상을
+ * 찍은 순서로 채운다(혼자 두 개 찍었으면 둘 다 나온다, 2026-10-22). 고른 영상은 찍은 순서로 위에서부터 놓는다.
+ * logs 는 찍은 시각 순서여야 한다.
  * 색 번호는 추억 지도와 같게 memberIds 순서로 정한다.
  */
 fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours: Int, zone: ZoneId): List<RecapScene> {
@@ -314,10 +297,32 @@ fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours
         RecapScene(
             startMinute = window.startMinute,
             endMinute = window.endMinute,
-            clips = window.logs
-                .distinctBy { it.authorId }
-                .take(RECAP_MAX_CLIPS)
+            clips = pickRecapClips(window.logs)
                 .map { log -> RecapClip(log, memberIds.indexOf(log.authorId).takeIf { it >= 0 } ?: memberIds.size) },
         )
     }
+}
+
+/** 날짜 상자로 넘겨 볼 수 있는 최대 일수(날짜가 잘못 저장돼도 목록이 끝없이 길어지지 않게) */
+private const val MAX_DAYS = 366
+
+/** 여정의 날짜들: 시작일부터 종료일까지 하루씩("YYYY-MM-DD"). 날짜를 읽을 수 없으면 빈 목록, 종료일이 이상하면 시작일 하루만 */
+internal fun journeyDays(startDate: String, endDate: String): List<LocalDate> {
+    val start = runCatching { LocalDate.parse(startDate) }.getOrNull() ?: return emptyList()
+    val end = runCatching { LocalDate.parse(endDate) }.getOrNull()?.takeIf { !it.isBefore(start) } ?: start
+    return generateSequence(start) { it.plusDays(1) }
+        .takeWhile { !it.isAfter(end) }
+        .take(MAX_DAYS)
+        .toList()
+}
+
+/** 그날 0시 ~ 다음 날 0시(폰 시간대, N01 기록 보기와 같은 기준) */
+internal fun dayRange(day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Pair<Date, Date> =
+    Date.from(day.atStartOfDay(zone).toInstant()) to Date.from(day.plusDays(1).atStartOfDay(zone).toInstant())
+
+/** 한 시간대 영상들 중 DAY RECAP 에 쓸 최대 3개: 구성원별 첫 영상 먼저, 남는 칸은 나머지 영상으로. 찍은 순서로 돌려준다 */
+internal fun pickRecapClips(videos: List<FeedLog>): List<FeedLog> {
+    val firstPerAuthor = videos.distinctBy { it.authorId }.take(RECAP_MAX_CLIPS)
+    val rest = videos.filterNot { it in firstPerAuthor }.take(RECAP_MAX_CLIPS - firstPerAuthor.size)
+    return (firstPerAuthor + rest).sortedBy { it.capturedAtMillis }
 }
