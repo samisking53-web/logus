@@ -89,7 +89,7 @@ enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"
  * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
  *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
  * - S17 DAY RECAP: 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
- *   (RecapPlayer, 1단계). 장면 사이 지도 이동은 2단계에서 끼워 넣는다. 아래 "영상 저장하기"는 흐리게(준비 중).
+ *   (RecapPlayer). 시간대 사이에는 구성원 위치 지도 장면(2단계, RecapMapView)이 들어간다. 아래 "영상 저장하기"는 흐리게(준비 중).
  */
 @Composable
 fun JourneyDetailScreen(

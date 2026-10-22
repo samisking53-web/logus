@@ -22,6 +22,11 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** 여정 상세(S15~S17) 상태 */
 data class JourneyDetailUiState(
@@ -54,20 +59,42 @@ data class JourneyDetailUiState(
     /** S16: 구성원별 경로, 위치 없이 올린 기록 수 */
     val routes: List<MemberRoute> = emptyList(),
     val unlocatedCount: Int = 0,
-    /** S17: DAY RECAP 장면들(시간대마다 구성원 영상 최대 3개) */
-    val recapScenes: List<RecapScene> = emptyList(),
+    /** S17: DAY RECAP 장면들(지도 장면 + 시간대마다 구성원 영상 최대 3개를 차례대로) */
+    val recapScenes: List<RecapStep> = emptyList(),
 )
 
+/** S17 DAY RECAP 의 장면 하나: 영상 장면(RecapScene) 또는 지도 장면(RecapMapScene). startMinute 은 화면 위 "11:00" */
+sealed interface RecapStep {
+    val startMinute: Int
+}
+
 /**
- * S17 DAY RECAP 의 한 장면(한 차례): 한 시간대 안에서 구성원 칸(최대 3칸)마다 n번째 영상을 위·가운데·아래로 동시에 튼다.
+ * S17 DAY RECAP 의 영상 장면(한 차례): 한 시간대 안에서 구성원 칸(최대 3칸)마다 n번째 영상을 위·가운데·아래로 동시에 튼다.
  * 한 시간대는 가장 많이 올린 사람의 영상 개수만큼 장면(차례)이 생긴다.
  */
 data class RecapScene(
     /** 시간대 시작·끝(그날 0시부터 분). 화면 위 "11:00" */
-    val startMinute: Int,
+    override val startMinute: Int,
     val endMinute: Int,
     val clips: List<RecapClip>,
-)
+) : RecapStep
+
+/**
+ * S17 DAY RECAP 2단계 지도 장면(2026-10-21 팀 결정): 시간대 영상 앞에 구성원 위치를 지도로 보여 준다.
+ * - 첫 지도 장면(fromMinute == null): 그 시간대 위치를 확대해 보여 준다.
+ * - 그다음부터: 앞 지도 장면 위치(from)에서 이번 위치(to)로 구성원마다 자기 길을 따라 움직인 뒤 확대한다(화면 위 "11:00 → 13:00").
+ * pins 의 from == null 은 이번에 새로 나타나는 사람, to == null 은 이번 시간대에 위치가 없어 사라지는 사람이다.
+ * groups 는 도착한 위치(to)가 같은 건물(GROUP_METERS 안)인 사람들 uid 묶음(혼자면 한 명짜리 묶음).
+ */
+data class RecapMapScene(
+    override val startMinute: Int,
+    val fromMinute: Int?,
+    val pins: List<RecapPin>,
+    val groups: List<List<String>>,
+) : RecapStep
+
+/** 지도 장면 속 구성원 한 명: 구성원 구분색 번호(추억 지도와 같은 색), 출발·도착 위치 */
+data class RecapPin(val uid: String, val colorIndex: Int, val from: GeoPoint?, val to: GeoPoint?)
 
 /**
  * 장면 속 칸 하나: 그 칸의 구성원, 구성원 구분색 번호(추억 지도와 같은 색), 이번 차례에 틀 영상.
@@ -290,27 +317,53 @@ fun buildRoutes(logs: List<FeedLog>, memberIds: List<String>): List<MemberRoute>
 /** 장면 하나에 동시에 트는 영상 수(위·가운데·아래) */
 const val RECAP_MAX_CLIPS = 3
 
+/** 지도 장면에서 같은 건물로 보고 프로필을 한 말풍선에 묶는 거리(미터, 2026-10-21 팀 결정) */
+const val GROUP_METERS = 50.0
+
 /**
- * 기록들 → DAY RECAP 장면들(S17, 2026-10-22 팀 결정). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고,
+ * 기록들 → DAY RECAP 장면들(S17). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고,
  * N01 과 같은 시간대로 나눈다(영상이 없는 시간대는 건너뜀). 시간대마다:
- * - 칸 = 여정 구성원 전원(memberIds 순서, 혼자면 한 칸). 4명 이상이면 그 시간대에 영상을 많이 올린 3명(같으면 구성원 순서)
- * - 장면(차례) 수 = 그 시간대에 가장 많이 올린 사람의 영상 개수. n번째 장면에는 칸마다 그 사람의 n번째 영상(찍은 순서)
- * - 영상이 모자라거나 없는 사람의 칸은 log = null(검은 화면)
+ * - 지도 장면(2단계, 2026-10-21 팀 결정): 그 시간대에 위치를 남긴 구성원마다 그 시간대 첫 위치. 위치가 있는 사람이 없으면 지도 장면을 건너뛴다.
+ *   앞 지도 장면에 있던 사람은 그 위치에서 이번 위치로 움직이고, 이번에 위치가 없는 사람은 사라진다(다음에 위치가 생기면 다시 나타남).
+ * - 영상 장면(2026-10-22 팀 결정):
+ *   - 칸 = 여정 구성원 전원(memberIds 순서, 혼자면 한 칸). 4명 이상이면 그 시간대에 영상을 많이 올린 3명(같으면 구성원 순서)
+ *   - 장면(차례) 수 = 그 시간대에 가장 많이 올린 사람의 영상 개수. n번째 장면에는 칸마다 그 사람의 n번째 영상(찍은 순서)
+ *   - 영상이 모자라거나 없는 사람의 칸은 log = null(검은 화면)
  * 색 번호는 구성원 순서(추억 지도와 같은 색). memberIds 에 없는 사람(나간 구성원)의 영상도 뒤에 붙여 보여 준다.
  * logs 는 찍은 시각 순서여야 한다.
  */
-fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours: Int, zone: ZoneId): List<RecapScene> {
+fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours: Int, zone: ZoneId): List<RecapStep> {
     val videos = logs.filter { it.mediaType == "video" && it.mediaPath != null }
     val people = memberIds + videos.map { it.authorId }.distinct().filterNot { it in memberIds }
+    var lastMap: RecapMapScene? = null
     return groupByWindows(videos, intervalHours, zone).flatMap { window ->
         val byAuthor = window.logs.groupBy { it.authorId }
+
+        // 지도 장면: 구성원마다 이 시간대 첫 위치
+        val here = people.withIndex().mapNotNull { (index, uid) ->
+            byAuthor[uid]?.firstNotNullOfOrNull { it.location }?.let { Triple(uid, index, it) }
+        }
+        val mapScene = if (here.isEmpty()) null else {
+            val before = lastMap?.pins.orEmpty().filter { it.to != null }.associateBy { it.uid }
+            val pins = here.map { (uid, index, point) -> RecapPin(uid, index, before[uid]?.to, point) } +
+                before.values.filter { old -> here.none { it.first == old.uid } }
+                    .map { RecapPin(it.uid, it.colorIndex, it.to, null) }
+            RecapMapScene(
+                startMinute = window.startMinute,
+                fromMinute = lastMap?.startMinute,
+                pins = pins,
+                groups = groupNearby(here.map { it.first to it.third }),
+            ).also { lastMap = it }
+        }
+
+        // 영상 장면들
         val count = { uid: String -> byAuthor[uid]?.size ?: 0 }
         val lanes = people.withIndex()
             .sortedWith(compareByDescending<IndexedValue<String>> { count(it.value) }.thenBy { it.index })
             .take(RECAP_MAX_CLIPS)
             .sortedBy { it.index }
         val rounds = lanes.maxOfOrNull { count(it.value) } ?: 0
-        (0 until rounds).map { round ->
+        listOfNotNull(mapScene) + (0 until rounds).map { round ->
             RecapScene(
                 startMinute = window.startMinute,
                 endMinute = window.endMinute,
@@ -318,6 +371,28 @@ fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours
             )
         }
     }
+}
+
+/**
+ * 같은 건물(GROUP_METERS 안)에 있는 사람끼리 묶는다. 순서대로 보면서, 앞에서 만든 묶음의 첫 사람과 가까우면 그 묶음에 넣고
+ * 아니면 새 묶음을 만든다(첫 사람 기준이라 묶음이 끝없이 길게 이어지지 않는다).
+ */
+internal fun groupNearby(points: List<Pair<String, GeoPoint>>): List<List<String>> {
+    val groups = mutableListOf<MutableList<Pair<String, GeoPoint>>>()
+    points.forEach { p ->
+        val group = groups.firstOrNull { distanceMeters(it.first().second, p.second) <= GROUP_METERS }
+        if (group != null) group += p else groups += mutableListOf(p)
+    }
+    return groups.map { g -> g.map { it.first } }
+}
+
+/** 두 좌표 사이 거리(미터, 지구를 공으로 보고 계산) */
+internal fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {
+    val r = 6_371_000.0
+    val dLat = Math.toRadians(b.lat - a.lat)
+    val dLng = Math.toRadians(b.lng - a.lng)
+    val h = sin(dLat / 2).pow(2) + cos(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * sin(dLng / 2).pow(2)
+    return 2 * r * asin(sqrt(h.coerceIn(0.0, 1.0)))
 }
 
 /** 날짜 상자로 넘겨 볼 수 있는 최대 일수(날짜가 잘못 저장돼도 목록이 끝없이 길어지지 않게) */

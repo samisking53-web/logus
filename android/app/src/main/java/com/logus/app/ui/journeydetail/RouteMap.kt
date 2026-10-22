@@ -48,7 +48,7 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 // L01 위치 확인과 같은 지도(오픈스트리트맵 데이터, OpenFreeMap 타일, 키 없음)
-private const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+internal const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val LINE_SOURCE = "route-lines"
 private const val PIN_SOURCE = "route-pins"
 
@@ -64,36 +64,11 @@ private const val SINGLE_PIN_ZOOM = 15.0
  */
 @Composable
 fun RouteMap(routes: List<MemberRoute>, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val density = LocalDensity.current.density
-    val mapView = remember {
-        MapLibre.getInstance(context)
-        // TextureView 방식: 둥근 모서리 상자 안에 지도가 잘려 보인다
-        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, options).apply { onCreate(null) }
-    }
+    val mapView = rememberLifecycleMapView()
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
 
-    DisposableEffect(lifecycle, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
-                else -> Unit
-            }
-        }
-        lifecycle.addObserver(observer) // 지금 상태(시작·재개)까지의 이벤트가 바로 들어온다
-        onDispose {
-            lifecycle.removeObserver(observer)
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
-            mapView.onDestroy()
-        }
-    }
     LaunchedEffect(mapView) {
         mapView.getMapAsync { m ->
             m.uiSettings.isRotateGesturesEnabled = false
@@ -159,6 +134,40 @@ fun RouteMap(routes: List<MemberRoute>, modifier: Modifier = Modifier) {
         }
     }
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+/**
+ * 화면 생명주기(시작·멈춤)에 맞춰 켜고 끄는 MapLibre 지도(MapView 규칙, L01 과 같은 방식). 화면을 떠나면 정리한다.
+ * TextureView 방식이라 둥근 모서리 상자 안에 지도가 잘려 보인다. S16 추억 지도·S17 DAY RECAP 지도 장면이 함께 쓴다.
+ */
+@Composable
+internal fun rememberLifecycleMapView(): MapView {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val mapView = remember {
+        MapLibre.getInstance(context)
+        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+        MapView(context, options).apply { onCreate(null) }
+    }
+    DisposableEffect(lifecycle, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer) // 지금 상태(시작·재개)까지의 이벤트가 바로 들어온다
+        onDispose {
+            lifecycle.removeObserver(observer)
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
+            mapView.onDestroy()
+        }
+    }
+    return mapView
 }
 
 /** 번호 핀 그림: 구성원 색 동그라미 + 흰 테두리 + 흰 숫자(26dp) */
