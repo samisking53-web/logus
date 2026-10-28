@@ -11,6 +11,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -104,6 +106,7 @@ class RecapExporter(
             // 1) 영상 파일 받기(전체의 30%)
             val videoLogs = steps.filterIsInstance<RecapScene>().flatMap { s -> s.clips.mapNotNull { it.log } }.distinctBy { it.id }
             val files = mutableMapOf<String, File>()
+            val withSound = mutableSetOf<String>() // 소리가 들어 있는 영상(마이크를 거절하고 찍은 영상은 소리가 없다)
             val durations = mutableMapOf<String, Long>()
             videoLogs.forEachIndexed { i, log ->
                 val file = File(workDir, "${log.id}.mp4")
@@ -112,6 +115,7 @@ class RecapExporter(
                 if (duration != null) {
                     files[log.id] = file
                     durations[log.id] = duration
+                    if (withContext(Dispatchers.IO) { hasAudioTrack(file) }) withSound += log.id
                 }
                 onProgress(0.3f * (i + 1) / videoLogs.size)
             }
@@ -132,8 +136,16 @@ class RecapExporter(
 
             // 4) 합치기
             val output = File(workDir, "${info.fileStem}.mp4")
-            val composition = buildComposition(scenes, files, RecapOverlay(context, info, scenes, members, avatars, cameras, snapshots))
-            runTransformer(composition, output) { onProgress(0.35f + 0.6f * it) }
+            fun overlay() = RecapOverlay(context, info, scenes, members, avatars, cameras, snapshots)
+            try {
+                runTransformer(buildComposition(scenes, files, withSound, overlay(), sound = true), output) { onProgress(0.35f + 0.6f * it) }
+            } catch (e: ExportException) {
+                // 소리 때문에 실패하는 폰이 있을 수 있어서, 소리 없이 한 번 더 만든다
+                Log.w(TAG, "소리 넣어 만들기 실패, 소리 없이 다시 만든다", e)
+                output.delete()
+                onProgress(0.35f)
+                runTransformer(buildComposition(scenes, files, withSound, overlay(), sound = false), output) { onProgress(0.35f + 0.6f * it) }
+            }
 
             // 5) 갤러리에 저장
             val uri = withContext(Dispatchers.IO) { saveToGallery(output, info.fileStem) }
@@ -155,8 +167,28 @@ class RecapExporter(
         }
     }.getOrNull()
 
-    /** 칸 3줄의 영상 줄을 만들어 겹치고, 위에 덧그림(overlay)을 얹은 합성 */
-    private suspend fun buildComposition(scenes: List<ExportScene>, files: Map<String, File>, overlay: RecapOverlay): Composition {
+    private fun hasAudioTrack(file: File): Boolean = runCatching {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(file.absolutePath)
+            (0 until extractor.trackCount).any { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+        } finally {
+            extractor.release()
+        }
+    }.getOrDefault(false)
+
+    /**
+     * 칸 3줄의 영상 줄(소리 없이 화면만)을 만들어 겹치고, 위에 덧그림(overlay)을 얹은 합성.
+     * sound 면 소리 전용 줄을 하나 더 둔다: 장면마다 영상이 있는 칸 중 맨 위 영상의 소리, 소리가 없으면 조용한 소리(silence.wav).
+     * (그림으로 시작하는 줄에 소리를 억지로 넣는 방법은 여러 줄을 합칠 때 멈추는 경우가 있어서 쓰지 않는다)
+     */
+    private suspend fun buildComposition(
+        scenes: List<ExportScene>,
+        files: Map<String, File>,
+        withSound: Set<String>,
+        overlay: RecapOverlay,
+        sound: Boolean,
+    ): Composition {
         val fillers = mutableMapOf<Int, Uri>()
         suspend fun filler(height: Int): Uri = fillers.getOrPut(height) {
             withContext(Dispatchers.IO) {
@@ -180,12 +212,12 @@ class RecapExporter(
                             .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setEndPositionMs(scene.durationMs).build())
                             .build(),
                     )
-                        .setRemoveAudio(lane != scene.audioLane) // 소리는 영상이 있는 칸 중 맨 위만
+                        .setRemoveAudio(true) // 소리는 아래 소리 전용 줄에서
                         .setEffects(Effects(emptyList(), listOf(laneSize(height))))
                         .build()
                 } else {
                     // 칸이 비거나(검은 화면) 칸이 없는 때: 검은 그림을 장면 길이만큼
-                    EditedMediaItem.Builder(MediaItem.Builder().setUri(filler(height)).setImageDurationMs(scene.durationMs).build())
+                    EditedMediaItem.Builder(MediaItem.Builder().setUri(filler(height)).setMimeType(MimeTypes.IMAGE_PNG).setImageDurationMs(scene.durationMs).build())
                         .setFrameRate(ReelLayout.FRAME_RATE)
                         .setRemoveAudio(true)
                         .setEffects(Effects(emptyList(), listOf(laneSize(height))))
@@ -194,11 +226,53 @@ class RecapExporter(
             }
             EditedMediaItemSequence(items)
         }
-        return Composition.Builder(sequences)
+
+        // 소리 전용 줄(영상 칸 줄 뒤에 둬서 칸 번호 0~2 는 그대로)
+        val soundSource = scenes.map { scene ->
+            val clip = scene.audioLane?.let { (scene.step as? RecapScene)?.clips?.getOrNull(it)?.log }
+            clip?.takeIf { it.id in withSound }?.let { files[it.id] }
+        }
+        val audioSequence = if (sound && soundSource.any { it != null }) {
+            val silence = withContext(Dispatchers.IO) { writeSilence(scenes.maxOf { it.durationMs }) }
+            EditedMediaItemSequence(
+                scenes.mapIndexed { i, scene ->
+                    val clipping = MediaItem.ClippingConfiguration.Builder().setEndPositionMs(scene.durationMs).build()
+                    val source = soundSource[i]
+                    if (source != null) {
+                        EditedMediaItem.Builder(MediaItem.Builder().setUri(Uri.fromFile(source)).setClippingConfiguration(clipping).build())
+                            .setRemoveVideo(true)
+                            .build()
+                    } else {
+                        EditedMediaItem.Builder(
+                            MediaItem.Builder().setUri(Uri.fromFile(silence)).setMimeType(MimeTypes.AUDIO_WAV).setClippingConfiguration(clipping).build(),
+                        ).build()
+                    }
+                },
+            )
+        } else {
+            null
+        }
+        return Composition.Builder(listOfNotNull(*sequences.toTypedArray(), audioSequence))
             .setVideoCompositorSettings(LaneCompositorSettings(scenes))
             .setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay)))))
-            .experimentalSetForceAudioTrack(true) // 소리 없는 장면(지도·검은 화면)은 조용한 소리로 채운다
             .build()
+    }
+
+    /** 조용한 소리 파일(48kHz, 1채널, 16비트 WAV). 소리 없는 장면(지도·검은 화면)을 채운다 */
+    private fun writeSilence(durationMs: Long): File {
+        val rate = 48_000
+        val dataBytes = (rate * durationMs / 1000).toInt() * 2
+        val file = File(workDir, "silence.wav")
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + dataBytes); put("WAVE".toByteArray())
+            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(1); putInt(rate); putInt(rate * 2); putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(dataBytes)
+        }
+        FileOutputStream(file).use { out ->
+            out.write(header.array())
+            out.write(ByteArray(dataBytes))
+        }
+        return file
     }
 
     /** 칸 크기로 맞추고 넘치는 부분은 가운데를 잘라 꽉 채운다(앱 재생 화면과 같게) */

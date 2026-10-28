@@ -226,6 +226,17 @@ fun RecapExportDialogs(state: RecapExportState, onCancel: () -> Unit, onDismiss:
         is RecapExportState.Failed -> ExportDialog(onDismiss = onDismiss) {
             DialogTitle("영상을 만들지 못했어요")
             DialogBody(state.message)
+            // 원인 찾기용 오류 이름(이 화면을 캡처해 보내면 고칠 수 있다)
+            state.detail?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(18.dp))
             OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 Text("확인", color = LogUsColors.primaryStrong, fontWeight = FontWeight.Bold)

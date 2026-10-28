@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.transformer.ExportException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,8 @@ sealed interface RecapExportState {
     data object Idle : RecapExportState
     data class Working(val progress: Float) : RecapExportState
     data class Done(val uri: Uri) : RecapExportState
-    data class Failed(val message: String) : RecapExportState
+    /** detail: 원인을 찾기 위한 오류 이름(팝업 아래 작은 글자. 팀원이 캡처해 개발에 쓴다) */
+    data class Failed(val message: String, val detail: String? = null) : RecapExportState
 }
 
 /**
@@ -54,6 +56,7 @@ class RecapExportViewModel(app: Application) : AndroidViewModel(app) {
                 Log.w(TAG, "DAY RECAP 영상 만들기 실패", e)
                 RecapExportState.Failed(
                     e.message?.takeIf { it.contains("인터넷") } ?: "영상을 만들지 못했어요. 잠시 뒤 다시 해 주세요.",
+                    detail = errorDetail(e),
                 )
             }
         }
@@ -69,6 +72,14 @@ class RecapExportViewModel(app: Application) : AndroidViewModel(app) {
     /** 완료·실패 팝업 닫기 */
     fun dismiss() {
         if (_state.value !is RecapExportState.Working) _state.value = RecapExportState.Idle
+    }
+
+    /** 오류 이름과 원인(가장 안쪽 원인까지)을 한 줄로: "ERROR_CODE_… · IllegalStateException: …" */
+    private fun errorDetail(e: Exception): String {
+        val code = (e as? ExportException)?.errorCodeName
+        var root: Throwable = e
+        while (root.cause != null && root.cause !== root) root = root.cause!!
+        return listOfNotNull(code, "${root::class.java.simpleName}: ${root.message.orEmpty().take(200)}").joinToString(" · ")
     }
 
     private fun fileStem(day: LocalDate) = "LOGUS_DAYRECAP_${day}_${System.currentTimeMillis() % 100000}"
