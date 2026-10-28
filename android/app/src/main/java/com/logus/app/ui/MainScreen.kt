@@ -361,6 +361,8 @@ fun MainScreen(
                         },
                         onLoadMore = myLogViewModel::loadMore,
                         onRetry = { myLogViewModel.load(uid, force = true) },
+                        onHide = myLogViewModel::hide,
+                        onMessageShown = myLogViewModel::messageShown,
                         coverUrl = myLogViewModel::coverUrl,
                     )
                 }

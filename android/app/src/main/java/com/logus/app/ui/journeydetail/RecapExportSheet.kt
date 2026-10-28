@@ -120,7 +120,7 @@ private fun ExportOption(
             Box(
                 Modifier
                     .size(44.dp)
-                    .background(if (filled) Primary else LogUsColors.profileBox, CircleShape),
+                    .background(if (filled) Primary else LogUsColors.iconCircle, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -256,7 +256,7 @@ private fun CircleIcon(content: @Composable () -> Unit) {
     Box(
         Modifier
             .size(64.dp)
-            .background(LogUsColors.profileBox, CircleShape),
+            .background(LogUsColors.iconCircle, CircleShape),
         contentAlignment = Alignment.Center,
     ) { content() }
     Spacer(Modifier.height(12.dp))

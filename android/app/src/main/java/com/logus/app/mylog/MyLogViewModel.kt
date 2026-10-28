@@ -26,6 +26,10 @@ data class MyLogUiState(
     /** 내 여정을 끝까지 다 읽었다 */
     val endReached: Boolean = false,
     val error: String? = null,
+    /** 휴지통으로 지우는 중인 여정 ID */
+    val deletingId: String? = null,
+    /** 잠깐 보여 줄 안내(지움 완료·실패) */
+    val message: String? = null,
 )
 
 /**
@@ -108,6 +112,35 @@ class MyLogViewModel(
         }
         return emptyList<Journey>() to cursor
     }
+
+    /**
+     * S14 휴지통 "마이로그에서 지우기": 내 마이로그에서만 뺀다(여정·기록·다른 구성원의 마이로그는 그대로).
+     * 서버에 표시(hiddenAt)를 남긴 뒤 목록에서 뺀다. 실패하면 목록은 그대로 두고 알려 준다.
+     */
+    fun hide(journey: Journey) {
+        val uid = loadedUid ?: return
+        if (_state.value.deletingId != null) return
+        _state.update { it.copy(deletingId = journey.id) }
+        viewModelScope.launch {
+            try {
+                journeys.hideFromMyLog(journey.id, uid)
+                coverUrls.remove(journey.id)
+                _state.update {
+                    it.copy(
+                        deletingId = null,
+                        journeys = it.journeys.filterNot { j -> j.id == journey.id },
+                        message = "마이로그에서 지웠어요",
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "마이로그에서 지우기 실패 (보안 규칙 배포 확인)", e)
+                _state.update { it.copy(deletingId = null, message = "지우지 못했어요. 인터넷 연결을 확인해 주세요.") }
+            }
+        }
+    }
+
+    /** 안내를 보여 준 뒤 */
+    fun messageShown() = _state.update { it.copy(message = null) }
 
     /** 카드의 대표 사진 주소: 그 여정에서 가장 먼저 찍은 기록의 대표 화면. 없거나 못 받으면 null(보라 그림) */
     suspend fun coverUrl(journeyId: String): String? {
