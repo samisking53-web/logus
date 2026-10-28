@@ -1,6 +1,7 @@
 package com.logus.app.journey
 
 import com.google.firebase.Firebase
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.firestore
@@ -43,6 +44,9 @@ data class InvitePreview(
     val notifyIntervalHours: Int?,
     val alreadyMember: Boolean,
 )
+
+/** 진행 중인 내 여정 하나 + 내 멤버 문서의 대표 사진 Storage 경로(내 홈에서만 보인다, 없으면 null → 기본 그림) */
+data class MyOngoingJourney(val journey: Journey, val coverPath: String?)
 
 /** 여정 구성원 한 명(홈의 동그란 이름 표시, 기록 보기의 작은 프로필). photoUrl 이 null 이면 기본 프로필(지구본) */
 data class Member(val uid: String, val nickname: String, val photoUrl: String? = null)
@@ -151,60 +155,39 @@ class JourneyRepository {
 
     /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */
     suspend fun loadJourney(journeyId: String): Journey? {
-        val doc = db.collection("journeys").document(journeyId).get().await()
-        return Journey(
-            id = doc.id,
-            name = doc.getString("name") ?: return null,
-            startDate = doc.getString("startDate") ?: return null,
-            endDate = doc.getString("endDate") ?: return null,
-            memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
-            memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
-            inviteCode = doc.getString("inviteCode"),
-            ownerId = doc.getString("ownerId"),
-            city = doc.getString("city").orEmpty(),
-        )
+        return db.collection("journeys").document(journeyId).get().await().toJourney()
     }
 
     /**
-     * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정. 없으면 null.
-     * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 5개만 읽고(비용 관리: limit),
-     * 그중 종료일이 오늘 이후이고 내가 "여정 마치기"를 누르지 않은 첫 여정을 고른다
-     * (마쳤는지는 내 멤버 문서의 finishedAt 으로 본다. 기간 안의 여정만 하나씩 확인해서 보통 읽기 1번이 더 든다).
+     * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정들(S01-A 홈에 모두 보여 준다). 없으면 빈 목록.
+     * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 limit 개만 읽고(비용 관리), 그중 종료일이 오늘 이후이고
+     * 내가 "여정 마치기"를 누르지 않은 여정만 남긴다. 기간 안의 여정마다 내 멤버 문서를 한꺼번에 읽어
+     * 마쳤는지(finishedAt)와 내 홈에서만 보이는 대표 사진(coverPath)을 함께 가져온다.
      * 색인: firestore.indexes.json 의 journeys(memberIds 포함 + startDate 내림차순)을 쓴다.
      */
-    suspend fun findOngoingJourney(uid: String, today: String): Journey? {
+    suspend fun findOngoingJourneys(uid: String, today: String, limit: Long = 10): List<MyOngoingJourney> = coroutineScope {
         val snap = db.collection("journeys")
             .whereArrayContains("memberIds", uid)
             .whereLessThanOrEqualTo("startDate", today)
             .orderBy("startDate", Query.Direction.DESCENDING)
-            .limit(5)
+            .limit(limit)
             .get()
             .await()
-        return snap.documents
-            .mapNotNull { doc ->
-                Journey(
-                    id = doc.id,
-                    name = doc.getString("name") ?: return@mapNotNull null,
-                    startDate = doc.getString("startDate") ?: return@mapNotNull null,
-                    endDate = doc.getString("endDate") ?: return@mapNotNull null,
-                    memberIds = (doc.get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
-                    memberCount = doc.getLong("memberCount")?.toInt() ?: 1,
-                    inviteCode = doc.getString("inviteCode"),
-                    ownerId = doc.getString("ownerId"),
-                    city = doc.getString("city").orEmpty(),
-                )
-            }
+        snap.documents
+            .mapNotNull { it.toJourney() }
             .filter { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
-            .firstOrNull { !isFinishedByMe(it.id, uid) }
+            .map { journey -> async { journey to myMemberDoc(journey.id, uid) } }
+            .awaitAll()
+            .filter { (_, me) -> me.get("finishedAt") == null }
+            .map { (journey, me) -> MyOngoingJourney(journey, me.getString("coverPath")) }
     }
 
-    /** 내가 이 여정에서 "여정 마치기"를 눌렀는지(내 멤버 문서에 finishedAt 이 있는지) */
-    private suspend fun isFinishedByMe(journeyId: String, uid: String): Boolean =
+    /** 이 여정의 내 멤버 문서(finishedAt: 여정 마치기, coverPath: 내 홈 여정 카드 대표 사진) */
+    private suspend fun myMemberDoc(journeyId: String, uid: String): DocumentSnapshot =
         db.collection("journeys").document(journeyId)
             .collection("members").document(uid)
             .get()
             .await()
-            .get("finishedAt") != null
 
     /**
      * N01 "여정 마치기"(날짜 상자 옆 다운로드 모양 버튼): 나에게만 여정을 끝낸다.
@@ -242,4 +225,19 @@ class JourneyRepository {
             }
             .awaitAll()
     }
+}
+
+/** journeys 문서 → Journey. 꼭 있어야 하는 칸(이름·기간)이 없으면 null */
+private fun DocumentSnapshot.toJourney(): Journey? {
+    return Journey(
+        id = id,
+        name = getString("name") ?: return null,
+        startDate = getString("startDate") ?: return null,
+        endDate = getString("endDate") ?: return null,
+        memberIds = (get("memberIds") as? List<*>)?.filterIsInstance<String>().orEmpty(),
+        memberCount = getLong("memberCount")?.toInt() ?: 1,
+        inviteCode = getString("inviteCode"),
+        ownerId = getString("ownerId"),
+        city = getString("city").orEmpty(),
+    )
 }

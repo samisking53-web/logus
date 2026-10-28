@@ -187,6 +187,24 @@ describe("멤버 문서", () => {
     // 마친 뒤에도 알림 주기는 바꿀 수 있다
     await assertSucceeds(updateDoc(ref, { notifyIntervalHours: 2 }));
   });
+
+  it("대표 사진: 본인 문서의 coverPath 만, 이 여정의 내 폴더 cover_시각.jpg 경로로 바꾼다(내 홈에서만 보임)", async () => {
+    const ref = doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", BOB);
+    await assertSucceeds(updateDoc(ref, { coverPath: `journeys/${JOURNEY_ID}/${BOB}/cover_1730000000000.jpg` }));
+    await assertSucceeds(updateDoc(ref, { coverPath: null }));
+    // 다른 사람 폴더·다른 여정·대표 사진이 아닌 파일·글자가 아닌 값은 거부
+    await assertFails(updateDoc(ref, { coverPath: `journeys/${JOURNEY_ID}/${ALICE}/cover_1.jpg` }));
+    await assertFails(updateDoc(ref, { coverPath: `journeys/otherJourney/${BOB}/cover_1.jpg` }));
+    await assertFails(updateDoc(ref, { coverPath: `journeys/${JOURNEY_ID}/${BOB}/video.mp4` }));
+    await assertFails(updateDoc(ref, { coverPath: 123 }));
+    // 다른 칸과 함께 바꾸거나, 다른 사람 문서는 거부
+    await assertFails(updateDoc(ref, { coverPath: `journeys/${JOURNEY_ID}/${BOB}/cover_2.jpg`, role: "owner" }));
+    await assertFails(
+      updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), {
+        coverPath: `journeys/${JOURNEY_ID}/${BOB}/cover_3.jpg`,
+      }),
+    );
+  });
 });
 
 describe("기록", () => {

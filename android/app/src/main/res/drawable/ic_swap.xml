@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 전환 모양(동그랗게 도는 두 화살표). S01-A 여정 카드 대표 사진 바꾸기 버튼. 색은 코드에서 tint 로 정한다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M19.5,10.5A7.5,7.5 0,0 0,6.2 7.2 M4.5,13.5A7.5,7.5 0,0 0,17.8 16.8 M5.2,3.8v3.9h3.9 M18.8,20.2v-3.9h-3.9" />
+</vector>

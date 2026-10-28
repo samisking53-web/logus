@@ -31,6 +31,11 @@ data class FeedWindow(
 /** N01 기록 보기 상태 */
 data class JourneyFeedUiState(
     val journeyId: String? = null,
+    /** 보고 있는 날(폰 날짜 기준). 처음엔 오늘, 날짜 상자 양쪽 〈 〉로 하루씩 옮긴다 */
+    val day: LocalDate = LocalDate.now(),
+    /** 〈 를 누를 수 있는지(여정 시작일보다 뒤인 날) / 〉 를 누를 수 있는지(오늘·여정 종료일보다 앞인 날) */
+    val canGoPrev: Boolean = false,
+    val canGoNext: Boolean = false,
     /** 처음 읽는 중 */
     val loading: Boolean = true,
     /** 오늘 기록을 시간대별로 나눈 것(아래로 갈수록 늦은 시간) */
@@ -41,7 +46,7 @@ data class JourneyFeedUiState(
     val members: Map<String, Member> = emptyMap(),
     /** 다음 쪽을 읽는 중 */
     val loadingMore: Boolean = false,
-    /** 오늘 기록을 끝까지 다 읽었다 */
+    /** 그날 기록을 끝까지 다 읽었다 */
     val endReached: Boolean = false,
     val error: String? = null,
     /** N03 저장 팝업의 "기록 N개"(이 여정 전체 기록 수). 세는 중이거나 못 세면 null */
@@ -57,7 +62,8 @@ const val DEFAULT_INTERVAL_HOURS = 2
 
 /**
  * N01~N03 기록 보기(스토리보드 v4 13쪽, 화면 목록의 S06 우리 기록): S01-A 여정 카드를 누르면 연다.
- * - 오늘(폰 날짜) 찍은 이 여정의 기록을 찍은 시각 순서로 30개씩 읽고, 아래로 내리면 다음 30개를 읽는다(비용 관리).
+ * - 그날(처음엔 오늘, 폰 날짜) 찍은 이 여정의 기록을 찍은 시각 순서로 30개씩 읽고, 아래로 내리면 다음 30개를 읽는다(비용 관리).
+ * - 날짜 상자 양쪽 〈 〉: 전날·다음날 기록으로 옮긴다(여정 시작일 ~ 오늘(종료일이 먼저면 종료일)까지).
  * - 공통 알림 간격(1·2·3시간)으로 시간대를 나눈다. 시작점은 오늘 첫 기록 시각을 10분 단위로 내린 시각
  *   (예: 첫 기록 09:24, 2시간 → 09:20 ~ 11:20, 11:20 ~ 13:20 …). 기록이 없는 시간대는 건너뛴다.
  * - 여정 저장(다운로드 모양 버튼 → N03 "저장하시겠습니까?" → 저장): 나에게만 여정을 끝낸다(내 멤버 문서 finishedAt).
@@ -77,22 +83,45 @@ class JourneyFeedViewModel(
     private var dayStart: Date = Date()
     private var dayEnd: Date = Date()
     private var loadJob: Job? = null
+    private var journey: Journey? = null
 
     /** 대표 화면 주소를 한 번 받으면 기억해 둔다(스크롤로 다시 보일 때 Storage 에 또 묻지 않게) */
     private val previewUrls = mutableMapOf<String, String?>()
 
     /** 화면을 열 때·기록을 올리고 돌아왔을 때: 오늘 기록을 처음부터 다시 읽는다 */
     fun open(journey: Journey) {
+        this.journey = journey
+        showDay(journey, lastDay(journey), reloadMembers = true)
+    }
+
+    /** 다시 시도(불러오기 실패 뒤): 보고 있던 날을 처음부터 다시 읽는다 */
+    fun reload() {
+        val journey = journey ?: return
+        showDay(journey, _state.value.day, reloadMembers = true)
+    }
+
+    /** 날짜 상자 〈(-1) 〉(+1): 전날·다음날 기록으로 옮긴다(여정 시작일 ~ 오늘 사이에서만) */
+    fun moveDay(delta: Long) {
+        val journey = journey ?: return
+        val target = _state.value.day.plusDays(delta)
+        if (target < firstDay(journey) || target > lastDay(journey)) return
+        showDay(journey, target, reloadMembers = false)
+    }
+
+    /** 그날(day) 기록을 처음부터 읽는다. reloadMembers 가 false 면(날짜만 옮길 때) 읽어 둔 구성원 프로필을 그대로 쓴다 */
+    private fun showDay(journey: Journey, day: LocalDate, reloadMembers: Boolean) {
         loadJob?.cancel()
         val zone = ZoneId.systemDefault()
-        val today = LocalDate.now(zone)
-        dayStart = Date.from(today.atStartOfDay(zone).toInstant())
-        dayEnd = Date.from(today.plusDays(1).atStartOfDay(zone).toInstant())
+        dayStart = Date.from(day.atStartOfDay(zone).toInstant())
+        dayEnd = Date.from(day.plusDays(1).atStartOfDay(zone).toInstant())
         val previous = _state.value.takeIf { it.journeyId == journey.id }
         loaded = emptyList()
         lastDoc = null
         _state.value = JourneyFeedUiState(
             journeyId = journey.id,
+            day = day,
+            canGoPrev = day > firstDay(journey),
+            canGoNext = day < lastDay(journey),
             loading = true,
             intervalHours = previous?.intervalHours ?: DEFAULT_INTERVAL_HOURS,
             members = previous?.members.orEmpty(),
@@ -101,9 +130,10 @@ class JourneyFeedViewModel(
             try {
                 val interval = runCatching { journeys.loadCommonNotifyInterval(journey) }.getOrNull()
                     ?: DEFAULT_INTERVAL_HOURS
-                val members = runCatching { journeys.loadMembers(journey.memberIds, limit = MAX_MEMBERS) }
-                    .getOrDefault(emptyList())
-                    .associateBy { it.uid }
+                val members = previous?.members?.takeIf { !reloadMembers && it.isNotEmpty() }
+                    ?: runCatching { journeys.loadMembers(journey.memberIds, limit = MAX_MEMBERS) }
+                        .getOrDefault(emptyList())
+                        .associateBy { it.uid }
                 val page = logs.loadLogs(journey.id, dayStart, dayEnd, after = null)
                 loaded = page.logs
                 lastDoc = page.last
@@ -117,10 +147,21 @@ class JourneyFeedViewModel(
                     )
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "오늘 기록 읽기 실패", e)
+                Log.w(TAG, "기록 읽기 실패", e)
                 _state.update { it.copy(loading = false, error = "기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.") }
             }
         }
+    }
+
+    /** 볼 수 있는 첫날: 여정 시작일(날짜를 읽지 못하면 오늘) */
+    private fun firstDay(journey: Journey): LocalDate =
+        runCatching { LocalDate.parse(journey.startDate) }.getOrNull()?.coerceAtMost(LocalDate.now()) ?: LocalDate.now()
+
+    /** 볼 수 있는 마지막 날: 오늘(여정 종료일이 오늘보다 앞이면 종료일) */
+    private fun lastDay(journey: Journey): LocalDate {
+        val today = LocalDate.now()
+        val end = runCatching { LocalDate.parse(journey.endDate) }.getOrNull() ?: return today
+        return minOf(today, end).coerceAtLeast(firstDay(journey))
     }
 
     /** 아래로 내려 끝에 가까워지면: 다음 30개를 읽어 이어 붙인다 */

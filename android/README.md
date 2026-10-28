@@ -27,14 +27,16 @@ android/
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
    ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users), 내 초대 코드(getInviteCode 함수)
-   ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
+   ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 여정 여러 개 S01-A·오류)
+   ├─ home/CoverPhoto*.kt       S01-A 여정 카드 대표 사진 선택 팝업 상태·저장(내 멤버 문서 coverPath, 내 홈에서만)
+   ├─ home/GalleryRepository.kt 대표 사진 팝업의 폰 사진첩 목록(MediaStore)
    ├─ home/JoinViewModel.kt     초대 코드 입력 팝업 → 코드 확인(previewInvite) → I01 → 참여(joinJourney) → 수락 완료 팝업 상태
    ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
    ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
    ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
-   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
+   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드(여러 개), 초대 코드 입력 팝업, 대표 사진 선택 팝업
    ├─ ui/feed/JourneyFeedScreen.kt  N01~N03 기록 보기(오늘 기록을 시간대별 카드로, 여정 마치기)
    ├─ feed/JourneyFeedViewModel.kt  기록 보기 상태(30개씩 읽기, 시간대 나누기, 여정 마치기)
    ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·3초 고정 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
@@ -76,6 +78,10 @@ android/
 - 여정을 만들면 카메라 대신 홈(오늘 시작이면 S01-A)으로 가는지
 - S01-A 여정 카드를 누르면 N01 기록 보기가 열리고, 오늘 올린 영상이 시간대별 카드(첫 장면·작은 프로필·시각)로 보이는지. 다운로드 모양 버튼 → "저장하시겠습니까?" 팝업(여정 이름·날짜·기록 수·인원) → "취소"면 그대로, "저장"이면 마이로그로 가고 홈이 S01 이 되는지
 - 폰 홈 화면의 앱 아이콘이 연보라 바탕 + 보라 지구 로고인지(바뀐 아이콘이 안 보이면 앱을 지웠다가 다시 설치)
+- 오늘이 기간 안인 여정이 둘 이상이면 S01-A 에 여정 카드가 모두 보이고(스크롤), "지금 기록하기" 버튼 없이 "새 여정 시작하기"·"초대 코드로 참여"만 있는지
+- 여정 카드 사진 오른쪽 위 전환 버튼 → "대표 사진 선택" 팝업(사진 접근 허용) → 사진 고르고 "이 사진으로 변경" → 내 홈 카드 사진만 바뀌는지(다른 구성원 홈은 그대로)
+- N01 날짜 상자 〈 〉로 전날·다음날 기록이 보이는지(여정 첫날·오늘에서는 화살표가 흐려짐)
+- S05 에서 영상을 누르면 소리까지 재생되는지, "+10코인" 문구
 
 ## 알아 둘 것
 - 로그인은 구글 계정만 쓴다(카카오는 쓰지 않기로 함).

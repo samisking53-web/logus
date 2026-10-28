@@ -9,6 +9,13 @@
     <!-- S04 앱 내 카메라: 영상 촬영(카메라)과 소리 녹음(마이크). 마이크를 거절하면 소리 없이 찍는다 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- S01-A 대표 사진 선택 팝업: 폰 사진첩 목록을 팝업 안에 보여 준다(고른 한 장만 줄여서 올린다).
+         안드로이드 13 이상은 사진만(READ_MEDIA_IMAGES), 14 이상은 "일부 사진만 허용"도, 12 이하는 저장소 읽기 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <!-- 카메라가 없는 기기도 앱을 설치할 수 있게(카메라 화면만 못 쓴다) -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 

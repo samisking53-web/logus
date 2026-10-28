@@ -26,12 +26,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.logus.app.R
 import com.logus.app.auth.Profile
 import com.logus.app.home.HomeUiState
+import com.logus.app.home.OngoingCard
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ErrorMessage
@@ -48,15 +54,16 @@ import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PrimaryStrong
 
-// S01 홈 / S01-A 여행 기간 중 홈(지금 기록하기)
+// S01 홈 / S01-A 여행 기간 중 홈
 /**
- * 홈 화면. 진행 중인 여정이 없으면 S01, 오늘이 여행 기간 안이면 S01-A 를 보여 준다.
+ * 홈 화면. 진행 중인 여정이 없으면 S01, 오늘이 여행 기간 안인 여정이 있으면 S01-A 를 보여 준다.
  * - S01: 제목 → 프로필 상자 → "현재 진행중인 여정이 없어요!" → 새 여정 시작하기 / 초대 코드로 참여
- * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 → 지금 기록하기(보라) → 새 여정 시작하기(조금 밝은 보라)
- *   → 초대 코드로 참여(흰색). 세 버튼은 크기가 같고, 화면이 길어지면 아래로 스크롤된다.
+ * - S01-A: 프로필 상자(작게) → 진행 중인 여정 카드 **모두**(여러 개면 "진행 중인 여정 N개"와 함께 아래로 이어진다)
+ *   → 새 여정 시작하기(조금 밝은 보라) → 초대 코드로 참여(흰색). 화면이 길어지면 아래로 스크롤된다.
+ *   "지금 기록하기" 버튼은 홈에 두지 않는다(2026-10-28 팀 결정): 여정 카드 → N01 기록 보기의 "지금 기록하기"로 찍는다.
  * "새 여정 시작하기"는 S02, "초대 코드로 참여"는 6자리 초대 코드 입력 팝업(링크는 쓰지 않음)을 연다.
- * 여정 카드의 친구 추가(사람+) 버튼은 "여정에 초대하기" 팝업을 연다(MainScreen 이 연결).
- * "지금 기록하기"는 S04 앱 내 카메라를 연다(MainScreen 이 연결). "사진 수정"은 다음 작업에서 화면을 만들며 연결한다.
+ * 여정 카드: 누르면 N01 기록 보기, 사람+ 버튼은 "여정에 초대하기" 팝업, 사진 위 전환 버튼은 대표 사진 선택 팝업(MainScreen 이 연결).
+ * coverUrl: 대표 사진 Storage 경로 → 내려받기 주소(HomeViewModel 이 한 번 받으면 기억한다).
  */
 @Composable
 fun HomeScreen(
@@ -66,9 +73,10 @@ fun HomeScreen(
     onEditPhoto: () -> Unit = {},
     onNewJourney: () -> Unit = {},
     onJoinWithCode: () -> Unit = {},
-    onRecordNow: () -> Unit = {},
-    onInviteToJourney: () -> Unit = {},
-    onOpenJourney: () -> Unit = {},
+    onInviteToJourney: (Journey) -> Unit = {},
+    onOpenJourney: (Journey) -> Unit = {},
+    onChangeCover: (OngoingCard) -> Unit = {},
+    coverUrl: suspend (String) -> String? = { null },
 ) {
     Column(
         Modifier
@@ -83,23 +91,35 @@ fun HomeScreen(
                 // S01-A
                 Spacer(Modifier.height(8.dp))
                 ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto)
-                Spacer(Modifier.height(32.dp))
-                JourneyCard(
-                    journey = state.journey,
-                    members = state.members,
-                    myNickname = profile.nickname,
-                    onInviteFriends = onInviteToJourney, // 여정에 초대하기 팝업(MainScreen)
-                    onOpen = onOpenJourney, // 카드를 누르면 N01 기록 보기(MainScreen)
-                )
-                Spacer(Modifier.height(36.dp))
-                ActionButton(
-                    icon = painterResource(R.drawable.ic_camera),
-                    title = "지금 기록하기",
-                    subtitle = null,
-                    filled = true,
-                    onClick = onRecordNow,
-                )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(if (state.journeys.size > 1) 24.dp else 32.dp))
+                if (state.journeys.size > 1) {
+                    Text(
+                        "진행 중인 여정 ${state.journeys.size}개",
+                        color = LogUsColors.primaryStrong,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                state.journeys.forEachIndexed { index, card ->
+                    if (index > 0) Spacer(Modifier.height(16.dp))
+                    key(card.journey.id) {
+                        val cover by produceState<String?>(initialValue = null, card.coverPath) {
+                            value = card.coverPath?.let { coverUrl(it) }
+                        }
+                        JourneyCard(
+                            journey = card.journey,
+                            members = card.members,
+                            myNickname = profile.nickname,
+                            coverPhoto = cover,
+                            onInviteFriends = { onInviteToJourney(card.journey) }, // 여정에 초대하기 팝업(MainScreen)
+                            onOpen = { onOpenJourney(card.journey) }, // 카드를 누르면 N01 기록 보기(MainScreen)
+                            onChangeCover = { onChangeCover(card) }, // 대표 사진 선택 팝업(MainScreen)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
                 // S01 과 같은 두 버튼. 새 여정은 조금 밝은 보라(그림 상자는 기본 보라)
                 ActionButton(
                     icon = rememberVectorPainter(Icons.Filled.Add),
@@ -276,8 +296,16 @@ private fun HomeS01APreview() {
         HomeScreen(
             previewProfile,
             HomeUiState.Ongoing(
-                Journey("j1", "우리의 포르투", "2026-09-24", "2026-09-26", listOf("a", "b", "c", "d"), 4),
-                listOf(Member("a", "성연"), Member("b", "민지"), Member("c", "수아"), Member("d", "현우")),
+                listOf(
+                    OngoingCard(
+                        Journey("j1", "우리의 포르투", "2026-09-24", "2026-09-26", listOf("a", "b", "c", "d"), 4),
+                        listOf(Member("a", "성연"), Member("b", "민지"), Member("c", "수아"), Member("d", "현우")),
+                    ),
+                    OngoingCard(
+                        Journey("j2", "리스본 산책", "2026-09-25", "2026-09-27", listOf("a", "b"), 2),
+                        listOf(Member("a", "성연"), Member("b", "민지")),
+                    ),
+                ),
             ),
             onRetry = {},
         )

@@ -22,6 +22,7 @@ import com.logus.app.auth.Profile
 import com.logus.app.feed.JourneyFeedViewModel
 import com.logus.app.home.HomeUiState
 import com.logus.app.profile.ProfileEditViewModel
+import com.logus.app.home.CoverPhotoViewModel
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.journey.Journey
@@ -34,6 +35,7 @@ import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.feed.JourneyFeedScreen
+import com.logus.app.ui.home.CoverPhotoDialog
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.home.ProfileEditDialog
@@ -64,6 +66,7 @@ fun MainScreen(
     locationPickerViewModel: LocationPickerViewModel = viewModel(),
     feedViewModel: JourneyFeedViewModel = viewModel(),
     profileEditViewModel: ProfileEditViewModel = viewModel(),
+    coverPhotoViewModel: CoverPhotoViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -85,6 +88,11 @@ fun MainScreen(
 
     val ongoing = homeState as? HomeUiState.Ongoing
     val myInviteCode by homeViewModel.myInviteCode.collectAsStateWithLifecycle()
+    // S01-A 에서 고른 여정(카드를 누르거나 카드의 버튼을 누른 여정). 기록 보기·카메라·초대 팝업은 이 여정으로 연다
+    var activeJourneyId by rememberSaveable { mutableStateOf<String?>(null) }
+    val active: Journey? = ongoing?.journeys?.firstOrNull { it.journey.id == activeJourneyId }?.journey
+    // 대표 사진 선택 팝업(S01-A 여정 카드 사진 위 전환 버튼)
+    val coverState by coverPhotoViewModel.state.collectAsStateWithLifecycle()
 
     // S01-A 여정 카드의 친구 추가 버튼 → 여정에 초대하기 팝업(뒤는 S01-A 그대로)
     var invitingToJourney by rememberSaveable { mutableStateOf(false) }
@@ -113,7 +121,7 @@ fun MainScreen(
             capturing = false
             mapOpen = false
             // 기록 보기에서 "지금 기록하기"로 왔으면 기록 보기로 돌아가서 방금 올린 기록이 보이게 다시 읽는다
-            if (viewingFeed) ongoing?.let { feedViewModel.open(it.journey) }
+            if (viewingFeed) active?.let { feedViewModel.open(it) }
             val message = when {
                 uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
                 uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
@@ -128,18 +136,25 @@ fun MainScreen(
         mapOpen = false
         capturing = true
     }
-    // 홈을 다시 읽는 중이거나 진행 중인 여정이 없어지면 팝업·카메라를 닫는다(나중에 갑자기 다시 뜨지 않게)
-    LaunchedEffect(homeState) {
-        if (homeState !is HomeUiState.Ongoing) {
+    // 홈을 다시 읽는 중이거나 고른 여정이 진행 중 목록에서 없어지면 팝업·카메라를 닫는다(나중에 갑자기 다시 뜨지 않게)
+    LaunchedEffect(homeState, activeJourneyId) {
+        if (active == null) {
             invitingToJourney = false
             capturing = false
             viewingFeed = false
         }
     }
     // 기록 보기를 다시 그릴 때(화면 회전·앱 복귀 등) 다른 여정의 기록이 남아 있으면 이 여정으로 다시 읽는다
-    LaunchedEffect(viewingFeed, ongoing?.journey?.id) {
-        val journey = ongoing?.journey ?: return@LaunchedEffect
+    LaunchedEffect(viewingFeed, active?.id) {
+        val journey = active ?: return@LaunchedEffect
         if (viewingFeed && feedState.journeyId != journey.id) feedViewModel.open(journey)
+    }
+    // 대표 사진을 저장하면: 그 여정 카드 사진만 바꾸고 팝업을 닫는다(내 홈에서만 바뀐다)
+    LaunchedEffect(coverState.savedPath) {
+        val path = coverState.savedPath ?: return@LaunchedEffect
+        coverState.journeyId?.let { homeViewModel.setCover(it, path) }
+        coverPhotoViewModel.close()
+        Toast.makeText(context, "대표 사진을 바꿨어요", Toast.LENGTH_SHORT).show()
     }
     // N03 저장 팝업에서 "저장"이 끝나면: 나에게만 여정이 끝났으니 홈을 다시 읽고(S01) 마이로그로 간다
     LaunchedEffect(feedState.finished) {
@@ -172,13 +187,13 @@ fun MainScreen(
                             Toast.LENGTH_LONG,
                         ).show()
                     }
-                    // 홈을 다시 읽는다: 오늘이 여행 기간 안이면 S01-A(지금 기록하기), 아니면 S01.
-                    // 카메라는 자동으로 열지 않는다(2026-10-09 팀 결정). 홈의 "지금 기록하기"로만 연다.
+                    // 홈을 다시 읽는다: 오늘이 여행 기간 안이면 S01-A(진행 중 여정 카드들), 아니면 S01.
+                    // 카메라는 자동으로 열지 않는다(2026-10-09 팀 결정). 여정 카드 → N01 "지금 기록하기"로 연다.
                     homeViewModel.load(uid, force = true)
                 },
             )
         }
-    } else if (capturing && ongoing != null) {
+    } else if (capturing && active != null) {
         // S04 앱 내 카메라 → 촬영을 마치면 S05 기록 올리기(둘 다 전체 화면, 하단 탭 없음)
         val video = captureState.videoFile
         Box(
@@ -206,7 +221,7 @@ fun MainScreen(
                         LocationPickerSheet(
                             state = pickerState,
                             onOpen = { ctx, fine, coarse ->
-                                locationPickerViewModel.open(ctx, uploadState.place, fine, coarse, ongoing.journey.city)
+                                locationPickerViewModel.open(ctx, uploadState.place, fine, coarse, active.city)
                             },
                             onClose = { mapOpen = false },
                             onRecenter = locationPickerViewModel::recenterToGps,
@@ -223,13 +238,13 @@ fun MainScreen(
                     onThemeDone = uploadViewModel::commitThemeInput,
                     onRemoveTheme = uploadViewModel::removeTheme,
                     onUpload = {
-                        uploadViewModel.upload(ongoing.journey.id, uid, video, captureState.capturedAtMillis)
+                        uploadViewModel.upload(active.id, uid, video, captureState.capturedAtMillis)
                     },
                 )
             } else {
-                // S04: 뒤로 가기 → 찍던 영상은 버리고 홈(S01-A)으로
+                // S04: 뒤로 가기 → 찍던 영상은 버리고 N01 기록 보기로
                 CaptureScreen(
-                    journeyName = ongoing.journey.name,
+                    journeyName = active.name,
                     state = captureState,
                     onBack = {
                         captureViewModel.discardAndStop()
@@ -239,7 +254,7 @@ fun MainScreen(
                 )
             }
         }
-    } else if (viewingFeed && ongoing != null) {
+    } else if (viewingFeed && active != null) {
         // N01~N03 기록 보기(전체 화면, 하단 탭 없음). 뒤로 가기 → S01-A
         BackHandler { viewingFeed = false }
         Box(
@@ -249,14 +264,15 @@ fun MainScreen(
                 .navigationBarsPadding(),
         ) {
             JourneyFeedScreen(
-                journey = ongoing.journey,
+                journey = active,
                 state = feedState,
                 onBack = { viewingFeed = false },
-                onRecordNow = { openCapture(ongoing.journey) }, // → S04, 다 올리면 기록 보기로 돌아온다
+                onRecordNow = { openCapture(active) }, // → S04, 다 올리면 기록 보기로 돌아온다
+                onMoveDay = feedViewModel::moveDay, // 날짜 상자 〈 〉: 전날·다음날 기록
                 onFinish = { feedViewModel.finish(uid) }, // N03 저장 팝업의 "저장"
                 onAskSave = feedViewModel::loadRecordCount,
                 onLoadMore = feedViewModel::loadMore,
-                onRetry = { feedViewModel.open(ongoing.journey) },
+                onRetry = { feedViewModel.reload() },
                 previewUrl = feedViewModel::previewUrl,
             )
         }
@@ -286,20 +302,22 @@ fun MainScreen(
                             creatingJourney = true
                         },
                         onJoinWithCode = joinViewModel::openDialog,
-                        // S01-A "지금 기록하기" → S04 앱 내 카메라
-                        onRecordNow = { ongoing?.let { openCapture(it.journey) } },
-                        onInviteToJourney = {
+                        // S01-A 여정 카드의 사람+ 버튼 → 그 여정의 여정에 초대하기 팝업
+                        onInviteToJourney = { journey ->
+                            activeJourneyId = journey.id
                             invitingToJourney = true
-                            homeViewModel.refreshOngoing() // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
-                            ongoing?.let { homeViewModel.loadMyInviteCode(uid, it.journey) } // 이 여정에서 쓰는 내 초대 코드
+                            homeViewModel.refreshOngoing(journey.id) // 그사이 누가 참여했을 수 있으니 인원수를 새로 읽는다
+                            homeViewModel.loadMyInviteCode(uid, journey) // 이 여정에서 쓰는 내 초대 코드
                         },
-                        // S01-A 여정 카드 → N01 기록 보기
-                        onOpenJourney = {
-                            ongoing?.let {
-                                feedViewModel.open(it.journey)
-                                viewingFeed = true
-                            }
+                        // S01-A 여정 카드 → 그 여정의 N01 기록 보기("지금 기록하기"는 여기에 있다)
+                        onOpenJourney = { journey ->
+                            activeJourneyId = journey.id
+                            feedViewModel.open(journey)
+                            viewingFeed = true
                         },
+                        // S01-A 여정 카드 사진 위 전환 버튼 → 대표 사진 선택 팝업
+                        onChangeCover = { card -> coverPhotoViewModel.open(context, card.journey.id, card.coverPath) },
+                        coverUrl = homeViewModel::coverUrl,
                     )
                     MainTab.EXPLORE -> ExploreScreen()
                     MainTab.MY_LOG -> MyLogScreen(onSignOut = onSignOut)
@@ -330,19 +348,30 @@ fun MainScreen(
             )
         }
         // 여정에 초대하기 팝업(S01-A 위): 여정 이름·현재 인원·여정의 초대 코드(늘 같은 코드)·복사·공유
-        if (invitingToJourney && ongoing != null && tab == MainTab.HOME && invitePreview == null) {
-            val myCode = myInviteCode.takeIf { it.journeyId == ongoing.journey.id }
+        if (invitingToJourney && active != null && tab == MainTab.HOME && invitePreview == null) {
+            val myCode = myInviteCode.takeIf { it.journeyId == active.id }
             JourneyInviteDialog(
-                journeyName = ongoing.journey.name,
-                memberCount = ongoing.journey.memberCount,
+                journeyName = active.name,
+                memberCount = active.memberCount,
                 inviteCode = myCode?.code,
                 loadingCode = myCode?.loading ?: true,
-                endDate = ongoing.journey.endDate,
+                endDate = active.endDate,
                 inviterName = profile.nickname,
                 onClose = { invitingToJourney = false },
             )
         }
-        // 초대 수락 완료 팝업(I01 위). "홈으로 가기" → 방금 참여한 여정을 S01-A 로 보여 준다("지금 기록하기")
+        // 대표 사진 선택 팝업(S01-A 위). 고른 사진은 내 홈에서만 보인다
+        if (coverState.open && tab == MainTab.HOME && invitePreview == null) {
+            CoverPhotoDialog(
+                state = coverState,
+                onPermissionResult = { coverPhotoViewModel.onPermissionResult(context) },
+                onSelectAlbum = coverPhotoViewModel::selectAlbum,
+                onSelect = coverPhotoViewModel::select,
+                onSave = { coverPhotoViewModel.save(context, uid) },
+                onClose = coverPhotoViewModel::close,
+            )
+        }
+        // 초대 수락 완료 팝업(I01 위). "홈으로 가기" → 방금 참여한 여정 카드를 S01-A 맨 위에 보여 준다
         val joinedJourneyId = joinState.joinedJourneyId
         if (joinedJourneyId != null && invitePreview != null) {
             InviteAcceptedDialog(

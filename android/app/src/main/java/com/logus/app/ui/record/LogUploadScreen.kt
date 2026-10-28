@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -46,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -79,6 +81,7 @@ import com.logus.app.R
 import com.logus.app.record.LogUploadUiState
 import com.logus.app.record.MAX_THEMES
 import com.logus.app.ui.components.ErrorMessage
+import com.logus.app.ui.components.LocalVideoPlayer
 import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.theme.BackgroundDark
 import com.logus.app.ui.theme.LogUsColors
@@ -92,10 +95,11 @@ import java.io.File
 /**
  * S04 에서 촬영을 마치면 바로 뜨는 화면. 하단 탭은 숨긴다. 위에서부터:
  * - 뒤로 가기 + "기록 올리기"
- * - 찍은 영상의 첫 장면(16:9)과 "▶ 0:03"(영상 길이)
+ * - 찍은 영상의 첫 장면(16:9)과 "▶ 0:03"(영상 길이), 가운데 큰 재생 버튼. 영상을 누르면 그 자리에서 소리까지 재생하고,
+ *   끝나면(또는 다시 누르면) 첫 장면으로 돌아온다(LocalVideoPlayer)
  * - 흰 카드: "위치 확인 · 지도 열기"(누르면 영상 아래부터 L01 위치 확인 팝업이 올라온다.
  *   고르면 "위치 확인 완료"와 장소 이름·주소가 보인다) →
- *   "영상·위치 함께 저장하면 +10P" → □ 위치 없이 저장(켜면 위치 정보 없이 올린다)
+ *   "영상·위치 함께 저장하면 +10코인" → □ 위치 없이 저장(켜면 위치 정보 없이 올린다)
  * - 테마(직접 입력): 인스타그램 해시태그처럼 # 이 앞에 붙는다. 띄어쓰기·쉼표·완료로 태그 하나가 되고 최대 3개.
  * - 맨 아래 "여정에 올리기"와 작은 안내 문구
  * 뒤로 가기(버튼·폰)는 S04 로 돌아간다(찍은 영상은 지우고 다시 찍는다). 올리는 중에는 뒤로 가지 않는다.
@@ -137,6 +141,9 @@ fun LogUploadScreen(
     ) {
         LogUploadContent(
             thumbnail = thumbnail,
+            video = video,
+            // 지도 팝업을 열거나 올리는 중에는 재생을 멈춘다
+            playEnabled = !mapOpen && !state.uploading,
             durationMs = durationMs,
             state = state,
             onBack = { if (!state.uploading) onBack() },
@@ -189,6 +196,9 @@ fun LogUploadScreen(
 @Composable
 private fun LogUploadContent(
     thumbnail: ImageBitmap?,
+    /** 찍은 영상 파일(미리보기에서는 null → 재생 버튼만 그린다) */
+    video: File?,
+    playEnabled: Boolean,
     durationMs: Long,
     state: LogUploadUiState,
     onBack: () -> Unit,
@@ -215,17 +225,38 @@ private fun LogUploadContent(
             RecordTopBar(title = "기록 올리기", onBack = onBack)
             Spacer(Modifier.height(12.dp))
 
-            // 찍은 영상(첫 장면) + 길이
+            // 찍은 영상: 처음엔 첫 장면 + 길이 + 가운데 재생 버튼. 누르면 소리까지 재생, 끝나거나 다시 누르면 첫 장면으로
+            var playing by remember(video) { mutableStateOf(false) }
+            LaunchedEffect(playEnabled) { if (!playEnabled) playing = false }
             Box(
                 videoModifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(20.dp))
                     .background(BackgroundDark)
+                    .clickable(
+                        enabled = video != null && playEnabled,
+                        onClickLabel = if (playing) "영상 멈추기" else "영상 재생",
+                        role = Role.Button,
+                    ) { playing = !playing }
                     .semantics { contentDescription = "찍은 영상 ${durationMs / 1000}초" },
             ) {
-                thumbnail?.let {
-                    Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (playing && playEnabled && video != null) {
+                    LocalVideoPlayer(file = video, onFinished = { playing = false }, modifier = Modifier.fillMaxSize())
+                } else {
+                    thumbnail?.let {
+                        Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    }
+                    // 가운데 큰 재생 버튼(흰 동그라미 + 진한 삼각형)
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .size(56.dp)
+                            .background(PhotoFrame, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = BackgroundDark, modifier = Modifier.size(32.dp))
+                    }
                 }
                 Row(
                     Modifier
@@ -234,9 +265,16 @@ private fun LogUploadContent(
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = BackgroundDark, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(durationLabel(durationMs), color = BackgroundDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    if (!playing) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = BackgroundDark, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        if (playing) "재생 중 · 누르면 멈춤" else durationLabel(durationMs),
+                        color = BackgroundDark,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -294,7 +332,7 @@ private fun LogUploadContent(
                 }
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "영상·위치 함께 저장하면 +10P",
+                    "영상·위치 함께 저장하면 +10코인",
                     color = LogUsColors.primaryStrong,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -487,7 +525,9 @@ private fun LogUploadContentPreview() {
     LogUsTheme {
         LogUploadContent(
             thumbnail = null,
-            durationMs = 8_000,
+            video = null,
+            playEnabled = true,
+            durationMs = 3_000,
             state = LogUploadUiState(themes = listOf("카페"), themeInput = "에그타"),
             onBack = {},
             onOpenMap = {},
