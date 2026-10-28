@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -194,14 +195,22 @@ fun RecapPlayer(
             // 지도는 장면이 바뀌어도 계속 두고(다시 받지 않게), 영상 장면일 때는 영상 칸이 위를 덮는다
             if (hasMap) RecapMapView(mapController, members, Modifier.fillMaxSize())
             if (step is RecapScene) {
-                // 구성원 수만큼 위·가운데·아래로 나눈다
+                // 구성원 수만큼 위·가운데·아래로 나눈다. 칸 사이 틈 없이 한 덩어리(바깥 모서리만 둥글게, 칸 사이는 얇은 흰 선)
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BackgroundDark),
                 ) {
                     step.clips.forEachIndexed { i, clip ->
+                        if (i > 0) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(PhotoFrame),
+                            )
+                        }
                         RecapClipView(
                             clip = clip,
                             author = members[clip.uid],
@@ -337,7 +346,7 @@ private fun RecapClipView(
     val name = author?.nickname ?: "구성원"
     Box(
         modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clipToBounds()
             .background(
                 if (log == null) Brush.linearGradient(listOf(BackgroundDark, BackgroundDark))
                 else Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)),
