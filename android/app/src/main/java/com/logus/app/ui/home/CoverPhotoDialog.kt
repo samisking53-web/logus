@@ -266,7 +266,7 @@ private fun CoverPhotoContent(
     }
 }
 
-/** 앨범 고르기 줄: 사진 모양 + 앨범 이름(굵게) … 오른쪽 "사진 N장 ▾". 누르면 앨범 목록 */
+/** 앨범 고르기 줄(연보라 칸, 다크는 바탕색): 사진 모양 + 앨범 이름(굵게) … 오른쪽 "사진 N장 ▾". 누르면 앨범 목록 */
 @Composable
 private fun AlbumBar(state: CoverPhotoUiState, onSelectAlbum: (String?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -276,7 +276,7 @@ private fun AlbumBar(state: CoverPhotoUiState, onSelectAlbum: (String?) -> Unit)
                 .fillMaxWidth()
                 .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface)
+                .background(LogUsColors.iconCircle)
                 .clickable(enabled = state.albums.size > 1, role = Role.Button, onClickLabel = "앨범 고르기") { expanded = true }
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -354,7 +354,7 @@ private fun PhotoGrid(state: CoverPhotoUiState, onSelect: (GalleryPhoto) -> Unit
                         Modifier
                             .aspectRatio(1f)
                             .clip(shape)
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(LogUsColors.iconCircle)
                             .border(
                                 width = if (isSelected) 2.5.dp else 1.dp,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else LogUsColors.border,
@@ -405,7 +405,7 @@ private fun PermissionBox(asked: Boolean, onAsk: () -> Unit, onOpenSettings: () 
             .fillMaxWidth()
             .height(312.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(LogUsColors.iconCircle)
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
