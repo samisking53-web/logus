@@ -81,4 +81,6 @@ dependencies {
 
     // S17 추억 영상: 구성원 영상 3개 동시 재생(Media3 ExoPlayer)
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
 }

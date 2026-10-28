@@ -9,6 +9,10 @@
     <!-- S04 앱 내 카메라: 영상 촬영(카메라)과 소리 녹음(마이크). 마이크를 거절하면 소리 없이 찍는다 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- S17 DAY RECAP 영상 다운로드: 안드로이드 9 이하에서 갤러리(동영상 폴더)에 저장할 때만 필요 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- 카메라가 없는 기기도 앱을 설치할 수 있게(카메라 화면만 못 쓴다) -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 

@@ -26,6 +26,7 @@ import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
 import com.logus.app.journeydetail.JourneyDetailViewModel
+import com.logus.app.journeydetail.RecapExportViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
 import com.logus.app.record.CapturePhase
@@ -70,6 +71,7 @@ fun MainScreen(
     profileEditViewModel: ProfileEditViewModel = viewModel(),
     myLogViewModel: MyLogViewModel = viewModel(),
     detailViewModel: JourneyDetailViewModel = viewModel(),
+    exportViewModel: RecapExportViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -109,6 +111,7 @@ fun MainScreen(
     // S15~S17 여정 상세를 보여 주는 중인지(마이로그 여정 카드를 누르면 연다. 하단 탭은 숨긴다)
     var viewingDetail by rememberSaveable { mutableStateOf(false) }
     val detailState by detailViewModel.state.collectAsStateWithLifecycle()
+    val exportState by exportViewModel.state.collectAsStateWithLifecycle()
     // S14 마이로그 여정 목록: 탭을 처음 열 때 지난 여정을 읽는다(그 뒤로는 탭을 오가도 다시 읽지 않는다)
     LaunchedEffect(tab, uid) {
         if (tab == MainTab.MY_LOG) myLogViewModel.load(uid)
@@ -256,7 +259,10 @@ fun MainScreen(
         }
     } else if (viewingDetail && detailState.journey != null) {
         // S15~S17 여정 상세(전체 화면, 하단 탭 없음). 뒤로 가기 → 마이로그
-        BackHandler { viewingDetail = false }
+        BackHandler {
+            exportViewModel.cancel() // 여정 상세를 닫으면 만들던 영상도 멈춘다
+            viewingDetail = false
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -265,7 +271,10 @@ fun MainScreen(
         ) {
             JourneyDetailScreen(
                 state = detailState,
-                onBack = { viewingDetail = false },
+                onBack = {
+                    exportViewModel.cancel()
+                    viewingDetail = false
+                },
                 onMoveDay = detailViewModel::moveDay,
                 onLoadMore = detailViewModel::loadMore,
                 onRetry = detailViewModel::retry,
@@ -273,6 +282,10 @@ fun MainScreen(
                 onRetryDayAll = detailViewModel::retryDayAll,
                 videoUrl = detailViewModel::videoUrl,
                 previewUrl = detailViewModel::previewUrl,
+                exportState = exportState,
+                onExportDownload = { exportViewModel.start(detailState) },
+                onExportCancel = exportViewModel::cancel,
+                onExportDismiss = exportViewModel::dismiss,
             )
         }
     } else if (viewingFeed && ongoing != null) {

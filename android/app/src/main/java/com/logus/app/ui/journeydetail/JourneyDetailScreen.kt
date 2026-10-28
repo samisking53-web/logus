@@ -1,5 +1,11 @@
 package com.logus.app.ui.journeydetail
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -28,6 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +58,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -59,11 +68,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.logus.app.R
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ProfileDialog
 import com.logus.app.journeydetail.JourneyDetailUiState
+import com.logus.app.journeydetail.RecapExportState
+import com.logus.app.journeydetail.RecapMapScene
 import com.logus.app.record.FeedLog
 import com.logus.app.ui.feed.LogCard
 import com.logus.app.ui.feed.WindowHeader
@@ -103,6 +115,11 @@ fun JourneyDetailScreen(
     onRetryDayAll: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
+    /** S17 영상 추출: 만들기 상태, "영상 다운로드", 만드는 중 취소, 완료·실패 팝업 닫기 */
+    exportState: RecapExportState = RecapExportState.Idle,
+    onExportDownload: () -> Unit = {},
+    onExportCancel: () -> Unit = {},
+    onExportDismiss: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(DetailTab.RECORDS) }
     LaunchedEffect(tab, state.dayIndex) {
@@ -134,7 +151,9 @@ fun JourneyDetailScreen(
         onRetryDayAll = onRetryDayAll,
         previewUrl = previewUrl,
         videoUrl = videoUrl,
+        onExportDownload = onExportDownload,
     )
+    RecapExportDialogs(state = exportState, onCancel = onExportCancel, onDismiss = onExportDismiss)
 }
 
 /** 화면 그리기만 하는 부분(미리보기에서도 쓰려고 나눴다) */
@@ -150,6 +169,7 @@ private fun JourneyDetailContent(
     onRetryDayAll: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
+    onExportDownload: () -> Unit = {},
 ) {
     val journey = state.journey ?: return
     Column(Modifier.fillMaxSize()) {
@@ -173,7 +193,13 @@ private fun JourneyDetailContent(
         when (tab) {
             DetailTab.RECORDS -> RecordsTab(state = state, listState = listState, onRetry = onRetry, previewUrl = previewUrl)
             DetailTab.MAP -> MapTab(state = state, city = journey.city, onRetry = onRetryDayAll)
-            DetailTab.RECAP -> RecapTab(state = state, onRetry = onRetryDayAll, previewUrl = previewUrl, videoUrl = videoUrl)
+            DetailTab.RECAP -> RecapTab(
+                state = state,
+                onRetry = onRetryDayAll,
+                previewUrl = previewUrl,
+                videoUrl = videoUrl,
+                onExportDownload = onExportDownload,
+            )
         }
     }
 }
@@ -453,8 +479,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
 }
 
 /**
- * S17 DAY RECAP: 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 저장하기 · 준비 중"(흐리게, 2026-10-21 팀 결정).
- * 그날 영상 기록이 없으면 안내 글.
+ * S17 DAY RECAP: 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 추출"(2026-10-28 팀 요청).
+ * "영상 추출" → 아래에서 올라오는 창 [영상 다운로드] [탐색에 자동 올리기(준비 중)].
+ * 안드로이드 9 이하는 갤러리에 저장하려면 저장 공간 권한이 필요해서, 다운로드를 누를 때 먼저 묻는다.
+ * 그날 영상 기록이 없으면 안내 글(영상 추출도 누를 수 없음).
  */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
@@ -462,7 +490,36 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
+    onExportDownload: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var sheetOpen by remember { mutableStateOf(false) }
+    // 안드로이드 9 이하: 저장 공간 권한을 받은 뒤 만들기 시작
+    val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            onExportDownload()
+        } else {
+            Toast.makeText(context, "갤러리에 저장하려면 저장 공간 권한이 필요해요", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val startDownload = {
+        sheetOpen = false
+        val needsPermission = Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else onExportDownload()
+    }
+    if (sheetOpen) {
+        val mapCount = state.recapScenes.count { it is RecapMapScene }
+        RecapExportSheet(
+            summary = listOfNotNull(
+                state.days.getOrNull(state.dayIndex)?.let { "${it.monthValue}.${it.dayOfMonth}" },
+                "장면 ${state.recapScenes.size}개",
+                if (mapCount > 0) "지도 장면 포함" else null,
+            ).joinToString(" · "),
+            onDismiss = { sheetOpen = false },
+            onDownload = startDownload,
+        )
+    }
     Column(
         Modifier
             .weight(1f)
@@ -512,15 +569,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
             )
         }
         Spacer(Modifier.height(12.dp))
-        // mp4 로 만들어 저장하는 기능은 아직 범위 밖이라 흐리게 둔다(CLAUDE.md "지금 범위 밖")
-        OutlinedButton(
-            onClick = {},
-            enabled = false,
+        val ready = !state.dayAllLoading && state.dayAllIndex == state.dayIndex && state.recapScenes.isNotEmpty()
+        Button(
+            onClick = { sheetOpen = true },
+            enabled = ready,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = OnPrimary),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
         ) {
-            Text("영상 저장하기 · 준비 중", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Icon(painterResource(R.drawable.ic_download), contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("영상 추출", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

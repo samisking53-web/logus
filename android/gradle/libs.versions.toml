@@ -66,6 +66,8 @@ maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.re
 # S17 추억 영상(DAY RECAP): 구성원 영상 3개를 동시에 Storage 주소에서 바로 재생 (안드로이드 공식 영상 재생 라이브러리 Media3 ExoPlayer)
 # 기본 VideoView 는 여러 개를 동시에 틀면 기기에 따라 끊겨서 쓰지 않는다
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
