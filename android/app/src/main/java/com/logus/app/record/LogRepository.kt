@@ -33,6 +33,8 @@ data class FeedLog(
     val capturedAtMillis: Long,
     /** 장소 이름(위치 없이 올렸으면 null) */
     val placeName: String?,
+    /** 기록 위치(위치 없이 올렸거나 (0,0)이면 null). 여정 상세 S16 추억 지도의 핀 */
+    val location: GeoPoint? = null,
 )
 
 /** 기록 한 쪽(페이지): 기록들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
@@ -117,19 +119,24 @@ class LogRepository {
             .limit(limit)
         if (after != null) query = query.startAfter(after)
         val snap = query.get().await()
-        val logs = snap.documents.mapNotNull { doc ->
-            FeedLog(
-                id = doc.id,
-                authorId = doc.getString("authorId") ?: return@mapNotNull null,
-                mediaType = doc.getString("mediaType") ?: return@mapNotNull null,
-                mediaPath = doc.getString("mediaPath"),
-                capturedAtMillis = doc.getTimestamp("capturedAt")?.toDate()?.time ?: return@mapNotNull null,
-                placeName = doc.getString("placeName"),
-            )
-        }
+        val logs = snap.documents.mapNotNull { it.toFeedLog() }
         val last = if (snap.size() < limit) null else snap.documents.lastOrNull()
         return LogPage(logs, last)
     }
+
+    /**
+     * S14 마이로그 여정 목록의 대표 사진: 이 여정에서 가장 먼저 찍은 기록 1개(없으면 null).
+     * 한 개만 읽는다(비용 관리). 대표 화면 주소는 previewUrl 로 받는다.
+     */
+    suspend fun loadFirstLog(journeyId: String): FeedLog? =
+        db.collection("journeys").document(journeyId).collection("logs")
+            .orderBy("capturedAt", Query.Direction.ASCENDING)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .firstOrNull()
+            ?.toFeedLog()
 
     /**
      * 이 여정에 올라온 기록 수(모든 구성원, N03 저장 팝업의 "기록 N개").
@@ -154,6 +161,18 @@ class LogRepository {
             else -> null
         } ?: error("대표 화면이 없는 기록이에요")
         return storage.reference.child(path).downloadUrl.await().toString()
+    }
+
+    /** 영상 기록의 재생 주소(Storage 다운로드 주소). 보안 규칙상 여정 구성원만 받을 수 있다. S17 DAY RECAP이 쓴다 */
+    suspend fun videoUrl(log: FeedLog): String {
+        val path = log.mediaPath?.takeIf { log.mediaType == "video" } ?: error("영상이 없는 기록이에요")
+        return storage.reference.child(path).downloadUrl.await().toString()
+    }
+
+    /** 영상 기록 파일을 폰의 target 파일로 받는다(S17 DAY RECAP 영상 추출이 합치기 전에 쓴다). 구성원만 받을 수 있다 */
+    suspend fun downloadVideo(log: FeedLog, target: File) {
+        val path = log.mediaPath?.takeIf { log.mediaType == "video" } ?: error("영상이 없는 기록이에요")
+        storage.reference.child(path).getFile(target).await()
     }
 
     /**
@@ -182,6 +201,24 @@ class LogRepository {
 private const val PAGE_SIZE = 30L
 
 private const val TAG = "LogRepository"
+
+/** logs 문서 → FeedLog. 꼭 있어야 하는 칸(작성자·종류·찍은 시각)이 없으면 null */
+private fun DocumentSnapshot.toFeedLog(): FeedLog? {
+    return FeedLog(
+        id = id,
+        authorId = getString("authorId") ?: return null,
+        mediaType = getString("mediaType") ?: return null,
+        mediaPath = getString("mediaPath"),
+        capturedAtMillis = getTimestamp("capturedAt")?.toDate()?.time ?: return null,
+        placeName = getString("placeName"),
+        location = (get("location") as? Map<*, *>)?.let { map ->
+            val lat = (map["lat"] as? Number)?.toDouble()
+            val lng = (map["lng"] as? Number)?.toDouble()
+            // 좌표 (0,0)은 결측으로 본다(CLAUDE.md 데이터 원칙)
+            if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) null else GeoPoint(lat, lng)
+        },
+    )
+}
 
 /** 영상 경로 journeys/…/{logId}.mp4 → 대표 화면(썸네일) 경로 journeys/…/{logId}.jpg */
 internal fun thumbnailPath(videoPath: String): String = videoPath.substringBeforeLast('.') + ".jpg"
