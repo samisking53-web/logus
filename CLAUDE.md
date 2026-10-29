@@ -18,7 +18,7 @@
 
 ## 기술 스택 (임의로 바꾸지 않는다)
 - 앱: 안드로이드 네이티브(`android/`, Kotlin + Jetpack Compose, Firebase Android SDK·BoM, 패키지 `com.logus.app`, minSdk 26). 빌드는 Android Studio에서 한다
-- 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript)
+- 백엔드: Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions(2세대, TypeScript), Cloud Messaging(FCM, 촬영 알림 푸시. 앱은 `firebase-messaging`)
 - 지도: MapLibre(안드로이드는 MapLibre Native Android `org.maplibre.gl:android-sdk`, TextureView 방식) + OpenFreeMap 타일(`https://tiles.openfreemap.org/styles/liberty`, 키 없음). 카카오맵·구글맵 SDK는 추가하지 않는다
 - 카메라: CameraX(camera-camera2·lifecycle·video·view). S04 앱 내 카메라에 쓴다
 - 추억 영상: 앱 안에서 재생. Media3 ExoPlayer(`androidx.media3:media3-exoplayer`, 2026-10-21 결정: 영상 3개를 동시에 Storage 주소에서 바로 재생, 기본 VideoView는 여러 개 동시 재생이 끊길 수 있어 쓰지 않음). DAY RECAP 영상 다운로드는 Media3 Transformer(`media3-transformer`·`media3-effect`, 2026-10-22 팀 결정: 서버 비용 없이 폰에서 합침)
@@ -56,6 +56,7 @@
 - S02 새 여정 만들기·S03 기간 달력은 `ui/journey/`(상태는 `journey/NewJourneyViewModel.kt`). 저장은 위쪽 오른쪽 "저장 →" 또는 "친구 초대하기"(저장 후 초대 코드 팝업)로 `createJourney` 함수를 부른다. 도시 추천은 ① 현재 위치(대략적인 위치 권한, play-services-location)의 도시 ② 글자를 칠 때 내장 목록(`journey/Cities.kt`) ③ "지도에서 찾기" 버튼으로 오픈스트리트맵 Nominatim 검색(`journey/CityRepository.kt`) 순서다. 어디에도 없으면 입력한 글자 그대로 저장한다
 - 여정을 만들면("저장 →" 또는 "친구 초대하기" 팝업을 닫으면) 홈으로 간다: 오늘이 여행 기간 안이면 S01-A, 미래 여정이면 S01과 "○월 ○일에 시작해요" 안내. 카메라(S04)는 자동으로 열지 않고 여정 카드 → N01 "지금 기록하기"로만 연다(2026-10-09 팀 결정, 시작일 자동 카메라 없앰. 2026-10-28부터 홈에는 "지금 기록하기"가 없음)
 - S04 앱 내 카메라(`ui/record/CaptureScreen.kt`, 상태는 `record/CaptureViewModel.kt`, CameraX): N01 기록 보기의 "지금 기록하기"로 연다(하단 탭 숨김). 위에서부터 뒤로 가기+여정 이름 → "● 여정 진행 중 · 지금 시각" → 16:9 가로 미리보기(화면 위쪽 절반 안, 앱은 세로 고정, 미리보기 영역대로 잘라 녹화) → "영상 · 3초 동안 찍혀요"·"00:02 / 00:03"·진행 막대 → 촬영 버튼(빨간 동그라미, 녹화 중 깜빡임·"촬영 중…"(눌리지 않음), 끝나면 "다시 촬영") → 맨 아래 "공통 알림 · N시간마다"(여정을 만든 사람의 members 문서 notifyIntervalHours). 영상은 늘 3초로 고정한다(2026-10-14 팀 결정. 3초가 되면 저절로 멈추고 중간에 멈추는 버튼은 없다. 앱을 내리는 등으로 3초 전에 끊기면 지우고 다시 찍게 한다. `CaptureViewModel.VIDEO_MILLIS`). FHD, 마이크 거절 시 소리 없이 앱 전용 임시 폴더 `cacheDir/captures`에 저장하고, 뒤로 가기로 나가면 지운다. 촬영을 마치면 바로 S05로 넘어간다
+- 촬영 알림(2026-10-29 팀 결정, `notify/`): 서버 함수 `sendCaptureReminders`가 매시 정각에 FCM 푸시를 보낸다. 여정 기간(폰 날짜) 안, 폰 시각 09:00~23:00, 9시부터 공통 알림 간격(만든 사람 members 문서 notifyIntervalHours)마다(2시간이면 9·11·…·23시). null("받지 않기")이면 보내지 않고, 여정을 저장(finishedAt)한 사람에게도 보내지 않는다. 제목 "지금 기록할 시간이에요"·내용 "{여정 이름} · 함께 3초 영상을 남겨 보세요". 알림을 누르면 홈 탭(S01-A)이 열린다(2026-10-29 팀 요청, 기록 보기·여정 상세·초대 팝업은 닫고 홈을 새로 읽음. 카메라·새 여정 만들기·DAY RECAP 영상 만들기 중이면 그대로 둠). 앱은 홈에 들어올 때마다 이 폰을 `users/{uid}/devices/{FCM 토큰}`(폰 시간대 함께)에 저장하고(`notify/DeviceRepository.kt`, 토큰이 바뀌면 `LogUsMessagingService.onNewToken`), 로그아웃하면 지운다. 안드로이드 13 이상은 홈에 처음 들어올 때 알림 권한을 한 번만 묻는다. 알림 채널 "촬영 알림"(`capture_reminder`), 누르면 여는 동작 `com.logus.app.CAPTURE_REMINDER`(앱 `CaptureReminder`와 서버 값이 같아야 한다), 알림 아이콘 `ic_notification`(흰 지구)
 - S05 기록 올리기(`ui/record/LogUploadScreen.kt`, 상태는 `record/LogUploadViewModel.kt`, 저장은 `record/LogRepository.kt`): 뒤로 가기+"기록 올리기" → 찍은 영상 첫 장면(16:9)과 "▶ 0:03"·가운데 큰 재생 버튼(영상을 누르면 그 자리에서 **소리까지** 재생, 끝나거나 다시 누르면 첫 장면으로. 안드로이드 기본 MediaPlayer+TextureView, `ui/components/LocalVideoPlayer.kt`, 지도 팝업을 열거나 올리는 중에는 멈춤. 2026-10-28 팀 요청) → 흰 카드(「위치 확인 · 지도 열기」 버튼 → L01 위치 확인 팝업, "영상·위치 함께 저장하면 +10코인"(포인트가 아니라 코인을 주므로 "P" 대신 "코인", 2026-10-28 팀 결정), □ 위치 없이 저장. 위치를 고르면 "위치 확인 완료 · 지도 열기"와 장소 이름·주소) → 테마(직접 입력, 인스타그램 해시태그처럼 앞에 # 이 붙고 띄어쓰기·쉼표·완료로 태그가 됨, 최대 3개, 글자·숫자·_ 만 20자까지) → 맨 아래 "여정에 올리기"(안내: 위치 있으면 "지도에 핀이 찍히고 코인 10개가 쌓여요"). L01에서 위치를 고르거나 "위치 없이 저장"을 켜야 올라간다(둘은 함께 쓸 수 없다). 올리면 Storage `journeys/{journeyId}/{uid}/{logId}.mp4`·대표 화면 썸네일 `{logId}.jpg`(첫 장면, 가로 640px JPEG) + `logs/{logId}`(mediaType video, themes, location null) → 영상 파일을 지우고 N01 기록 보기로 돌아와 방금 올린 기록을 보여 준다. 뒤로 가기는 영상을 지우고 S04로
 - L01 위치 확인(`ui/record/LocationPickerSheet.kt`, 상태는 `record/LocationPickerViewModel.kt`, 데이터는 `record/PlaceRepository.kt`): S05 "위치 확인 · 지도 열기"를 누르면 영상 아래(16dp 간격)부터 화면 맨 아래까지 올라오는 팝업. 제목 "위치 확인"·X → MapLibre 지도(OpenFreeMap 타일, 가운데 고정 핀, "GPS 현재 위치"·"지도를 눌러 옮겨 보세요") → 장소 이름·주소(오픈스트리트맵, 지도를 멈추면 다시 찾음)·안내·"지도·주소 © OpenStreetMap" → "이 위치 사용"(보라). 처음 열 때 정확한·대략적인 위치 권한을 묻고 GPS 위치에서 시작한다(못 쓰면 여정 도시 가운데, 그것도 없으면 서울). "이 위치 사용" → S05 위치 버튼이 "위치 확인 완료 · 지도 열기"+장소 이름·주소로 바뀌고 "위치 없이 저장"이 풀린다. "여정에 올리기"는 기록을 만든 뒤 `saveLogLocation`으로 좌표·장소 이름을 저장하고 10코인을 준다
 - S14 마이로그 여정 목록(v5 23쪽 수정본, `ui/mylog/MyLogScreen.kt`, 상태는 `mylog/MyLogViewModel.kt`): 하단 탭 마이로그(하단 탭은 보임). 맨 위는 가운데 "마이로그" 제목 글자만(22sp 굵게, LOG EARTH·뒤로 가기 버튼 없음, 2026-10-15 팀 결정. 스토리보드의 폴더 상자 대신). 폰의 뒤로 가기는 홈 탭으로 → 지난 여정 카드(surface 바탕·border 테두리: 왼쪽 88dp 대표 사진(그 여정에서 가장 먼저 찍은 기록의 대표 화면 `LogRepository.loadFirstLog`, 보라 그림 `CoverPlaceholder`를 먼저 깔고 사진을 받으면 덮음) · 여정 이름 · "9.24~26 · 3명"(같은 날 "9.12", 다른 달 "9.30~10.2") · "지난 여정 ›"(primary-strong)). 지난 여정 = 종료일이 오늘 이전이거나 내 멤버 문서에 finishedAt 이 있는 여정, 최근 시작한 순서로 10개씩(`JourneyRepository.loadPastJourneys`, 홈과 같은 색인). 탭을 처음 열 때만 읽고, N03 "저장" 뒤에는 다시 읽는다. 없으면 "아직 지난 여정이 없어요". 카드를 누르면 여정 상세(S15~S17)를 연다. 카드 오른쪽 휴지통(2026-10-28 팀 결정 (가) 내 마이로그에서만 지우기) → 확인 팝업("마이로그에서 지울까요?"·다른 구성원의 마이로그와 기록은 그대로·내가 올린 기록도 지워지지 않음·지운 여정은 앱에서 다시 볼 수 없음(warning) → [취소] [지우기]) → 내 멤버 문서에 hiddenAt(서버 시각, `JourneyRepository.hideFromMyLog`)을 넣고 목록에서 뺀다. hiddenAt 이 있는 여정은 지난 여정 목록에서 뺀다(여정마다 내 멤버 문서를 한 번씩 읽는다). 로그아웃 버튼은 마이로그에서 뺐다(2026-10-14 팀 결정, 홈 화면에 나중에 만든다). 다크 모드는 팔레트 이름으로 저절로 바뀌지만 이 화면은 따로 다듬지 않았다(나중에)
@@ -95,6 +96,7 @@
 
 ## 데이터 모델 (Firestore 초안. 바꾸면 이 파일도 함께 고친다)
 - `users/{uid}`: nickname, photoURL, coins(서버만 수정), createdAt
+- `users/{uid}/devices/{FCM 토큰}`: token(문서 ID와 같음), timeZone(폰 시간대 IANA 이름, 예: Asia/Seoul), platform(android), updatedAt. 촬영 알림을 받을 폰. 본인만 읽고 쓰고 지운다. 서버가 보낼 때 더는 쓸 수 없는 토큰이면 지운다
 - `users/{uid}/agreements/{termsVersion}`: ageOver14·terms·location(필수, true), notifyNewLogs, agreedAt. 문서 ID는 약관 버전 `YYYY-MM-DD`(`auth/Agreements.kt`의 `TERMS_VERSION`). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
 - `journeys/{journeyId}`: name, city, country, startDate, endDate, ownerId, memberIds(배열), memberCount, inviteCode(만든 사람의 초대 코드), createdAt. startDate·endDate는 현지 달력 날짜 문자열 `"YYYY-MM-DD"`
 - `journeys/{journeyId}/members/{uid}`: role(owner|member), notifyIntervalHours(1|2|3|null), coverPath(S01-A 여정 카드 대표 사진 Storage 경로 `journeys/{journeyId}/{uid}/cover_{시각}.jpg` 또는 없음. 본인만 바꾸고 그 사람 홈에서만 보인다), inviteCode(이 구성원의 초대 코드, 서버만 쓴다. 만든 사람은 여정을 만들 때, 다른 구성원은 처음 초대 팝업을 열 때 생긴다), finishedAt(N01 "여정 마치기"를 누른 시각, 없으면 아직 진행 중. 본인이 한 번만 서버 시각으로 넣는다. 있으면 그 사람 홈에서는 진행 중 여정으로 보지 않는다), hiddenAt(S14 휴지통으로 내 마이로그에서 지운 시각. 본인이 한 번만 서버 시각으로 넣는다. 있으면 그 사람 마이로그에 보이지 않는다), joinedAt
@@ -115,6 +117,7 @@
 - 멤버 문서는 본인만 notifyIntervalHours·coverPath(이 여정의 본인 폴더 `cover_{숫자}.jpg` 경로 또는 null만)를 고치고, finishedAt(여정 마치기)·hiddenAt(마이로그에서 지우기)은 본인이 한 번만 서버 시각으로 넣는다(되돌릴 수 없음). role·joinedAt·inviteCode는 서버만
 - 기록 수정·삭제는 작성자만. `location`, `placeName`, `isPublic`은 클라이언트가 직접 바꾸지 못하고 `saveLogLocation` 함수로만 바꾼다
 - `users/{uid}`는 로그인한 사용자가 읽을 수 있고, 본인은 nickname·photoURL만 고칠 수 있다
+- `users/{uid}/devices/{token}`은 본인만 읽고 지우며, 만들고 고칠 때는 token(문서 ID와 같음)·timeZone·platform(android)·updatedAt(서버 시각)만 쓸 수 있다
 - `coins`, `coinLedger`, `publicLogs`, `sharedRecaps`, `invites`, `inviteAttempts`는 클라이언트가 쓰지 못한다. `invites`·`inviteAttempts`는 읽지도 못한다
 - 비로그인 읽기는 `sharedRecaps`의 문서 단건 읽기(get)와 `publicLogs` 목록만 허용한다
 - 공유 slug는 추측하기 어려운 12자 이상 무작위 문자열로 만든다
@@ -132,6 +135,7 @@
 - `syncPublicLog`(Firestore 트리거): 공개이고 위치가 있는 기록만 publicLogs 사본과 `public/` 미디어 사본을 만들고, 조건이 깨지면 지운다
 - `generateRecapCaptions`: 썸네일·시간·장소를 LLM에 보내 제목·장면 순서·캡션을 JSON으로 받아 저장한다. 사용자당 하루 호출 횟수를 제한한다
 - `shareRecap`: sharedRecaps 사본과 공유 링크를 만든다
+- `sendCaptureReminders`(예약 함수, 매시 정각 UTC, 다시 시도 안 함): 종료일이 어제(UTC) 이후인 여정을 최대 500개 읽어, 만든 사람의 notifyIntervalHours 가 1·2·3이면 finishedAt 없는 구성원의 `users/{uid}/devices`마다 그 폰 시간대로 보낼 시각인지(`isReminderTime`: 여정 기간 안·09~23시·9시부터 간격마다) 계산해 FCM 으로 보낸다(500개씩 `sendEach`). 받을 수 없는 토큰은 기기 문서를 지운다. 시각 계산·보내기는 `runCaptureReminders`로 나눠 `tests/rules/reminders.test.ts`에서 가짜 보내기로 확인한다
 
 ## 인증
 - 로그인 수단: 구글 계정만 쓴다(카카오는 쓰지 않기로 함). 콘솔 설정 순서는 `docs/login-setup.txt`
@@ -161,5 +165,5 @@
 
 ## 지금 범위 밖 (요청이 있을 때만 만든다)
 - 로그아웃 버튼(마이로그에서 뺐고 홈 화면에 만든다, 2026-10-14 팀 결정. `MainScreen`의 `onSignOut`이 연결 자리)
-- 촬영 알림(FCM·예약 함수), 월별·연도별 타임라인, '1년 전 오늘'
+- 월별·연도별 타임라인, '1년 전 오늘'(촬영 알림은 2026-10-29에 만들었다)
 - S17 영상 추출의 "탐색에 자동 올리기"(지금은 흐린 버튼만, 탐색 화면을 만들 때 연결. 다른 구성원 영상·위치가 함께 공개되므로 동의 방식을 그때 정한다)·탐색의 공개 선택 화면(어디서 공개를 고르는지 v5에 없음)은 만들 때 방식을 팀에 먼저 질문한다

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 촬영 알림(FCM 푸시): 안드로이드 13 이상은 알림을 띄우려면 이 권한을 받아야 한다(홈에 처음 들어올 때 한 번 묻는다) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 새 여정의 도시 추천에 현재 위치를 쓴다. 도시 이름만 알면 돼서 대략적인 위치만 묻는다 -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- L01 위치 확인 지도: 핀을 촬영 위치에 정확히 찍으려고 정확한 위치를 묻는다(거절하면 대략적인 위치·지도 이동으로 고른다) -->
@@ -30,15 +32,41 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LogUs">
 
+        <!-- singleTop: 앱을 보고 있을 때 촬영 알림을 누르면 새 화면을 겹쳐 열지 않고 지금 화면에서 홈으로 간다(onNewIntent) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 촬영 알림을 누르면 이 동작으로 열린다(서버 sendCaptureReminders 의 clickAction) → 홈(S01-A) -->
+            <intent-filter>
+                <action android:name="com.logus.app.CAPTURE_REMINDER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- 촬영 알림 FCM 푸시 받기(토큰 저장, 앱을 보고 있을 때 알림 띄우기) -->
+        <service
+            android:name=".notify.LogUsMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- 앱이 뒤에 있을 때 FCM 이 알림을 띄울 때 쓰는 기본 채널·작은 아이콘·색 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="capture_reminder" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/primary" />
 
         <!-- 홈 프로필 사진 수정 팝업의 "사진 찍기": 폰의 카메라 앱이 찍은 사진을 앱 전용 임시 폴더에 쓰게 잠깐 허락한다 -->
         <provider

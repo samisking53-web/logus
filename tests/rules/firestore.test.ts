@@ -406,3 +406,33 @@ describe("공개 문서 (서버만 쓴다)", () => {
     await assertFails(setDoc(doc(dbAs(ALICE), "anything", "x"), { a: 1 }));
   });
 });
+
+describe("촬영 알림 기기", () => {
+  const TOKEN = "fcmToken_abc:123";
+  const device = () => ({ token: TOKEN, timeZone: "Asia/Seoul", platform: "android", updatedAt: serverTimestamp() });
+
+  it("본인은 내 폰 토큰을 저장하고, 다시 저장하고, 지운다", async () => {
+    const ref = doc(dbAs(ALICE), "users", ALICE, "devices", TOKEN);
+    await assertSucceeds(setDoc(ref, device()));
+    await assertSucceeds(setDoc(ref, { ...device(), timeZone: "Europe/Lisbon" }));
+    await assertSucceeds(getDoc(ref));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  it("다른 사람은 읽거나 쓰지 못한다", async () => {
+    await assertSucceeds(setDoc(doc(dbAs(ALICE), "users", ALICE, "devices", TOKEN), device()));
+    await assertFails(getDoc(doc(dbAs(BOB), "users", ALICE, "devices", TOKEN)));
+    await assertFails(setDoc(doc(dbAs(BOB), "users", ALICE, "devices", "bobToken"), { ...device(), token: "bobToken" }));
+    await assertFails(deleteDoc(doc(dbAs(BOB), "users", ALICE, "devices", TOKEN)));
+    await assertFails(getDoc(doc(dbAnon(), "users", ALICE, "devices", TOKEN)));
+  });
+
+  it("문서 ID 와 다른 토큰·빠진 칸·다른 칸·서버 시각이 아닌 값은 거부", async () => {
+    const ref = doc(dbAs(ALICE), "users", ALICE, "devices", TOKEN);
+    await assertFails(setDoc(ref, { ...device(), token: "other" }));
+    await assertFails(setDoc(ref, { token: TOKEN, platform: "android", updatedAt: serverTimestamp() }));
+    await assertFails(setDoc(ref, { ...device(), coins: 100 }));
+    await assertFails(setDoc(ref, { ...device(), platform: "ios" }));
+    await assertFails(setDoc(ref, { ...device(), updatedAt: new Date() }));
+  });
+});

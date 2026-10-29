@@ -1,7 +1,11 @@
 package com.logus.app.ui
 
+import android.Manifest
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +30,9 @@ import com.logus.app.home.CoverPhotoViewModel
 import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
+import com.logus.app.notify.CaptureReminder
 import com.logus.app.journeydetail.JourneyDetailViewModel
+import com.logus.app.journeydetail.RecapExportState
 import com.logus.app.journeydetail.RecapExportViewModel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.NewJourneyViewModel
@@ -75,6 +81,8 @@ fun MainScreen(
     myLogViewModel: MyLogViewModel = viewModel(),
     detailViewModel: JourneyDetailViewModel = viewModel(),
     exportViewModel: RecapExportViewModel = viewModel(),
+    // 촬영 알림을 누를 때마다 1씩 늘어난다(MainActivity) → 홈(S01-A)으로 간다
+    openHomeRequest: Int = 0,
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -120,6 +128,30 @@ fun MainScreen(
     var viewingDetail by rememberSaveable { mutableStateOf(false) }
     val detailState by detailViewModel.state.collectAsStateWithLifecycle()
     val exportState by exportViewModel.state.collectAsStateWithLifecycle()
+    // 촬영 알림 권한(안드로이드 13 이상): 홈에 처음 들어올 때 한 번만 묻는다. 거절하면 알림이 오지 않는다(폰 설정에서 다시 켤 수 있다)
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(uid) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            !CaptureReminder.hasPermission(context) &&
+            !CaptureReminder.askedPermission(context)
+        ) {
+            CaptureReminder.markAskedPermission(context)
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    // 촬영 알림을 누르면: 기록 보기·여정 상세·초대 팝업을 닫고 홈 탭(S01-A 진행 중 여정 카드들)으로 가서 홈을 새로 읽는다.
+    // 카메라(S04·S05)·새 여정 만들기·DAY RECAP 영상 만들기 중이면 찍은 영상·입력한 내용이 사라지지 않게 그대로 둔다.
+    LaunchedEffect(openHomeRequest) {
+        if (openHomeRequest == 0 || capturing || creatingJourney) return@LaunchedEffect
+        if (viewingDetail && exportViewModel.state.value is RecapExportState.Working) return@LaunchedEffect
+        viewingFeed = false
+        if (viewingDetail) exportViewModel.dismiss() // 다 만든·실패한 영상 팝업도 닫는다
+        viewingDetail = false
+        invitingToJourney = false
+        tab = MainTab.HOME
+        // 앱을 막 켠 경우엔 위에서 이미 읽는 중이라 다시 읽지 않는다
+        if (homeViewModel.state.value !is HomeUiState.Loading) homeViewModel.load(uid, force = true)
+    }
     // S14 마이로그 여정 목록: 탭을 처음 열 때 지난 여정을 읽는다(그 뒤로는 탭을 오가도 다시 읽지 않는다)
     LaunchedEffect(tab, uid) {
         if (tab == MainTab.MY_LOG) myLogViewModel.load(uid)
