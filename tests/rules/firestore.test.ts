@@ -188,6 +188,19 @@ describe("멤버 문서", () => {
     await assertSucceeds(updateDoc(ref, { notifyIntervalHours: 2 }));
   });
 
+  it("마이로그에서 지우기: 본인 문서에 hiddenAt 을 서버 시각으로 한 번만 넣는다", async () => {
+    const ref = doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", BOB);
+    // 서버 시각이 아니거나, 다른 칸과 함께 바꾸면 거부
+    await assertFails(updateDoc(ref, { hiddenAt: new Date() }));
+    await assertFails(updateDoc(ref, { hiddenAt: serverTimestamp(), finishedAt: serverTimestamp() }));
+    // 다른 사람 문서는 거부
+    await assertFails(updateDoc(doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", ALICE), { hiddenAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { hiddenAt: serverTimestamp() }));
+    // 한 번 지우면 다시 바꾸거나 되돌릴 수 없다
+    await assertFails(updateDoc(ref, { hiddenAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { hiddenAt: deleteField() }));
+  });
+
   it("대표 사진: 본인 문서의 coverPath 만, 이 여정의 내 폴더 cover_시각.jpg 경로로 바꾼다(내 홈에서만 보임)", async () => {
     const ref = doc(dbAs(BOB), "journeys", JOURNEY_ID, "members", BOB);
     await assertSucceeds(updateDoc(ref, { coverPath: `journeys/${JOURNEY_ID}/${BOB}/cover_1730000000000.jpg` }));

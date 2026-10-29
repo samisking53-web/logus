@@ -48,6 +48,9 @@ data class InvitePreview(
 /** 진행 중인 내 여정 하나 + 내 멤버 문서의 대표 사진 Storage 경로(내 홈에서만 보인다, 없으면 null → 기본 그림) */
 data class MyOngoingJourney(val journey: Journey, val coverPath: String?)
 
+/** 여정 한 쪽(페이지): 여정들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
+data class JourneyPage(val journeys: List<Journey>, val last: DocumentSnapshot?)
+
 /** 여정 구성원 한 명(홈의 동그란 이름 표시, 기록 보기의 작은 프로필). photoUrl 이 null 이면 기본 프로필(지구본) */
 data class Member(val uid: String, val nickname: String, val photoUrl: String? = null)
 
@@ -182,12 +185,53 @@ class JourneyRepository {
             .map { (journey, me) -> MyOngoingJourney(journey, me.getString("coverPath")) }
     }
 
-    /** 이 여정의 내 멤버 문서(finishedAt: 여정 마치기, coverPath: 내 홈 여정 카드 대표 사진) */
+    /**
+     * S14 마이로그 여정 목록: 나에게 끝난 지난 여정을 최근 시작한 순서로 limit 개씩 읽는다(비용 관리: 한 번에 다 읽지 않는다).
+     * "지난 여정" = 종료일이 오늘 이전이거나, 내가 N03 에서 "저장"(여정 마치기)을 눌러 finishedAt 이 있는 여정.
+     * 여정마다 내 멤버 문서를 한 번 더 읽어(한꺼번에) 끝냈는지·마이로그에서 지웠는지(hiddenAt) 확인한다.
+     * after 를 넘기면 그 문서 다음부터 이어서 읽는다. 색인은 홈과 같은 journeys(memberIds + startDate 내림차순)을 쓴다.
+     */
+    suspend fun loadPastJourneys(uid: String, today: String, after: DocumentSnapshot?, limit: Long = 10): JourneyPage {
+        var query = db.collection("journeys")
+            .whereArrayContains("memberIds", uid)
+            .whereLessThanOrEqualTo("startDate", today) // 아직 시작하지 않은 여정은 끝났을 수 없다
+            .orderBy("startDate", Query.Direction.DESCENDING)
+            .limit(limit)
+        if (after != null) query = query.startAfter(after)
+        val snap = query.get().await()
+        val past = coroutineScope {
+            snap.documents
+                .mapNotNull { it.toJourney() }
+                // 내 멤버 문서(여정 마치기·마이로그에서 지우기 표시)를 한꺼번에 읽는다
+                .map { journey -> async { journey to myMemberDoc(journey.id, uid) } }
+                .awaitAll()
+                .filter { (journey, me) ->
+                    me.get("hiddenAt") == null && // 마이로그에서 지운 여정은 빼고
+                        (journey.endDate < today || me.get("finishedAt") != null) // "YYYY-MM-DD" 글자 순서 = 날짜 순서
+                }
+                .map { it.first }
+        }
+        val last = if (snap.size() < limit) null else snap.documents.lastOrNull()
+        return JourneyPage(past, last)
+    }
+
+    /** 이 여정의 내 멤버 문서(finishedAt: 여정 마치기, hiddenAt: 마이로그에서 지움, coverPath: 내 홈 여정 카드 대표 사진) */
     private suspend fun myMemberDoc(journeyId: String, uid: String): DocumentSnapshot =
         db.collection("journeys").document(journeyId)
             .collection("members").document(uid)
             .get()
             .await()
+
+    /**
+     * S14 휴지통 "마이로그에서 지우기": 내 멤버 문서에 hiddenAt(서버 시각)을 넣어 내 마이로그에서만 뺀다.
+     * 여정·기록·영상과 다른 구성원의 마이로그는 그대로다. 보안 규칙이 "본인 문서, 한 번만, 서버 시각"을 확인한다(되돌릴 수 없음).
+     */
+    suspend fun hideFromMyLog(journeyId: String, uid: String) {
+        db.collection("journeys").document(journeyId)
+            .collection("members").document(uid)
+            .update("hiddenAt", FieldValue.serverTimestamp())
+            .await()
+    }
 
     /**
      * N01 "여정 마치기"(날짜 상자 옆 다운로드 모양 버튼): 나에게만 여정을 끝낸다.

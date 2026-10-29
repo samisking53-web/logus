@@ -1,6 +1,8 @@
 package com.logus.app.ui.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -54,6 +56,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +74,7 @@ import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.record.FeedLog
 import com.logus.app.ui.components.Avatar
+import com.logus.app.ui.components.ProfileDialog
 import com.logus.app.ui.home.ActionButton
 import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.record.RecordTopBar
@@ -180,6 +184,9 @@ private fun JourneyFeedContent(
     val showHint by remember(state.windows, state.endReached) {
         derivedStateOf { state.windows.isNotEmpty() && (listState.canScrollForward || !state.endReached) }
     }
+    // 기록 카드의 작은 프로필을 누르면 뜨는 프로필 팝업(누구의 것인지)
+    var profileOf by remember { mutableStateOf<Member?>(null) }
+    profileOf?.let { ProfileDialog(member = it, onDismiss = { profileOf = null }) }
 
     Column(Modifier.fillMaxSize()) {
         // 위에 고정되는 부분
@@ -291,7 +298,12 @@ private fun JourneyFeedContent(
                 else -> state.windows.forEach { window ->
                     item(key = "w${window.startMinute}") { WindowHeader(window) }
                     items(window.logs, key = { it.id }) { log ->
-                        LogCard(log = log, author = state.members[log.authorId], previewUrl = previewUrl)
+                        LogCard(
+                            log = log,
+                            author = state.members[log.authorId],
+                            previewUrl = previewUrl,
+                            onProfileClick = { profileOf = it },
+                        )
                         Spacer(Modifier.height(10.dp))
                     }
                     item(key = "gap${window.startMinute}") { Spacer(Modifier.height(18.dp)) }
@@ -346,7 +358,7 @@ private fun DayArrow(icon: ImageVector, label: String, enabled: Boolean, onClick
 
 /** "09:20 ~ 11:20 시간" + 오른쪽 "3개" */
 @Composable
-private fun WindowHeader(window: FeedWindow) {
+internal fun WindowHeader(window: FeedWindow) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -369,9 +381,15 @@ private fun WindowHeader(window: FeedWindow) {
 /**
  * 기록 카드: 대표 화면(영상 첫 장면)을 가로로 길게 잘라 보여 준다. 대표 화면이 없으면(예전 기록·글 기록) 보라 그라데이션.
  * 왼쪽 위 작은 동그란 프로필(사진이 없으면 지구본), 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름(있을 때).
+ * onProfileClick 이 있으면 작은 프로필을 눌러 프로필 팝업(ProfileDialog)을 연다(N01·S15 공통).
  */
 @Composable
-private fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog) -> String?) {
+internal fun LogCard(
+    log: FeedLog,
+    author: Member?,
+    previewUrl: suspend (FeedLog) -> String?,
+    onProfileClick: ((Member) -> Unit)? = null,
+) {
     val url by produceState<String?>(initialValue = null, log.id) { value = previewUrl(log) }
     val time = clockLabel(log.capturedAtMillis)
     val name = author?.nickname ?: "구성원"
@@ -384,6 +402,10 @@ private fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog)
             // 화면 읽기 프로그램은 카드 하나를 한 문장으로 읽는다
             .clearAndSetSemantics {
                 contentDescription = listOfNotNull("$name 님의 기록", time, log.placeName).joinToString(", ")
+                // 화면 읽기 프로그램에서는 카드를 두 번 누르면 프로필 팝업이 열린다
+                if (author != null && onProfileClick != null) {
+                    onClick(label = "$name 님 프로필 보기") { onProfileClick(author); true }
+                }
             },
     ) {
         if (url != null) {
@@ -409,7 +431,11 @@ private fun LogCard(log: FeedLog, author: Member?, previewUrl: suspend (FeedLog)
             size = 36.dp,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(12.dp),
+                .padding(12.dp)
+                .clip(CircleShape)
+                .clickable(enabled = author != null && onProfileClick != null) {
+                    author?.let { onProfileClick?.invoke(it) }
+                },
             ringWidth = 2.dp,
             ringColor = PhotoFrame,
         )

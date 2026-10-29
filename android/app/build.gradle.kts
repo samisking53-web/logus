@@ -78,4 +78,9 @@ dependencies {
 
     // L01 위치 확인 지도(MapLibre + OpenFreeMap 타일)
     implementation(libs.maplibre.android)
+
+    // S17 추억 영상: 구성원 영상 3개 동시 재생(Media3 ExoPlayer)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
 }
