@@ -78,6 +78,8 @@ import com.logus.app.journeydetail.RecapExportState
 import com.logus.app.journeydetail.RecapMapScene
 import com.logus.app.record.FeedLog
 import com.logus.app.ui.feed.LogCard
+import com.logus.app.ui.feed.LogVideoDialog
+import com.logus.app.ui.feed.dayVideos
 import com.logus.app.ui.feed.WindowHeader
 import com.logus.app.ui.home.LogoHeader
 import com.logus.app.ui.record.RecordTopBar
@@ -98,6 +100,7 @@ enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"
  * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → 날짜·지역 상자("9.24 포르투 · 1일째 / 3일", 양옆 ‹ › 로 하루씩 넘김)
  *   → 탭 버튼 [기록] [추억 지도] [DAY RECAP](한 화면 안에서 버튼으로 바꿔 본다)
  * - S15 기록: 고른 날의 기록을 N01 기록 보기와 같은 시간대 카드로 보여 준다. 아래로 내리면 30개씩 더 읽는다.
+ *   카드를 누르면 원본 영상 팝업(LogVideoDialog, N01 과 같다).
  * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
  *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
  * - S17 DAY RECAP: 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
@@ -122,6 +125,8 @@ fun JourneyDetailScreen(
     onExportDismiss: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(DetailTab.RECORDS) }
+    // S15 기록 카드를 누르면 여는 원본 영상 팝업(N01 과 같다)
+    var videoOf by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(tab, state.dayIndex) {
         if (tab == DetailTab.MAP || tab == DetailTab.RECAP) onLoadDayAll()
     }
@@ -152,7 +157,20 @@ fun JourneyDetailScreen(
         previewUrl = previewUrl,
         videoUrl = videoUrl,
         onExportDownload = onExportDownload,
+        onOpenVideo = { videoOf = it.id },
     )
+    videoOf?.let { startId ->
+        LogVideoDialog(
+            logs = remember(state.windows) { dayVideos(state.windows) },
+            startLogId = startId,
+            members = state.members,
+            canLoadMore = !state.endReached,
+            onLoadMore = onLoadMore,
+            videoUrl = videoUrl,
+            previewUrl = previewUrl,
+            onDismiss = { videoOf = null },
+        )
+    }
     RecapExportDialogs(state = exportState, onCancel = onExportCancel, onDismiss = onExportDismiss)
 }
 
@@ -170,6 +188,8 @@ private fun JourneyDetailContent(
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
     onExportDownload: () -> Unit = {},
+    /** S15 기록 카드를 누르면 원본 영상 팝업 */
+    onOpenVideo: (FeedLog) -> Unit = {},
 ) {
     val journey = state.journey ?: return
     Column(Modifier.fillMaxSize()) {
@@ -191,7 +211,13 @@ private fun JourneyDetailContent(
         }
 
         when (tab) {
-            DetailTab.RECORDS -> RecordsTab(state = state, listState = listState, onRetry = onRetry, previewUrl = previewUrl)
+            DetailTab.RECORDS -> RecordsTab(
+                state = state,
+                listState = listState,
+                onRetry = onRetry,
+                previewUrl = previewUrl,
+                onOpenVideo = onOpenVideo,
+            )
             DetailTab.MAP -> MapTab(state = state, city = journey.city, onRetry = onRetryDayAll)
             DetailTab.RECAP -> RecapTab(
                 state = state,
@@ -284,6 +310,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordsTab(
     listState: LazyListState,
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
+    onOpenVideo: (FeedLog) -> Unit,
 ) {
     // 아래에 더 볼 기록이 있으면 안내를 보여 주고, 끝까지 내리면 숨긴다(N01 과 같다)
     val showHint by remember(state.windows, state.endReached) {
@@ -329,6 +356,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordsTab(
                         author = state.members[log.authorId],
                         previewUrl = previewUrl,
                         onProfileClick = { profileOf = it },
+                        onClick = { onOpenVideo(log) },
                     )
                     Spacer(Modifier.height(10.dp))
                 }

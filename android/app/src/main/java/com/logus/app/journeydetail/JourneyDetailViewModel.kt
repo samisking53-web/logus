@@ -270,11 +270,14 @@ class JourneyDetailViewModel(
         loadDayAll()
     }
 
-    /** 영상 재생 주소(Storage 다운로드 주소, 구성원만 받을 수 있다). 못 받으면 null. 한 번 받은 주소는 기억한다 */
+    /**
+     * 영상 재생 주소(Storage 다운로드 주소, 구성원만 받을 수 있다). 못 받으면 null. 받은 주소만 기억한다
+     * (못 받은 것은 기억하지 않아서 S15 원본 영상 팝업의 "다시 불러오기"·S17 다음 재생 때 다시 묻는다)
+     */
     suspend fun videoUrl(log: FeedLog): String? {
-        if (videoUrls.containsKey(log.id)) return videoUrls[log.id]
+        videoUrls[log.id]?.let { return it }
         val url = runCatching { logs.videoUrl(log) }.onFailure { Log.w(TAG, "영상 주소 받기 실패", it) }.getOrNull()
-        videoUrls[log.id] = url
+        if (url != null) videoUrls[log.id] = url
         return url
     }
 

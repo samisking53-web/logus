@@ -51,9 +51,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
@@ -99,6 +101,7 @@ import java.time.ZoneId
  * - 아래로 스크롤되는 부분: "지금 기록하기"(→ S04, 오늘을 볼 때만) → 그날 기록을 공통 알림 간격으로 나눈 시간대
  *   ("09:20 ~ 11:20 시간" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
  * - 카드: 영상 대표 화면(첫 장면) 위 왼쪽 위에 기록한 사람의 작은 동그란 프로필, 오른쪽 위에 찍은 시각, 왼쪽 아래에 장소 이름.
+ *   카드를 누르면 원본 영상 팝업(LogVideoDialog, 16:9 소리까지 재생, ‹ › 로 그날 영상 넘기기), 작은 프로필을 누르면 프로필 팝업.
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
  * - 다운로드 모양 버튼: N03 "저장하시겠습니까?" 팝업(SaveJourneyDialog) → "저장" → 나에게만 여정을 끝내고 마이로그로 간다(MainScreen).
  */
@@ -116,8 +119,12 @@ fun JourneyFeedScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
+    /** 원본 영상 팝업의 재생 주소(Storage) */
+    videoUrl: suspend (FeedLog) -> String?,
 ) {
     var askSave by rememberSaveable { mutableStateOf(false) }
+    // 원본 영상 팝업으로 보고 있는 기록(카드를 누르면 연다)
+    var videoOf by rememberSaveable { mutableStateOf<String?>(null) }
     val today = LocalDate.now()
     val listState = rememberLazyListState()
     // 다른 날로 옮기면 목록 맨 위부터 보여 준다
@@ -148,7 +155,22 @@ fun JourneyFeedScreen(
         },
         onRetry = onRetry,
         previewUrl = previewUrl,
+        onOpenVideo = { videoOf = it.id },
     )
+
+    // 원본 영상 팝업: 그날 영상 기록 전체를 찍은 순서대로 ‹ › 로 넘겨 본다
+    videoOf?.let { startId ->
+        LogVideoDialog(
+            logs = remember(state.windows) { dayVideos(state.windows) },
+            startLogId = startId,
+            members = state.members,
+            canLoadMore = !state.endReached,
+            onLoadMore = onLoadMore,
+            videoUrl = videoUrl,
+            previewUrl = previewUrl,
+            onDismiss = { videoOf = null },
+        )
+    }
 
     // N03 "저장하시겠습니까?" 팝업. "저장"을 눌러야만 여정을 저장하고 마이로그로 간다
     if (askSave || state.finishing) {
@@ -178,6 +200,8 @@ private fun JourneyFeedContent(
     onAskFinish: () -> Unit,
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
+    /** 기록 카드를 누르면 원본 영상 팝업 */
+    onOpenVideo: (FeedLog) -> Unit = {},
 ) {
     val viewingToday = state.day == today
     // 아래에 더 볼 기록이 있으면(스크롤할 수 있거나 아직 다 읽지 않음) 안내를 보여 주고, 끝까지 내리면 숨긴다
@@ -303,6 +327,7 @@ private fun JourneyFeedContent(
                             author = state.members[log.authorId],
                             previewUrl = previewUrl,
                             onProfileClick = { profileOf = it },
+                            onClick = { onOpenVideo(log) },
                         )
                         Spacer(Modifier.height(10.dp))
                     }
@@ -382,6 +407,7 @@ internal fun WindowHeader(window: FeedWindow) {
  * 기록 카드: 대표 화면(영상 첫 장면)을 가로로 길게 잘라 보여 준다. 대표 화면이 없으면(예전 기록·글 기록) 보라 그라데이션.
  * 왼쪽 위 작은 동그란 프로필(사진이 없으면 지구본), 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름(있을 때).
  * onProfileClick 이 있으면 작은 프로필을 눌러 프로필 팝업(ProfileDialog)을 연다(N01·S15 공통).
+ * onClick 이 있으면 영상 기록 카드의 나머지 부분을 눌러 원본 영상 팝업(LogVideoDialog)을 연다(N01·S15 공통).
  */
 @Composable
 internal fun LogCard(
@@ -389,22 +415,35 @@ internal fun LogCard(
     author: Member?,
     previewUrl: suspend (FeedLog) -> String?,
     onProfileClick: ((Member) -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val url by produceState<String?>(initialValue = null, log.id) { value = previewUrl(log) }
     val time = clockLabel(log.capturedAtMillis)
     val name = author?.nickname ?: "구성원"
+    // 원본 영상 팝업은 영상 기록만 연다
+    val openVideo = onClick?.takeIf { log.mediaType == "video" && log.mediaPath != null }
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(3f)
             .clip(RoundedCornerShape(18.dp))
             .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)))
+            .clickable(enabled = openVideo != null) { openVideo?.invoke() }
             // 화면 읽기 프로그램은 카드 하나를 한 문장으로 읽는다
             .clearAndSetSemantics {
                 contentDescription = listOfNotNull("$name 님의 기록", time, log.placeName).joinToString(", ")
-                // 화면 읽기 프로그램에서는 카드를 두 번 누르면 프로필 팝업이 열린다
-                if (author != null && onProfileClick != null) {
-                    onClick(label = "$name 님 프로필 보기") { onProfileClick(author); true }
+                // 화면 읽기 프로그램에서는 카드를 두 번 누르면 원본 영상 팝업이, 영상이 아니면 프로필 팝업이 열린다.
+                // 영상 카드의 프로필 팝업은 "작업" 메뉴로 연다
+                val profileAction = if (author != null && onProfileClick != null) {
+                    { onProfileClick(author); true }
+                } else {
+                    null
+                }
+                if (openVideo != null) {
+                    onClick(label = "원본 영상 보기") { openVideo(); true }
+                    profileAction?.let { customActions = listOf(CustomAccessibilityAction("$name 님 프로필 보기", it)) }
+                } else if (profileAction != null) {
+                    onClick(label = "$name 님 프로필 보기", action = profileAction)
                 }
             },
     ) {
@@ -466,6 +505,12 @@ internal fun LogCard(
     }
 }
 
+/** 원본 영상 팝업에서 ‹ › 로 넘겨 볼 그날 영상 기록(찍은 순서) */
+internal fun dayVideos(windows: List<FeedWindow>): List<FeedLog> =
+    windows.flatMap { it.logs }
+        .filter { it.mediaType == "video" && it.mediaPath != null }
+        .sortedBy { it.capturedAtMillis }
+
 @Composable
 private fun CenteredBox(content: @Composable () -> Unit) {
     Box(
@@ -477,7 +522,7 @@ private fun CenteredBox(content: @Composable () -> Unit) {
 }
 
 /** 찍은 시각 "09:24"(폰 시간대) */
-private fun clockLabel(millis: Long): String {
+internal fun clockLabel(millis: Long): String {
     val t = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalTime()
     return "%02d:%02d".format(t.hour, t.minute)
 }

@@ -88,6 +88,9 @@ class JourneyFeedViewModel(
     /** 대표 화면 주소를 한 번 받으면 기억해 둔다(스크롤로 다시 보일 때 Storage 에 또 묻지 않게) */
     private val previewUrls = mutableMapOf<String, String?>()
 
+    /** 원본 영상 팝업에서 받은 영상 주소(같은 영상을 다시 볼 때 Storage 에 또 묻지 않게) */
+    private val videoUrls = mutableMapOf<String, String>()
+
     /** 화면을 열 때·기록을 올리고 돌아왔을 때: 오늘 기록을 처음부터 다시 읽는다 */
     fun open(journey: Journey) {
         this.journey = journey
@@ -195,6 +198,14 @@ class JourneyFeedViewModel(
         if (previewUrls.containsKey(log.id)) return previewUrls[log.id]
         val url = runCatching { logs.previewUrl(log) }.getOrNull()
         previewUrls[log.id] = url
+        return url
+    }
+
+    /** 원본 영상 팝업의 재생 주소(Storage 다운로드 주소). 못 받으면 null. 받은 주소만 기억한다(실패하면 다시 시도할 수 있게) */
+    suspend fun videoUrl(log: FeedLog): String? {
+        videoUrls[log.id]?.let { return it }
+        val url = runCatching { logs.videoUrl(log) }.onFailure { Log.w(TAG, "영상 주소 받기 실패", it) }.getOrNull()
+        if (url != null) videoUrls[log.id] = url
         return url
     }
 

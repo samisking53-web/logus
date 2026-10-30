@@ -355,6 +355,7 @@ fun MainScreen(
                 onLoadMore = feedViewModel::loadMore,
                 onRetry = { feedViewModel.reload() },
                 previewUrl = feedViewModel::previewUrl,
+                videoUrl = feedViewModel::videoUrl, // 기록 카드 → 원본 영상 팝업
             )
         }
     } else {
