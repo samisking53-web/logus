@@ -52,7 +52,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
@@ -64,6 +63,7 @@ import com.logus.app.journeydetail.RecapMapScene
 import com.logus.app.journeydetail.RecapScene
 import com.logus.app.journeydetail.RecapStep
 import com.logus.app.record.FeedLog
+import com.logus.app.record.VideoCache
 import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.theme.BackgroundDark
 import com.logus.app.ui.theme.LogUsColors
@@ -155,7 +155,8 @@ fun RecapPlayer(
                 ticker.cancel()
             }
             is RecapScene -> {
-                if (players.isEmpty()) players = List(RECAP_MAX_CLIPS) { ExoPlayer.Builder(context).build() }
+                // 폰 안 영상 캐시를 쓰는 재생기: 한 번 본 영상은 다시 받지 않는다(VideoCache)
+                if (players.isEmpty()) players = List(RECAP_MAX_CLIPS) { VideoCache.newPlayer(context) }
                 playVideoScene(step, players, videoUrl) { progress = it }
             }
         }
@@ -267,7 +268,7 @@ private suspend fun playVideoScene(
     val active = scene.clips.indices.mapNotNull { i ->
         val url = urls[i] ?: return@mapNotNull null
         players[i].apply {
-            setMediaItem(MediaItem.fromUri(url))
+            setMediaItem(VideoCache.mediaItem(url, scene.clips[i].log?.mediaPath))
             // 소리는 영상이 있는 칸 중 맨 위 하나만
             volume = if (soundGiven) 0f else 1f
             soundGiven = true

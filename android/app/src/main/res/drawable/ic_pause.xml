@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 일시 정지(❚❚): 원본 영상 팝업에서 재생 중일 때 가운데 버튼 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,5h3.5v14h-3.5z M13.5,5h3.5v14h-3.5z" />
+</vector>
