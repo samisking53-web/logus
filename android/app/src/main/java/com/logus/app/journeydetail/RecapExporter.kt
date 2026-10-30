@@ -49,6 +49,7 @@ import com.logus.app.feed.minuteLabel
 import com.logus.app.journey.Member
 import com.logus.app.record.GeoPoint
 import com.logus.app.record.LogRepository
+import com.logus.app.record.VideoCache
 import com.logus.app.ui.journeydetail.MAP_STYLE_URL
 import com.logus.app.ui.theme.BackgroundDark
 import com.logus.app.ui.theme.MemberColors
@@ -110,7 +111,11 @@ class RecapExporter(
             val durations = mutableMapOf<String, Long>()
             videoLogs.forEachIndexed { i, log ->
                 val file = File(workDir, "${log.id}.mp4")
-                val ok = runCatching { logs.downloadVideo(log, file) }.onFailure { Log.w(TAG, "영상 받기 실패", it) }.isSuccess
+                // 폰 안 영상 캐시(VideoCache)를 거친다: DAY RECAP 재생 등으로 이미 본 영상은 다시 받지 않는다
+                val ok = runCatching {
+                    val url = logs.videoUrl(log)
+                    VideoCache.copyTo(context, url, log.mediaPath, file)
+                }.onFailure { Log.w(TAG, "영상 받기 실패", it) }.isSuccess
                 val duration = if (ok) withContext(Dispatchers.IO) { videoDurationMs(file) } else null
                 if (duration != null) {
                     files[log.id] = file

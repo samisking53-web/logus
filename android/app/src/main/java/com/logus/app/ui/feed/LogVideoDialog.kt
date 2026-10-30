@@ -69,15 +69,14 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
-import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
 import com.logus.app.R
 import com.logus.app.journey.Member
 import com.logus.app.record.FeedLog
+import com.logus.app.record.VideoCache
 import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.theme.BackgroundDark
 import com.logus.app.ui.theme.BorderDark
@@ -99,7 +98,8 @@ import kotlinx.coroutines.delay
  * - 진행 막대와 "0:00 / 0:03"
  * - [‹] "1 / 8 · 원본 영상" [›]: 그날 영상 기록 전체를 찍은 순서대로 넘겨 본다(2026-10-30 팀 결정).
  *   아직 안 읽은 그날 기록이 있으면 마지막 영상에 왔을 때 더 읽는다(onLoadMore).
- * 영상은 Storage 주소에서 바로 재생한다(Media3 ExoPlayer, 폰에 받아 두지 않음). 팝업을 닫으면 재생기를 정리한다.
+ * 영상은 Storage 주소에서 재생하고 폰 안 캐시(VideoCache)에 남겨 둬서, 다시 볼 때는 받지 않는다(Media3 ExoPlayer).
+ * 팝업을 닫으면 재생기를 정리한다.
  */
 @Composable
 fun LogVideoDialog(
@@ -127,7 +127,8 @@ fun LogVideoDialog(
     if (log == null) return
 
     val context = LocalContext.current
-    val player = remember { ExoPlayer.Builder(context).build() }
+    // 폰 안 영상 캐시를 쓰는 재생기: 한 번 본 영상은 다시 받지 않는다(VideoCache)
+    val player = remember { VideoCache.newPlayer(context) }
     var playing by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
@@ -202,7 +203,7 @@ fun LogVideoDialog(
             buffering = false
             return@LaunchedEffect
         }
-        player.setMediaItem(MediaItem.fromUri(url))
+        player.setMediaItem(VideoCache.mediaItem(url, log.mediaPath))
         player.prepare()
         player.playWhenReady = true
     }
