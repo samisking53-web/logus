@@ -7,3 +7,4 @@ export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
 export { previewInvite } from "./previewInvite";
 export { saveLogLocation } from "./saveLogLocation";
+export { sendCaptureReminders } from "./sendCaptureReminders";

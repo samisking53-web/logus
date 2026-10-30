@@ -15,11 +15,13 @@ rules_version = '2';
 //
 // 클라이언트가 쓰는 문서 요약 (필드: 타입, 제한)
 //   users/{uid}: nickname 1~20자, photoURL(https 주소 500자 이하 또는 null), createdAt(서버 시각)
+//   users/{uid}/devices/{token}: 촬영 알림을 받을 폰(token = 문서 ID, timeZone, platform 'android', updatedAt 서버 시각). 본인만
 //   users/{uid}/agreements/{termsVersion}: 약관 동의 기록. ageOver14·terms·location(모두 true 필수),
 //     notifyNewLogs(bool), agreedAt(서버 시각). 본인만 읽고, 한 번 만들면 고치거나 지울 수 없다
 //   journeys/{journeyId}/members/{uid}: notifyIntervalHours(1|2|3|null)만 본인이 수정,
 //     finishedAt(여정 마치기, N01 다운로드 모양 버튼)은 본인이 한 번만 서버 시각으로 넣는다
 //     hiddenAt(마이로그에서 지우기, S14 휴지통 버튼)도 본인이 한 번만 서버 시각으로 넣는다
+//     coverPath(S01-A 여정 카드 대표 사진, 내 홈에서만 보임)는 본인 폴더의 cover_{시각}.jpg 경로 또는 null 로만 바꾼다
 //   journeys/{journeyId}/logs/{logId}:
 //     authorId(본인 uid, 변경 불가), mediaType(photo|video|text), mediaPath(본인 폴더 경로 또는 null),
 //     body 0~500자, themes(테마 태그 0~3개, 각 1~20자, # 없이), taggedUids(구성원 uid 20개 이하),
@@ -85,8 +87,26 @@ service cloud.firestore {
         && isServerTime(data.agreedAt);
     }
 
+    // 촬영 알림 기기: token 은 문서 ID 와 같고, timeZone 은 폰 시간대 이름(예: Asia/Seoul), updatedAt 은 서버 시각
+    function isValidDevice(data, token) {
+      return data.keys().hasOnly(['token', 'timeZone', 'platform', 'updatedAt'])
+        && data.keys().hasAll(['token', 'timeZone', 'platform', 'updatedAt'])
+        && data.token == token
+        && isStringBetween(data.token, 1, 4096)
+        && isStringBetween(data.timeZone, 1, 64)
+        && data.platform == 'android'
+        && isServerTime(data.updatedAt);
+    }
+
     function isValidNotifyInterval(value) {
       return value == null || value in [1, 2, 3];
+    }
+
+    // 여정 카드 대표 사진: 이 여정의 본인 폴더에 올린 cover_{시각}.jpg 만 가리킨다(null 이면 기본 그림)
+    function isValidCoverPath(value, journeyId, uid) {
+      return value == null
+        || (value is string && value.size() <= 200
+            && value.matches('^journeys/' + journeyId + '/' + uid + '/cover_[0-9]+[.]jpg$'));
     }
 
     // 기록에서 클라이언트가 정하는 필드를 검증한다. 생성과 수정 모두 이 함수를 거친다.
@@ -166,6 +186,13 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow write: if false;
       }
+
+      // 촬영 알림을 받을 폰(문서 ID = FCM 토큰). 본인만 읽고 쓰고 지운다(로그아웃하면 지운다).
+      // 서버 함수 sendCaptureReminders 가 이 토큰·시간대로 폰 시각 09~23시에 알림을 보낸다.
+      match /devices/{token} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidDevice(request.resource.data, token);
+      }
     }
 
     // ---------- 여정 ----------
@@ -192,6 +219,9 @@ service cloud.firestore {
             || (changedKeys().hasOnly(['hiddenAt'])
               && !('hiddenAt' in resource.data)
               && isServerTime(request.resource.data.hiddenAt))
+            // S01-A 여정 카드 대표 사진(내 홈에서만 보인다): 본인 폴더 사진 경로만
+            || (changedKeys().hasOnly(['coverPath'])
+              && isValidCoverPath(request.resource.data.coverPath, journeyId, memberId))
           );
         allow create, delete: if false;
       }

@@ -1,4 +1,4 @@
-// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 10코인을 준다 (S05·S07, 화면 문구 "+10P")
+// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 10코인을 준다 (S05·S07, 화면 문구 "+10코인")
 // 코인은 users/{uid}/coinLedger/{logId} 문서가 없을 때만 준다 → 같은 기록으로 두 번 받을 수 없다.
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";

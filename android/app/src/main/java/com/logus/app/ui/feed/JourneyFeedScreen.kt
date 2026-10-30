@@ -21,9 +21,13 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,14 +44,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -86,8 +94,9 @@ import java.time.ZoneId
 // N01~N03 기록 보기 (스토리보드 v4 13쪽 N01 스크롤 전·N02 스크롤 후, 화면 목록의 S06 우리 기록)
 /**
  * S01-A 여정 카드를 누르면 여는 화면. 하단 탭은 숨긴다.
- * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → "10월 9일 · 전체 3명"(오늘 날짜·전체 인원) + 다운로드 모양 "여정 마치기" 버튼
- * - 아래로 스크롤되는 부분: "지금 기록하기"(→ S04) → 오늘 기록을 공통 알림 간격으로 나눈 시간대
+ * - 위에 고정: LOG EARTH → 뒤로 가기 + 여정 이름 → "〈 10월 9일 · 전체 3명 〉"(보는 날짜·전체 인원) + 다운로드 모양 "여정 마치기" 버튼.
+ *   〈 는 전날, 〉 는 다음날 기록으로 옮긴다(여정 시작일 ~ 오늘). 끝에 닿으면 그쪽 화살표는 흐려지고 눌리지 않는다.
+ * - 아래로 스크롤되는 부분: "지금 기록하기"(→ S04, 오늘을 볼 때만) → 그날 기록을 공통 알림 간격으로 나눈 시간대
  *   ("09:20 ~ 11:20 시간" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
  * - 카드: 영상 대표 화면(첫 장면) 위 왼쪽 위에 기록한 사람의 작은 동그란 프로필, 오른쪽 위에 찍은 시각, 왼쪽 아래에 장소 이름.
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
@@ -99,6 +108,8 @@ fun JourneyFeedScreen(
     state: JourneyFeedUiState,
     onBack: () -> Unit,
     onRecordNow: () -> Unit,
+    /** 날짜 상자 〈(-1) 〉(+1) */
+    onMoveDay: (Long) -> Unit,
     onFinish: () -> Unit,
     /** 저장 팝업을 열 때(기록 수 세기) */
     onAskSave: () -> Unit,
@@ -109,6 +120,8 @@ fun JourneyFeedScreen(
     var askSave by rememberSaveable { mutableStateOf(false) }
     val today = LocalDate.now()
     val listState = rememberLazyListState()
+    // 다른 날로 옮기면 목록 맨 위부터 보여 준다
+    LaunchedEffect(state.day) { listState.scrollToItem(0) }
 
     // 끝에서 3칸 안쪽까지 내려오면 다음 기록을 읽는다(한 번에 다 읽지 않는다)
     LaunchedEffect(listState) {
@@ -128,6 +141,7 @@ fun JourneyFeedScreen(
         listState = listState,
         onBack = onBack,
         onRecordNow = onRecordNow,
+        onMoveDay = onMoveDay,
         onAskFinish = {
             onAskSave()
             askSave = true
@@ -160,10 +174,12 @@ private fun JourneyFeedContent(
     listState: LazyListState,
     onBack: () -> Unit,
     onRecordNow: () -> Unit,
+    onMoveDay: (Long) -> Unit,
     onAskFinish: () -> Unit,
     onRetry: () -> Unit,
     previewUrl: suspend (FeedLog) -> String?,
 ) {
+    val viewingToday = state.day == today
     // 아래에 더 볼 기록이 있으면(스크롤할 수 있거나 아직 다 읽지 않음) 안내를 보여 주고, 끝까지 내리면 숨긴다
     val showHint by remember(state.windows, state.endReached) {
         derivedStateOf { state.windows.isNotEmpty() && (listState.canScrollForward || !state.endReached) }
@@ -179,19 +195,36 @@ private fun JourneyFeedContent(
             RecordTopBar(title = journey.name, onBack = onBack)
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 오늘 날짜 · 전체 인원
-                Box(
+                // 〈 보는 날짜 · 전체 인원 〉
+                Row(
                     Modifier
                         .weight(1f)
                         .height(52.dp)
                         .background(LogUsColors.profileBox, RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    DayArrow(
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        label = "전날 기록 보기",
+                        enabled = state.canGoPrev,
+                        onClick = { onMoveDay(-1) },
+                    )
                     Text(
-                        "${today.monthValue}월 ${today.dayOfMonth}일 · 전체 ${journey.memberCount}명",
+                        "${state.day.monthValue}월 ${state.day.dayOfMonth}일 · 전체 ${journey.memberCount}명",
                         color = LogUsColors.primaryStrong,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                    DayArrow(
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        label = "다음날 기록 보기",
+                        enabled = state.canGoNext,
+                        onClick = { onMoveDay(1) },
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -223,7 +256,8 @@ private fun JourneyFeedContent(
                 .fillMaxWidth(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
         ) {
-            item(key = "record") {
+            // 지금 기록하기는 오늘을 볼 때만(지난날 화면에서 찍으면 오늘 기록으로 올라가 헷갈리므로)
+            if (viewingToday) item(key = "record") {
                 Column {
                     Spacer(Modifier.height(4.dp))
                     ActionButton(
@@ -249,7 +283,11 @@ private fun JourneyFeedContent(
                 state.windows.isEmpty() -> item(key = "empty") {
                     CenteredBox {
                         Text(
-                            "오늘은 아직 기록이 없어요.\n'지금 기록하기'로 첫 장면을 남겨 보세요.",
+                            if (viewingToday) {
+                                "오늘은 아직 기록이 없어요.\n'지금 기록하기'로 첫 장면을 남겨 보세요."
+                            } else {
+                                "이날은 기록이 없어요.\n〈 〉로 다른 날을 볼 수 있어요."
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 15.sp,
                             lineHeight = 22.sp,
@@ -300,6 +338,21 @@ private fun JourneyFeedContent(
                 Text("아래로 밀면 다음 시간대", color = LogUsColors.primaryStrong, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+/** 날짜 상자 양쪽 화살표. 더 갈 수 없으면 흐리게 하고 누를 수 없게 한다 */
+@Composable
+private fun DayArrow(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(44.dp)) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = LogUsColors.primaryStrong,
+            modifier = Modifier
+                .size(26.dp)
+                .alpha(if (enabled) 1f else 0.3f),
+        )
     }
 }
 
@@ -445,6 +498,9 @@ private fun JourneyFeedPreview() {
             journey = Journey("j", "우리의 포르투", "2026-09-24", "2026-09-26", listOf("a", "b", "c"), 3),
             state = JourneyFeedUiState(
                 journeyId = "j",
+                day = day,
+                canGoPrev = false,
+                canGoNext = true,
                 loading = false,
                 windows = groupByWindows(logs, 2, zone),
                 members = mapOf("a" to Member("a", "성연"), "b" to Member("b", "민수"), "c" to Member("c", "지우")),
@@ -454,6 +510,7 @@ private fun JourneyFeedPreview() {
             listState = rememberLazyListState(),
             onBack = {},
             onRecordNow = {},
+            onMoveDay = {},
             onAskFinish = {},
             onRetry = {},
             previewUrl = { null },

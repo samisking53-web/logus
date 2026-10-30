@@ -13,12 +13,14 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.logus.app.legal.LegalDoc
+import com.logus.app.notify.DeviceRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 회원가입 안에서 지금 보여 줄 화면 */
 enum class SignupStep {
@@ -65,6 +67,7 @@ sealed interface AuthUiState {
  */
 class AuthViewModel(
     private val repository: AuthRepository = AuthRepository(),
+    private val devices: DeviceRepository = DeviceRepository(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<AuthUiState>(AuthUiState.Checking)
@@ -179,7 +182,14 @@ class AuthViewModel(
 
     fun signOut(activity: Activity) {
         profileWatch?.cancel()
+        val uid = (_state.value as? AuthUiState.Ready)?.uid
         viewModelScope.launch {
+            // 이 폰으로 촬영 알림이 더 오지 않게(다음에 이 폰으로 로그인한 사람이 내 알림을 받지 않게) 먼저 지운다.
+            // 인터넷이 끊겨 있으면 서버 확인을 끝없이 기다리므로 3초만 기다린다(지우기는 연결되면 마저 된다)
+            if (uid != null) {
+                runCatching { withTimeoutOrNull(UNREGISTER_TIMEOUT_MILLIS) { devices.unregister(uid) } }
+                    .onFailure { Log.w(TAG, "알림 기기 지우기 실패", it) }
+            }
             repository.signOut(activity)
             _state.value = AuthUiState.SignedOut()
         }
@@ -222,6 +232,11 @@ class AuthViewModel(
      */
     private fun enterHome(uid: String, profile: Profile) {
         _state.value = AuthUiState.Ready(uid, profile)
+        // 촬영 알림을 받을 이 폰(FCM 토큰·시간대)을 등록한다. 여행지에서 시간대가 바뀌면 앱을 열 때 새로 저장된다
+        viewModelScope.launch {
+            runCatching { devices.register(uid) }
+                .onFailure { Log.w(TAG, "촬영 알림 기기 등록 실패 (보안 규칙 배포 확인)", it) }
+        }
         profileWatch?.cancel()
         profileWatch = viewModelScope.launch {
             repository.profileChanges(uid)
@@ -237,6 +252,7 @@ class AuthViewModel(
 
     private companion object {
         const val TAG = "AuthViewModel"
+        const val UNREGISTER_TIMEOUT_MILLIS = 3_000L
     }
 }
 

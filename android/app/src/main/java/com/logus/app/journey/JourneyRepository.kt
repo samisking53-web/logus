@@ -45,6 +45,9 @@ data class InvitePreview(
     val alreadyMember: Boolean,
 )
 
+/** 진행 중인 내 여정 하나 + 내 멤버 문서의 대표 사진 Storage 경로(내 홈에서만 보인다, 없으면 null → 기본 그림) */
+data class MyOngoingJourney(val journey: Journey, val coverPath: String?)
+
 /** 여정 한 쪽(페이지): 여정들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
 data class JourneyPage(val journeys: List<Journey>, val last: DocumentSnapshot?)
 
@@ -155,29 +158,31 @@ class JourneyRepository {
 
     /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */
     suspend fun loadJourney(journeyId: String): Journey? {
-        val doc = db.collection("journeys").document(journeyId).get().await()
-        return doc.toJourney()
+        return db.collection("journeys").document(journeyId).get().await().toJourney()
     }
 
     /**
-     * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정. 없으면 null.
-     * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 5개만 읽고(비용 관리: limit),
-     * 그중 종료일이 오늘 이후이고 내가 "여정 마치기"를 누르지 않은 첫 여정을 고른다
-     * (마쳤는지는 내 멤버 문서의 finishedAt 으로 본다. 기간 안의 여정만 하나씩 확인해서 보통 읽기 1번이 더 든다).
+     * 오늘(today, "YYYY-MM-DD") 진행 중인 내 여정들(S01-A 홈에 모두 보여 준다). 없으면 빈 목록.
+     * 시작일이 오늘 이전인 내 여정을 최근 시작한 순서로 limit 개만 읽고(비용 관리), 그중 종료일이 오늘 이후이고
+     * 내가 "여정 마치기"를 누르지 않은 여정만 남긴다. 기간 안의 여정마다 내 멤버 문서를 한꺼번에 읽어
+     * 마쳤는지(finishedAt)와 내 홈에서만 보이는 대표 사진(coverPath)을 함께 가져온다.
      * 색인: firestore.indexes.json 의 journeys(memberIds 포함 + startDate 내림차순)을 쓴다.
      */
-    suspend fun findOngoingJourney(uid: String, today: String): Journey? {
+    suspend fun findOngoingJourneys(uid: String, today: String, limit: Long = 10): List<MyOngoingJourney> = coroutineScope {
         val snap = db.collection("journeys")
             .whereArrayContains("memberIds", uid)
             .whereLessThanOrEqualTo("startDate", today)
             .orderBy("startDate", Query.Direction.DESCENDING)
-            .limit(5)
+            .limit(limit)
             .get()
             .await()
-        return snap.documents
+        snap.documents
             .mapNotNull { it.toJourney() }
             .filter { it.endDate >= today } // "YYYY-MM-DD" 글자는 사전 순서가 날짜 순서와 같다
-            .firstOrNull { myMemberDoc(it.id, uid).get("finishedAt") == null }
+            .map { journey -> async { journey to myMemberDoc(journey.id, uid) } }
+            .awaitAll()
+            .filter { (_, me) -> me.get("finishedAt") == null }
+            .map { (journey, me) -> MyOngoingJourney(journey, me.getString("coverPath")) }
     }
 
     /**
@@ -210,7 +215,7 @@ class JourneyRepository {
         return JourneyPage(past, last)
     }
 
-    /** 이 여정의 내 멤버 문서(finishedAt: 여정 마치기, hiddenAt: 마이로그에서 지움) */
+    /** 이 여정의 내 멤버 문서(finishedAt: 여정 마치기, hiddenAt: 마이로그에서 지움, coverPath: 내 홈 여정 카드 대표 사진) */
     private suspend fun myMemberDoc(journeyId: String, uid: String): DocumentSnapshot =
         db.collection("journeys").document(journeyId)
             .collection("members").document(uid)

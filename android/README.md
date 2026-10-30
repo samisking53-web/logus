@@ -27,14 +27,16 @@ android/
    ├─ ui/signup/ProfileSetupScreen.kt  P01 프로필 설정(2/2 단계)
    ├─ ui/signup/ProfilePhotoScreen.kt  P02 프로필 사진
    ├─ journey/JourneyRepository.kt  진행 중인 내 여정·구성원 읽기(Firestore journeys·users), 내 초대 코드(getInviteCode 함수)
-   ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 S01-A·오류)
+   ├─ home/HomeViewModel.kt     홈 상태(찾는 중·여정 없음 S01·진행 중 여정 여러 개 S01-A·오류)
+   ├─ home/CoverPhoto*.kt       S01-A 여정 카드 대표 사진 선택 팝업 상태·저장(내 멤버 문서 coverPath, 내 홈에서만)
+   ├─ home/GalleryRepository.kt 대표 사진 팝업의 폰 사진첩 목록(MediaStore)
    ├─ home/JoinViewModel.kt     초대 코드 입력 팝업 → 코드 확인(previewInvite) → I01 → 참여(joinJourney) → 수락 완료 팝업 상태
    ├─ journey/NewJourneyViewModel.kt  S02·S03 입력 상태, 저장(createJourney 함수)
    ├─ journey/Cities.kt         도시 추천용 내장 목록(한글·영문 검색)
    ├─ journey/CityRepository.kt 현재 위치의 도시·지도에서 도시 찾기(오픈스트리트맵)
    ├─ ui/SplashScreen.kt        앱 시작 화면(켤 때마다 잠깐)
    ├─ ui/MainScreen.kt          가입 후 메인: 탭 화면 + 하단 탭
-   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드, 초대 코드 입력 팝업
+   ├─ ui/home/                  S01·S01-A 홈, 프로필 상자, 여정 카드(여러 개), 초대 코드 입력 팝업, 대표 사진 선택 팝업
    ├─ ui/feed/JourneyFeedScreen.kt  N01~N03 기록 보기(오늘 기록을 시간대별 카드로, 여정 마치기)
    ├─ feed/JourneyFeedViewModel.kt  기록 보기 상태(30개씩 읽기, 시간대 나누기, 여정 마치기)
    ├─ ui/record/                S04 앱 내 카메라(16:9 미리보기·3초 고정 영상 촬영), S05 기록 올리기, L01 위치 확인 지도
@@ -47,6 +49,7 @@ android/
    ├─ ui/journey/               S02 새 여정 만들기, S03 여행 기간 달력, 초대 코드 팝업, 여정에 초대하기 팝업(S01-A)
    ├─ ui/invite/                I01 초대 확인(초대 코드를 확인한 뒤 화면), 초대 수락 완료 팝업
    ├─ ui/explore/, ui/mylog/    탐색·마이로그(준비 중. 로그아웃은 마이로그에)
+   ├─ notify/                   촬영 알림: FCM 푸시 받기(LogUsMessagingService), 이 폰 등록(DeviceRepository), 알림 채널·권한(CaptureReminder)
    ├─ ui/components/            동그란 프로필 사진, 하단 탭, 오류 문구 등
    └─ ui/theme/                 팔레트 색(CLAUDE.md "UI 규칙")과 다크 모드
 ```
@@ -76,6 +79,11 @@ android/
 - 여정을 만들면 카메라 대신 홈(오늘 시작이면 S01-A)으로 가는지
 - S01-A 여정 카드를 누르면 N01 기록 보기가 열리고, 오늘 올린 영상이 시간대별 카드(첫 장면·작은 프로필·시각)로 보이는지. 다운로드 모양 버튼 → "저장하시겠습니까?" 팝업(여정 이름·날짜·기록 수·인원) → "취소"면 그대로, "저장"이면 마이로그로 가고 홈이 S01 이 되는지
 - 폰 홈 화면의 앱 아이콘이 연보라 바탕 + 보라 지구 로고인지(바뀐 아이콘이 안 보이면 앱을 지웠다가 다시 설치)
+- 오늘이 기간 안인 여정이 둘 이상이면 S01-A 에 여정 카드가 모두 보이고(스크롤), "지금 기록하기" 버튼 없이 "새 여정 시작하기"·"초대 코드로 참여"만 있는지
+- 여정 카드 사진 오른쪽 위 전환 버튼 → "대표 사진 선택" 팝업(사진 접근 허용) → 사진 고르고 "이 사진으로 변경" → 내 홈 카드 사진만 바뀌는지(다른 구성원 홈은 그대로)
+- N01 날짜 상자 〈 〉로 전날·다음날 기록이 보이는지(여정 첫날·오늘에서는 화살표가 흐려짐)
+- S05 에서 영상을 누르면 소리까지 재생되는지, "+10코인" 문구
+- 촬영 알림(서버 함수 `sendCaptureReminders` 배포 뒤): 홈에 처음 들어올 때 "알림 허용"을 묻는지(안드로이드 13 이상) → 공통 알림 간격이 1시간인 여정을 오늘 날짜로 만들고 다음 정각(09~23시)까지 기다리면 "지금 기록할 시간이에요" 알림이 오는지(앱을 꺼 두어도·보고 있어도) → 알림을 누르면 홈(S01-A)이 열리는지
 
 ## 알아 둘 것
 - 로그인은 구글 계정만 쓴다(카카오는 쓰지 않기로 함).
@@ -83,4 +91,7 @@ android/
   구글 로그인을 켜면 Firebase가 자동으로 만드는 서버 확인용 ID이고, 안드로이드 구글 로그인에 꼭 필요하다.
 - 구글 로그인 버튼 색(흰 배경·회색 테두리)은 구글 디자인 가이드를 따라야 해서 팔레트의 예외다.
 - 프로필 사진(인터넷 주소)은 Coil 라이브러리로 띄운다. 못 불러오면 기본 프로필 그림을 보여 준다.
+- 촬영 알림은 서버가 매시 정각에 보낸다. 폰 시각 09~23시, 여정 기간 안, 9시부터 공통 알림 간격마다(2시간이면 9·11·…·23시)만 온다.
+  여정을 만든 사람이 "촬영 알림 받지 않기"를 골랐거나, 내가 그 여정을 저장(마침)했으면 오지 않는다.
+  알림이 안 오면: 폰 설정 → 앱 → LOG US → 알림이 켜져 있는지, Firestore `users/{uid}/devices`에 이 폰 문서가 있는지(홈에 들어오면 생긴다), 함수 로그(`firebase functions:log --only sendCaptureReminders`)를 본다.
 - 라이브러리 버전은 2024년 말 기준 안정 버전이다. Android Studio가 업데이트를 제안하면 올려도 된다.

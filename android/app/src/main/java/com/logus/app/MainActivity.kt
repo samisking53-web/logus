@@ -1,5 +1,6 @@
 package com.logus.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -31,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.logus.app.auth.AuthUiState
 import com.logus.app.auth.AuthViewModel
 import com.logus.app.auth.SignupStep
+import com.logus.app.notify.CaptureReminder
 import com.logus.app.ui.MainScreen
 import com.logus.app.ui.SplashScreen
 import com.logus.app.ui.WelcomeScreen
@@ -50,8 +53,14 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     private val authViewModel: AuthViewModel by viewModels()
 
+    /** 촬영 알림을 누를 때마다 1씩 늘린다 → MainScreen 이 홈(S01-A)으로 간다 */
+    private val openHomeRequests = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CaptureReminder.createChannel(this)
+        // 꺼져 있던 앱을 촬영 알림으로 켠 경우(화면을 돌려 다시 만들어질 때는 또 처리하지 않는다)
+        if (savedInstanceState == null) handleReminder(intent)
         enableEdgeToEdge()
         setContent {
             LogUsTheme {
@@ -91,6 +100,7 @@ class MainActivity : ComponentActivity() {
                                     uid = s.uid,
                                     profile = s.profile,
                                     onSignOut = { authViewModel.signOut(this@MainActivity) },
+                                    openHomeRequest = openHomeRequests.intValue,
                                 )
 
                                 is AuthUiState.Failed -> Column(
@@ -110,6 +120,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** 앱을 보고 있거나 뒤에 있을 때 촬영 알림을 누른 경우(singleTop 이라 새 화면을 만들지 않고 여기로 온다) */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleReminder(intent)
+    }
+
+    /** 촬영 알림으로 열렸으면 홈으로 가라고 알린다 */
+    private fun handleReminder(intent: Intent?) {
+        val fromReminder = intent?.action == CaptureReminder.ACTION_OPEN_HOME ||
+            intent?.getStringExtra("type") == "captureReminder"
+        if (fromReminder) openHomeRequests.intValue++
     }
 
     /** 회원가입 화면들: 약관 동의 → (약관 전문) → P01 프로필 설정 ↔ P02 사진 */
