@@ -2,7 +2,6 @@ package com.logus.app.ui.feed
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.CircleShape
@@ -114,7 +113,7 @@ import java.time.ZoneId
  *   ("09:20 ~ 11:20 시간" + 대표 화면 카드들). 아래로 내리면 "지금 기록하기"는 위로 올라가 사라지고 카드가 이어진다.
  * - 카드: 영상 대표 화면(첫 장면) 위 왼쪽 위에 기록한 사람의 작은 동그란 프로필, 오른쪽 위에 찍은 시각, 왼쪽 아래에 장소 이름.
  *   카드를 누르면 원본 영상 팝업(LogVideoDialog, 16:9 소리까지 재생, ‹ › 로 그날 영상 넘기기), 작은 프로필을 누르면 프로필 팝업.
- *   내 기록은 보라 테두리 + "내 기록" 배지. 카드를 길게 누르면 삭제 팝업(DeleteLogDialog, 2026-11-02 팀 그림):
+ *   카드를 길게 누르면 삭제 팝업(DeleteLogDialog, 2026-11-02 팀 그림):
  *   내 기록이면 "이 기록을 삭제할까요?" → 삭제 → 아래에 5초 동안 "내 기록을 삭제했어요 · 되돌리기",
  *   남의 기록이면 "다른 사람의 기록이에요"(지울 수 없다는 안내만). 날짜 상자 아래 줄은 "기록 N개 · 내 기록 N개".
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
@@ -401,8 +400,8 @@ private fun JourneyFeedContent(
                                 previewUrl = previewUrl,
                                 onProfileClick = { profileOf = it },
                                 onClick = { onOpenVideo(log) },
-                                mine = log.authorId == myUid,
                                 onLongClick = { onAskDelete(log) },
+                                longClickLabel = if (log.authorId == myUid) "내 기록 삭제" else "삭제 안내 보기",
                             )
                             Spacer(Modifier.height(10.dp))
                         }
@@ -549,7 +548,8 @@ internal fun WindowHeader(window: FeedWindow) {
  * 왼쪽 위 작은 동그란 프로필(사진이 없으면 지구본), 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름(있을 때).
  * onProfileClick 이 있으면 작은 프로필을 눌러 프로필 팝업(ProfileDialog)을 연다(N01·S15 공통).
  * onClick 이 있으면 영상 기록 카드의 나머지 부분을 눌러 원본 영상 팝업(LogVideoDialog)을 연다(N01·S15 공통).
- * mine 이면 보라 테두리 + "내 기록" 배지, onLongClick 이 있으면 길게 눌러 삭제 팝업(DeleteLogDialog)을 연다(N01, 2026-11-02 팀 그림).
+ * onLongClick 이 있으면 길게 눌러 삭제 팝업(DeleteLogDialog)을 연다(N01, 2026-11-02 팀 그림). longClickLabel 은 화면 읽기 프로그램의 "작업" 이름.
+ * 내 기록이라고 따로 표시(테두리·배지)하지는 않는다(2026-11-02 팀 결정).
  */
 @OptIn(ExperimentalFoundationApi::class) // combinedClickable(누르기 + 길게 누르기)
 @Composable
@@ -559,8 +559,8 @@ internal fun LogCard(
     previewUrl: suspend (FeedLog) -> String?,
     onProfileClick: ((Member) -> Unit)? = null,
     onClick: (() -> Unit)? = null,
-    mine: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    longClickLabel: String = "삭제",
 ) {
     val url by produceState<String?>(initialValue = null, log.id) { value = previewUrl(log) }
     val time = clockLabel(log.capturedAtMillis)
@@ -586,7 +586,7 @@ internal fun LogCard(
             )
             // 화면 읽기 프로그램은 카드 하나를 한 문장으로 읽는다
             .clearAndSetSemantics {
-                contentDescription = listOfNotNull(if (mine) "내 기록" else "$name 님의 기록", time, log.placeName).joinToString(", ")
+                contentDescription = listOfNotNull("$name 님의 기록", time, log.placeName).joinToString(", ")
                 // 화면 읽기 프로그램에서는 카드를 두 번 누르면 원본 영상 팝업이, 영상이 아니면 프로필 팝업이 열린다.
                 // 프로필 팝업·삭제는 "작업" 메뉴로 연다
                 val profileAction = if (author != null && onProfileClick != null) {
@@ -602,7 +602,7 @@ internal fun LogCard(
                     onClick(label = "$name 님 프로필 보기", action = profileAction)
                 }
                 onLongClick?.let { longClick ->
-                    actions += CustomAccessibilityAction(if (mine) "내 기록 삭제" else "삭제 안내 보기") { longClick(); true }
+                    actions += CustomAccessibilityAction(longClickLabel) { longClick(); true }
                 }
                 if (actions.isNotEmpty()) customActions = actions
             },
@@ -638,35 +638,17 @@ internal fun LogCard(
             ringWidth = 2.dp,
             ringColor = PhotoFrame,
         )
-        // 오른쪽 위: ("내 기록" 배지) + 찍은 시각
-        Row(
-            Modifier
+        Text(
+            time,
+            color = PhotoFrame,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (mine) {
-                Text(
-                    "내 기록",
-                    color = OnPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Primary, RoundedCornerShape(50))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                time,
-                color = PhotoFrame,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(PhotoScrim, RoundedCornerShape(50))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
+                .padding(12.dp)
+                .background(PhotoScrim, RoundedCornerShape(50))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        )
         log.placeName?.let {
             Text(
                 it,
@@ -678,14 +660,6 @@ internal fun LogCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
-            )
-        }
-        // 내 기록은 보라 테두리(사진 위에 그려야 보이므로 맨 마지막에)
-        if (mine) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .border(3.dp, Primary, RoundedCornerShape(18.dp)),
             )
         }
     }
