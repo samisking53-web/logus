@@ -9,7 +9,11 @@ import com.logus.app.journey.JourneyRepository
 import com.logus.app.journey.Member
 import com.logus.app.record.FeedLog
 import com.logus.app.record.LogRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +52,13 @@ data class JourneyFeedUiState(
     val loadingMore: Boolean = false,
     /** 그날 기록을 끝까지 다 읽었다 */
     val endReached: Boolean = false,
+    /** 날짜 상자 "기록 N개 · 내 기록 N개": 그날 기록 수(모든 구성원)와 그중 내 기록 수. 세는 중이거나 못 세면 null */
+    val dayCount: Int? = null,
+    val myDayCount: Int? = null,
+    /** 방금 지운 내 기록: 5초 동안 아래에 "내 기록을 삭제했어요 · 되돌리기"를 보여 준다. 없으면 null */
+    val justDeleted: FeedLog? = null,
+    /** 기록을 지우지 못했을 때 한 번 보여 줄 문구(MainScreen 이 알림으로 띄우고 지운다) */
+    val deleteError: String? = null,
     val error: String? = null,
     /** N03 저장 팝업의 "기록 N개"(이 여정 전체 기록 수). 세는 중이거나 못 세면 null */
     val recordCount: Int? = null,
@@ -83,7 +94,15 @@ class JourneyFeedViewModel(
     private var dayStart: Date = Date()
     private var dayEnd: Date = Date()
     private var loadJob: Job? = null
+    private var countJob: Job? = null
     private var journey: Journey? = null
+    /** 로그인한 나(내 기록인지 가려서 지울 수 있게 한다) */
+    private var myUid: String? = null
+
+    /** 지우기를 누른 뒤 5초 동안 되돌릴 수 있는 내 기록(시간이 지나거나 다른 날로 가면 진짜로 지운다) */
+    private var pendingDelete: PendingDelete? = null
+    /** 서버에서 지우는 중인 기록(그사이 다시 읽어도 화면에 다시 나오지 않게 뺀다) */
+    private val deleting = mutableMapOf<String, FeedLog>()
 
     /** 대표 화면 주소를 한 번 받으면 기억해 둔다(스크롤로 다시 보일 때 Storage 에 또 묻지 않게) */
     private val previewUrls = mutableMapOf<String, String?>()
@@ -92,8 +111,9 @@ class JourneyFeedViewModel(
     private val videoUrls = mutableMapOf<String, String>()
 
     /** 화면을 열 때·기록을 올리고 돌아왔을 때: 오늘 기록을 처음부터 다시 읽는다 */
-    fun open(journey: Journey) {
+    fun open(journey: Journey, uid: String) {
         this.journey = journey
+        myUid = uid
         showDay(journey, lastDay(journey), reloadMembers = true)
     }
 
@@ -114,6 +134,8 @@ class JourneyFeedViewModel(
     /** 그날(day) 기록을 처음부터 읽는다. reloadMembers 가 false 면(날짜만 옮길 때) 읽어 둔 구성원 프로필을 그대로 쓴다 */
     private fun showDay(journey: Journey, day: LocalDate, reloadMembers: Boolean) {
         loadJob?.cancel()
+        // 되돌리기를 기다리던 기록이 있으면 지금 지운다(되돌리기 안내는 이 날 화면에서만 보이므로)
+        commitPendingDelete()
         val zone = ZoneId.systemDefault()
         dayStart = Date.from(day.atStartOfDay(zone).toInstant())
         dayEnd = Date.from(day.plusDays(1).atStartOfDay(zone).toInstant())
@@ -138,7 +160,7 @@ class JourneyFeedViewModel(
                         .getOrDefault(emptyList())
                         .associateBy { it.uid }
                 val page = logs.loadLogs(journey.id, dayStart, dayEnd, after = null)
-                loaded = page.logs
+                loaded = page.logs.filterNot { it.id in deleting }
                 lastDoc = page.last
                 _state.update {
                     it.copy(
@@ -149,6 +171,7 @@ class JourneyFeedViewModel(
                         endReached = page.last == null,
                     )
                 }
+                loadCounts(journey.id)
             } catch (e: Exception) {
                 Log.w(TAG, "기록 읽기 실패", e)
                 _state.update { it.copy(loading = false, error = "기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.") }
@@ -177,7 +200,7 @@ class JourneyFeedViewModel(
         loadJob = viewModelScope.launch {
             try {
                 val page = logs.loadLogs(journeyId, dayStart, dayEnd, after = after)
-                loaded = loaded + page.logs
+                loaded = loaded + page.logs.filterNot { it.id in deleting }
                 lastDoc = page.last
                 _state.update {
                     it.copy(
@@ -191,6 +214,118 @@ class JourneyFeedViewModel(
                 _state.update { it.copy(loadingMore = false) }
             }
         }
+    }
+
+    /**
+     * 날짜 상자의 "기록 N개 · 내 기록 N개"를 센다(개수 세기라 문서를 내려받지 않는다).
+     * 내 기록 수는 색인(authorId + capturedAt)이 필요하다. 색인을 아직 배포하지 않았거나 실패하면,
+     * 그날 기록을 끝까지 읽었을 때만 읽은 기록으로 센다(아니면 그 칸은 비워 둔다).
+     */
+    private fun loadCounts(journeyId: String) {
+        val uid = myUid
+        val from = dayStart
+        val to = dayEnd
+        val day = _state.value.day
+        countJob?.cancel()
+        countJob = viewModelScope.launch {
+            // 지우는 중(되돌리기를 기다리는 것 포함)인 기록은 서버 숫자에 아직 들어 있을 수 있어서 뺀다
+            val stillDeleting = (deleting.values + listOfNotNull(pendingDelete?.log))
+                .filter { it.capturedAtMillis in from.time until to.time }
+            val total = runCatching { logs.countDayLogs(journeyId, from, to) - stillDeleting.size }
+                .onFailure { Log.w(TAG, "그날 기록 수 세기 실패", it) }
+                .getOrNull()
+            val mine = uid?.let {
+                runCatching { logs.countDayLogs(journeyId, from, to, authorId = it) - stillDeleting.size }
+                    .onFailure { e -> Log.w(TAG, "내 기록 수 세기 실패 (색인 배포 확인)", e) }
+                    .getOrNull()
+            }
+            _state.update { s ->
+                if (s.journeyId != journeyId || s.day != day) return@update s
+                s.copy(
+                    dayCount = total ?: loaded.size.takeIf { s.endReached },
+                    myDayCount = mine ?: loaded.count { it.authorId == uid }.takeIf { s.endReached && uid != null },
+                )
+            }
+        }
+    }
+
+    /**
+     * 내 기록 지우기(카드를 길게 눌러 "삭제"): 화면에서 바로 빼고 5초 동안 "되돌리기"를 보여 준 뒤 진짜로 지운다.
+     * 남의 기록은 지우지 않는다(화면에서도 막고, 보안 규칙도 작성자만 지울 수 있게 되어 있다).
+     */
+    fun deleteMine(log: FeedLog) {
+        val journeyId = _state.value.journeyId ?: return
+        if (log.authorId != myUid || loaded.none { it.id == log.id }) return
+        commitPendingDelete() // 앞서 지운 기록이 기다리고 있으면 먼저 지운다(되돌리기는 마지막 하나만)
+        loaded = loaded.filterNot { it.id == log.id }
+        _state.update {
+            it.copy(
+                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                dayCount = it.dayCount?.minus(1)?.coerceAtLeast(0),
+                myDayCount = it.myDayCount?.minus(1)?.coerceAtLeast(0),
+                justDeleted = log,
+            )
+        }
+        val timer = viewModelScope.launch {
+            delay(UNDO_MILLIS)
+            commitPendingDelete()
+        }
+        pendingDelete = PendingDelete(journeyId, log, timer)
+    }
+
+    /** "되돌리기": 아직 지우지 않은 기록을 화면에 다시 넣는다 */
+    fun undoDelete() {
+        val pending = pendingDelete ?: return
+        pending.timer.cancel()
+        pendingDelete = null
+        if (_state.value.journeyId == pending.journeyId) restore(pending.log)
+        _state.update { it.copy(justDeleted = null) }
+    }
+
+    /** 기다리던 기록을 지금 서버에서 지운다(5초가 지났거나, 다른 날·다른 여정으로 갔거나, 다른 기록을 또 지울 때) */
+    private fun commitPendingDelete() {
+        val pending = pendingDelete ?: return
+        pendingDelete = null
+        pending.timer.cancel()
+        _state.update { if (it.justDeleted?.id == pending.log.id) it.copy(justDeleted = null) else it }
+        deleting[pending.log.id] = pending.log
+        // 화면을 닫거나 앱을 내려도 끝까지 지우도록 이 화면과 상관없는 곳에서 돌린다
+        deleteScope.launch {
+            try {
+                logs.deleteLog(pending.journeyId, pending.log)
+            } catch (e: Exception) {
+                Log.w(TAG, "기록 지우기 실패 (보안 규칙 배포 확인)", e)
+                // 아직 같은 날을 보고 있으면 기록을 다시 보여 준다
+                if (_state.value.journeyId == pending.journeyId) restore(pending.log)
+                _state.update { it.copy(deleteError = "기록을 삭제하지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요.") }
+            } finally {
+                deleting.remove(pending.log.id)
+            }
+        }
+    }
+
+    /** 지우려던 기록을 다시 목록에 넣는다(지금 보고 있는 날의 기록일 때만) */
+    private fun restore(log: FeedLog) {
+        if (log.capturedAtMillis !in dayStart.time until dayEnd.time || loaded.any { it.id == log.id }) return
+        loaded = (loaded + log).sortedBy { it.capturedAtMillis }
+        _state.update {
+            it.copy(
+                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                dayCount = it.dayCount?.plus(1),
+                myDayCount = it.myDayCount?.plus(1),
+            )
+        }
+    }
+
+    /** 삭제 실패 문구를 보여 준 뒤 지운다 */
+    fun consumeDeleteError() {
+        _state.update { it.copy(deleteError = null) }
+    }
+
+    /** 이 화면 상태가 사라질 때(앱 종료 등): 되돌리기를 기다리던 기록은 지금 지운다 */
+    override fun onCleared() {
+        commitPendingDelete()
+        super.onCleared()
     }
 
     /** 기록의 대표 화면 주소(없으면 null → 화면은 보라 그림). 한 번 받은 주소는 기억한다 */
@@ -249,8 +384,17 @@ class JourneyFeedViewModel(
 
         /** 기록 보기에서 프로필을 읽어 올 최대 구성원 수 */
         const val MAX_MEMBERS = 30
+
+        /** 지운 뒤 "되돌리기"를 누를 수 있는 시간(2026-11-02 팀 결정: 5초) */
+        const val UNDO_MILLIS = 5_000L
     }
 }
+
+/** 되돌리기를 기다리는 삭제(어느 여정의 어떤 기록인지 + 5초 타이머) */
+private class PendingDelete(val journeyId: String, val log: FeedLog, val timer: Job)
+
+/** 기록 지우기는 화면을 닫아도 끝까지 하도록 앱 전체에서 쓰는 곳에서 돌린다(화면 상태 고치기는 메인 스레드에서) */
+private val deleteScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
 /**
  * 기록을 시간대로 나눈다. 시작점은 첫 기록 시각(그날 몇 분째)을 10분 단위로 내린 값이고,

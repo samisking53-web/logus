@@ -170,7 +170,7 @@ fun MainScreen(
             capturing = false
             mapOpen = false
             // 기록 보기에서 "지금 기록하기"로 왔으면 기록 보기로 돌아가서 방금 올린 기록이 보이게 다시 읽는다
-            if (viewingFeed) active?.let { feedViewModel.open(it) }
+            if (viewingFeed) active?.let { feedViewModel.open(it, uid) }
             val message = when {
                 uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
                 uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
@@ -196,7 +196,7 @@ fun MainScreen(
     // 기록 보기를 다시 그릴 때(화면 회전·앱 복귀 등) 다른 여정의 기록이 남아 있으면 이 여정으로 다시 읽는다
     LaunchedEffect(viewingFeed, active?.id) {
         val journey = active ?: return@LaunchedEffect
-        if (viewingFeed && feedState.journeyId != journey.id) feedViewModel.open(journey)
+        if (viewingFeed && feedState.journeyId != journey.id) feedViewModel.open(journey, uid)
     }
     // 대표 사진을 저장하면: 그 여정 카드 사진만 바꾸고 팝업을 닫는다(내 홈에서만 바뀐다)
     LaunchedEffect(coverState.savedPath) {
@@ -204,6 +204,12 @@ fun MainScreen(
         coverState.journeyId?.let { homeViewModel.setCover(it, path) }
         coverPhotoViewModel.close()
         Toast.makeText(context, "대표 사진을 바꿨어요", Toast.LENGTH_SHORT).show()
+    }
+    // 기록을 지우지 못했으면 알려 준다(기록은 다시 보인다)
+    LaunchedEffect(feedState.deleteError) {
+        val message = feedState.deleteError ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        feedViewModel.consumeDeleteError()
     }
     // N03 저장 팝업에서 "저장"이 끝나면: 나에게만 여정이 끝났으니 홈을 다시 읽고(S01) 마이로그로 간다
     LaunchedEffect(feedState.finished) {
@@ -356,6 +362,9 @@ fun MainScreen(
                 onRetry = { feedViewModel.reload() },
                 previewUrl = feedViewModel::previewUrl,
                 videoUrl = feedViewModel::videoUrl, // 기록 카드 → 원본 영상 팝업
+                myUid = uid,
+                onDeleteLog = feedViewModel::deleteMine, // 내 기록 길게 누르기 → 삭제(5초 동안 되돌리기)
+                onUndoDelete = feedViewModel::undoDelete,
             )
         }
     } else {
@@ -394,7 +403,7 @@ fun MainScreen(
                         // S01-A 여정 카드 → 그 여정의 N01 기록 보기("지금 기록하기"는 여기에 있다)
                         onOpenJourney = { journey ->
                             activeJourneyId = journey.id
-                            feedViewModel.open(journey)
+                            feedViewModel.open(journey, uid)
                             viewingFeed = true
                         },
                         // S01-A 여정 카드 사진 위 전환 버튼 → 대표 사진 선택 팝업

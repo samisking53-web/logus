@@ -65,6 +65,11 @@ object VideoCache {
             .setCustomCacheKey(storagePath ?: url)
             .build()
 
+    /** 지운 기록의 영상을 캐시에서 뺀다(이 앱을 켠 뒤 캐시를 한 번도 안 썼으면 할 일이 없다) */
+    suspend fun remove(storagePath: String) = withContext(Dispatchers.IO) {
+        runCatching { cache?.removeResource(storagePath) }
+    }
+
     /** 영상 파일을 target 에 만든다(캐시에 있으면 폰에서 복사, 없으면 받아서 캐시에도 남긴다). DAY RECAP 영상 추출용 */
     suspend fun copyTo(context: Context, url: String, storagePath: String?, target: File) = withContext(Dispatchers.IO) {
         val source = dataSourceFactory(context).createDataSource()

@@ -151,6 +151,34 @@ class LogRepository {
             .toInt()
 
     /**
+     * N01 날짜 상자의 "기록 N개 · 내 기록 N개": 한 여정의 [from, to) 사이에 찍은 기록 수(authorId 를 넘기면 그 사람 것만).
+     * 개수 세기(count)라 문서를 내려받지 않는다. authorId 로 거를 때는 색인(authorId + capturedAt, firestore.indexes.json)이 필요하다.
+     */
+    suspend fun countDayLogs(journeyId: String, from: Date, to: Date, authorId: String? = null): Int {
+        var query: Query = db.collection("journeys").document(journeyId).collection("logs")
+            .whereGreaterThanOrEqualTo("capturedAt", Timestamp(from))
+            .whereLessThan("capturedAt", Timestamp(to))
+        if (authorId != null) query = query.whereEqualTo("authorId", authorId)
+        return query.count().get(AggregateSource.SERVER).await().count.toInt()
+    }
+
+    /**
+     * 내 기록 삭제(N01 길게 누르기 → 삭제): 기록 문서를 먼저 지워 구성원 모두의 기록 보기·추억 지도·DAY RECAP 에서 빼고,
+     * 영상과 대표 화면(썸네일) 파일을 지운다. 보안 규칙상 작성자만 지울 수 있다(남의 기록은 거부된다).
+     * 파일 지우기가 실패해도 기록은 이미 사라졌으므로 넘어간다(로그만 남긴다). 받은 코인은 그대로 둔다(2026-11-02 팀 결정).
+     */
+    suspend fun deleteLog(journeyId: String, log: FeedLog) {
+        db.collection("journeys").document(journeyId).collection("logs").document(log.id).delete().await()
+        log.mediaPath?.let { path ->
+            for (file in listOf(path, thumbnailPath(path))) {
+                runCatching { storage.reference.child(file).delete().await() }
+                    .onFailure { Log.w(TAG, "기록 파일 지우기 실패: $file", it) }
+            }
+            VideoCache.remove(path) // 이 폰에 남겨 둔 영상도 지운다
+        }
+    }
+
+    /**
      * 기록의 대표 화면 주소(Storage 다운로드 주소). 사진은 그 사진, 영상은 같은 폴더의 {logId}.jpg 썸네일.
      * 보안 규칙상 여정 구성원만 받을 수 있다. 썸네일이 없으면(예전 기록) 예외가 난다 → 화면은 보라 그림으로 대신한다.
      */
