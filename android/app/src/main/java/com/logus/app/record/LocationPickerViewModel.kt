@@ -115,7 +115,7 @@ class LocationPickerViewModel(
                 repository.reverse(point)
             } catch (e: Exception) {
                 Log.w(TAG, "주소 찾기 실패", e)
-                PickedPlace(point = point, name = "선택한 위치", address = "주소를 찾지 못했어요. 인터넷 연결을 확인해 주세요.")
+                PickedPlace(point = point, name = UNKNOWN_PLACE_NAME, address = OFFLINE_PLACE_ADDRESS)
             }
             _state.update { it.copy(place = place, resolving = false) }
         }

@@ -84,4 +84,5 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.transformer)
     implementation(libs.media3.effect)
+    implementation(libs.work.runtime.ktx) // 오프라인에서 찍은 기록을 인터넷이 연결되면 자동으로 올리기(앱이 꺼져 있어도)
 }

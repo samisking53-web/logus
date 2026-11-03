@@ -82,6 +82,7 @@ import com.logus.app.feed.minuteLabel
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.record.FeedLog
+import com.logus.app.record.PendingLog
 import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.components.ProfileDialog
 import com.logus.app.ui.home.ActionButton
@@ -116,6 +117,8 @@ import java.time.ZoneId
  *   카드를 길게 누르면 삭제 팝업(DeleteLogDialog, 2026-11-02 팀 그림):
  *   내 기록이면 "이 기록을 삭제할까요?" → 삭제 → 아래에 5초 동안 "내 기록을 삭제했어요 · 되돌리기",
  *   남의 기록이면 "다른 사람의 기록이에요"(지울 수 없다는 안내만). 날짜 상자 아래 줄은 "기록 N개 · 내 기록 N개".
+ * - 맨 위: 인터넷이 없어 폰에 보관한 내 기록이 있으면 "올리기를 기다리는 기록 N개" 상자와 흐린 카드(첫 장면·"인터넷 연결 대기 중"/
+ *   "올리는 중…"). 인터넷이 연결되어 올라가면 사라지고 보통 기록 카드로 보인다(2026-11-03 팀 결정, PendingLogs).
  * - 맨 아래 "↓ 아래로 밀면 다음 시간대" 안내. 끝까지 내리면 사라진다.
  * - 다운로드 모양 버튼: N03 "저장하시겠습니까?" 팝업(SaveJourneyDialog) → "저장" → 나에게만 여정을 끝내고 마이로그로 간다(MainScreen).
  */
@@ -140,6 +143,9 @@ fun JourneyFeedScreen(
     /** 삭제 팝업의 "삭제"(내 기록만) / 아래 안내의 "되돌리기" */
     onDeleteLog: (FeedLog) -> Unit,
     onUndoDelete: () -> Unit,
+    /** 이 여정에서 폰에 보관해 두고 올리기를 기다리는 내 기록 / 그중 지금 올리는 중인 기록 ID */
+    pending: List<PendingLog> = emptyList(),
+    uploadingIds: Set<String> = emptySet(),
 ) {
     var askSave by rememberSaveable { mutableStateOf(false) }
     // 원본 영상 팝업으로 보고 있는 기록(카드를 누르면 연다)
@@ -180,6 +186,8 @@ fun JourneyFeedScreen(
         myUid = myUid,
         onAskDelete = { deleteOf = it.id },
         onUndoDelete = onUndoDelete,
+        pending = pending,
+        uploadingIds = uploadingIds,
     )
 
     // 삭제 팝업: 내 기록이면 "이 기록을 삭제할까요?", 남의 기록이면 "다른 사람의 기록이에요"(안내만)
@@ -251,6 +259,8 @@ private fun JourneyFeedContent(
     /** 기록 카드를 길게 누르면 삭제 팝업 */
     onAskDelete: (FeedLog) -> Unit = {},
     onUndoDelete: () -> Unit = {},
+    pending: List<PendingLog> = emptyList(),
+    uploadingIds: Set<String> = emptySet(),
 ) {
     val viewingToday = state.day == today
     // 이날 내가 올린 기록이 있으면 "길게 누르면 삭제" 안내를 보여 준다
@@ -344,6 +354,14 @@ private fun JourneyFeedContent(
                     .fillMaxWidth(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
             ) {
+                // 폰에 보관해 두고 인터넷을 기다리는 내 기록(이 폰에서만 보인다)
+                if (pending.isNotEmpty()) item(key = "pending") {
+                    Column {
+                        Spacer(Modifier.height(4.dp))
+                        PendingSection(pending = pending, uploadingIds = uploadingIds, me = state.members[myUid])
+                        Spacer(Modifier.height(14.dp))
+                    }
+                }
                 // 안내 띠: 이날 내가 올린 기록이 있을 때만
                 if (hasMine) item(key = "deleteHint") {
                     Column {
@@ -446,6 +464,108 @@ private fun JourneyFeedContent(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+/** "올리기를 기다리는 기록 N개 · 인터넷이 연결되면 자동으로 올라가요" + 흐린 카드들 */
+@Composable
+private fun PendingSection(pending: List<PendingLog>, uploadingIds: Set<String>, me: Member?) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(LogUsColors.profileBox, RoundedCornerShape(18.dp))
+            .padding(12.dp),
+    ) {
+        Text(
+            "올리기를 기다리는 기록 ${pending.size}개",
+            color = LogUsColors.primaryStrong,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() },
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "인터넷이 연결되면 자동으로 올라가요",
+            color = LogUsColors.primaryStrong,
+            fontSize = 13.sp,
+        )
+        pending.forEach { item ->
+            Spacer(Modifier.height(10.dp))
+            PendingLogCard(item = item, me = me, uploading = item.logId in uploadingIds)
+        }
+    }
+}
+
+/** 폰에 보관한 기록 카드: 기록 카드와 같은 모양에 어둡게 덮고 가운데 "인터넷 연결 대기 중" / "올리는 중…" */
+@Composable
+private fun PendingLogCard(item: PendingLog, me: Member?, uploading: Boolean) {
+    val time = clockLabel(item.capturedAtMillis)
+    val status = if (uploading) "올리는 중…" else "인터넷 연결 대기 중"
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(3f)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)))
+            .clearAndSetSemantics {
+                contentDescription = listOfNotNull("올리기를 기다리는 내 기록", time, item.place?.name, status).joinToString(", ")
+            },
+    ) {
+        if (item.thumbFile.exists()) {
+            AsyncImage(model = item.thumbFile, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        // 아직 올라가지 않았다는 것이 보이게 전체를 어둡게
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(PhotoScrim),
+        )
+        Avatar(
+            photo = me?.photoUrl,
+            size = 36.dp,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp),
+            ringWidth = 2.dp,
+            ringColor = PhotoFrame,
+        )
+        Text(
+            time,
+            color = PhotoFrame,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp)
+                .background(PhotoScrim, RoundedCornerShape(50))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+        Row(
+            Modifier
+                .align(Alignment.Center)
+                .background(PhotoScrim, RoundedCornerShape(50))
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (uploading) {
+                CircularProgressIndicator(color = PhotoFrame, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(status, color = PhotoFrame, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        item.place?.name?.let {
+            Text(
+                it,
+                color = PhotoFrame,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             )
         }
     }

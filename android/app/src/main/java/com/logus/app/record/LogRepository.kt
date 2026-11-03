@@ -10,10 +10,12 @@ import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.storage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -60,7 +62,9 @@ class LogRepository {
      * - 대표 화면(썸네일): 영상 첫 장면을 줄여 같은 폴더에 {logId}.jpg 로 함께 올린다(N01 기록 보기에서 쓴다).
      *   썸네일만 실패하면 기록은 그대로 올리고, 기록 보기에서 보라 그림으로 대신 보여 준다.
      * 문서 만들기에 실패하면 먼저 올린 영상·썸네일 파일을 지운다(쓰레기 파일이 남지 않게).
-     * 돌려주는 값: 새 기록 ID
+     * logId: 미리 정한 기록 ID(newLogId). 오프라인이면 같은 ID 로 폰에 보관했다가 나중에 올려서, 같은 기록이 두 번 생기지 않는다.
+     * resumed: 폰에 보관했던 기록을 다시 올리는 중(LogUploadWorker). 이미 다 올라가 있으면(지난번에 끝을 못 보고 앱이 꺼진 경우) 건너뛴다.
+     * 돌려주는 값: 기록 ID
      */
     suspend fun uploadVideoLog(
         journeyId: String,
@@ -69,8 +73,12 @@ class LogRepository {
         capturedAtMillis: Long,
         capturedTz: String,
         themes: List<String>,
+        logId: String? = null,
+        resumed: Boolean = false,
     ): String {
-        val logRef = db.collection("journeys").document(journeyId).collection("logs").document()
+        val logs = db.collection("journeys").document(journeyId).collection("logs")
+        val logRef = if (logId != null) logs.document(logId) else logs.document()
+        if (resumed && logRef.get(Source.SERVER).await().exists()) return logRef.id
         val mediaPath = "journeys/$journeyId/$uid/${logRef.id}.mp4"
         val fileRef = storage.reference.child(mediaPath)
         val metadata = StorageMetadata.Builder().setContentType("video/mp4").build()
@@ -100,12 +108,20 @@ class LogRepository {
                 ),
             ).await()
         } catch (e: Exception) {
+            // 기다리다 그만둔 경우(2분 넘김·작업 중지)는 저장이 나중에 서버에 닿을 수 있으므로 파일을 지우지 않는다
+            if (e is CancellationException) throw e
+            // 다시 올리는 중인데 그사이 먼저 보낸 저장이 서버에 닿아 이미 기록이 있으면 성공으로 본다(파일도 지우지 않는다)
+            if (resumed && runCatching { logRef.get(Source.SERVER).await().exists() }.getOrDefault(false)) return logRef.id
             runCatching { fileRef.delete().await() }
             if (thumbUploaded) runCatching { thumbRef.delete().await() }
             throw e
         }
         return logRef.id
     }
+
+    /** 새 기록 ID 를 미리 정한다(인터넷이 없어도 폰에서 바로 만든다) */
+    fun newLogId(journeyId: String): String =
+        db.collection("journeys").document(journeyId).collection("logs").document().id
 
     /**
      * N01 기록 보기: 한 여정의 [from, to) 사이에 찍은 기록을 찍은 시각 순서로 limit 개씩 읽는다(비용 관리: 한 번에 다 읽지 않는다).
@@ -249,7 +265,7 @@ internal fun thumbnailPath(videoPath: String): String = videoPath.substringBefor
  * 영상 첫 장면을 가로 최대 640px 로 줄인 JPEG(약 30~80KB). 영상이 작아도 기록 보기에서 빨리 보이도록 따로 만든다.
  * 안드로이드 기본 기능(MediaMetadataRetriever)이라 라이브러리가 필요 없다. 실패하면 null.
  */
-private fun videoThumbnailJpeg(video: File): ByteArray? {
+internal fun videoThumbnailJpeg(video: File): ByteArray? {
     val retriever = MediaMetadataRetriever()
     return try {
         retriever.setDataSource(video.absolutePath)

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 오프라인 기록 자동 올리기: 지금 인터넷이 되는지 확인하고, 연결되면 올리기(WorkManager) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 촬영 알림(FCM 푸시): 안드로이드 13 이상은 알림을 띄우려면 이 권한을 받아야 한다(홈에 처음 들어올 때 한 번 묻는다) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 새 여정의 도시 추천에 현재 위치를 쓴다. 도시 이름만 알면 돼서 대략적인 위치만 묻는다 -->

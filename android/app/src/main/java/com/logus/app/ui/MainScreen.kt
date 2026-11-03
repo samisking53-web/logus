@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
 import com.logus.app.notify.CaptureReminder
+import com.logus.app.record.PendingLogs
 import com.logus.app.journeydetail.JourneyDetailViewModel
 import com.logus.app.journeydetail.RecapExportState
 import com.logus.app.journeydetail.RecapExportViewModel
@@ -172,6 +174,7 @@ fun MainScreen(
             // 기록 보기에서 "지금 기록하기"로 왔으면 기록 보기로 돌아가서 방금 올린 기록이 보이게 다시 읽는다
             if (viewingFeed) active?.let { feedViewModel.open(it, uid) }
             val message = when {
+                uploadState.queued -> "인터넷이 없어서 폰에 보관했어요. 연결되면 자동으로 올라가요."
                 uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
                 uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
                 else -> "여정에 올렸어요"
@@ -204,6 +207,17 @@ fun MainScreen(
         coverState.journeyId?.let { homeViewModel.setCover(it, path) }
         coverPhotoViewModel.close()
         Toast.makeText(context, "대표 사진을 바꿨어요", Toast.LENGTH_SHORT).show()
+    }
+    // 폰에 보관한 기록(인터넷을 기다리는 것)과 지금 올리는 중인 것. N01 맨 위에 보여 준다(PendingLogs)
+    val pendingLogs by PendingLogs.items.collectAsStateWithLifecycle()
+    val uploadingIds by remember(context) { PendingLogs.uploadingIds(context) }.collectAsStateWithLifecycle(initialValue = emptySet())
+    // 보관했던 기록이 인터넷이 연결되어 올라가면: 알려 주고, 그 여정의 기록 보기를 보고 있으면 다시 읽어 보통 카드로 보여 준다
+    LaunchedEffect(Unit) {
+        PendingLogs.uploaded.collect { done ->
+            val coins = if (done.coinsGranted > 0) " · 코인 ${done.coinsGranted}개가 쌓였어요" else ""
+            Toast.makeText(context, "폰에 보관했던 기록을 여정에 올렸어요$coins", Toast.LENGTH_SHORT).show()
+            if (viewingFeed && feedViewModel.state.value.journeyId == done.journeyId) feedViewModel.reload()
+        }
     }
     // 기록을 지우지 못했으면 알려 준다(기록은 다시 보인다)
     LaunchedEffect(feedState.deleteError) {
@@ -365,6 +379,8 @@ fun MainScreen(
                 myUid = uid,
                 onDeleteLog = feedViewModel::deleteMine, // 내 기록 길게 누르기 → 삭제(5초 동안 되돌리기)
                 onUndoDelete = feedViewModel::undoDelete,
+                pending = pendingLogs.filter { it.journeyId == active.id && it.uid == uid },
+                uploadingIds = uploadingIds,
             )
         }
     } else {
