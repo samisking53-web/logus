@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.MirrorMode
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -61,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -74,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.logus.app.R
 import com.logus.app.record.CapturePhase
 import com.logus.app.record.CaptureUiState
 import com.logus.app.record.VIDEO_MILLIS
@@ -90,7 +94,9 @@ import java.time.LocalTime
 // S04 앱 내 카메라
 /**
  * 여행 중 홈(S01-A)의 "지금 기록하기"(또는 여정 시작일 자동)로 여는 앱 안 카메라. 하단 탭은 숨긴다.
- * - 맨 위: 뒤로 가기 + 여정 이름 / 그 아래: "● 여정 진행 중 · 14:30"(지금 시각, 1분마다 바뀐다)
+ * - 맨 위: 뒤로 가기 + 여정 이름 / 그 아래: "● 여정 진행 중 · 14:30"(지금 시각, 1분마다 바뀐다) + 오른쪽 카메라 전환 버튼
+ *   (전면 ↔ 후면, 2026-11-03 팀 그림. 녹화 중에는 꺼지고, 전면 카메라가 없는 폰에서는 흐리게 둔다.
+ *   전면 카메라 영상은 미리보기처럼 좌우를 뒤집어 저장한다. 고른 카메라는 앱을 끌 때까지 기억한다)
  * - 카메라 미리보기: 화면 위쪽 절반 안에 들어가도록 가로로 긴 16:9 상자. 앱은 세로로 고정되어 있고(AndroidManifest),
  *   상자에 보이는 그대로(16:9) 영상이 저장된다(CameraX 가 미리보기 영역대로 잘라 녹화한다).
  * - 영상은 늘 3초(2026-10-14 팀 결정). "00:02 / 00:03"과 진행 막대로 보여 주고, 3초가 되면 저절로 멈춘다.
@@ -105,6 +111,8 @@ fun CaptureScreen(
     state: CaptureUiState,
     onBack: () -> Unit,
     onStart: (controller: LifecycleCameraController, withAudio: Boolean) -> Unit,
+    /** 전환 버튼(전면 ↔ 후면) */
+    onToggleCamera: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -130,7 +138,24 @@ fun CaptureScreen(
                 Quality.FHD,
                 FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
             )
+            // 전면 카메라 영상은 미리보기(거울처럼 보임)와 같게 좌우를 뒤집어 저장한다
+            videoCaptureMirrorMode = MirrorMode.MIRROR_MODE_ON_FRONT_ONLY
         }
+    }
+    // 이 폰에 전면 카메라가 있는지(카메라 준비가 끝나야 알 수 있다)
+    var hasFrontCamera by remember { mutableStateOf(false) }
+    DisposableEffect(controller) {
+        val future = controller.initializationFuture
+        future.addListener(
+            { hasFrontCamera = runCatching { controller.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) }.getOrDefault(false) },
+            ContextCompat.getMainExecutor(context),
+        )
+        onDispose { }
+    }
+    // 전환 버튼으로 고른 카메라로 바꾼다
+    LaunchedEffect(state.useFrontCamera, hasFrontCamera) {
+        val selector = if (state.useFrontCamera && hasFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+        runCatching { controller.cameraSelector = selector }
     }
     LaunchedEffect(hasCamera) {
         if (hasCamera) controller.bindToLifecycle(lifecycleOwner)
@@ -160,6 +185,8 @@ fun CaptureScreen(
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
         },
         onRecordClick = { onStart(controller, hasAudio) }, // 녹화 중에는 버튼이 꺼져 있다(3초 고정)
+        canToggleCamera = hasCamera && hasFrontCamera,
+        onToggleCamera = onToggleCamera,
         cameraPreview = {
             AndroidView(
                 factory = { ctx ->
@@ -186,6 +213,9 @@ private fun CaptureContent(
     onRequestPermission: () -> Unit,
     onRecordClick: () -> Unit,
     cameraPreview: @Composable () -> Unit,
+    /** 전면 카메라가 있고 카메라 권한이 있는지(없으면 전환 버튼을 흐리게) */
+    canToggleCamera: Boolean = true,
+    onToggleCamera: () -> Unit = {},
 ) {
     val recording = state.phase == CapturePhase.Recording
     Column(
@@ -205,27 +235,49 @@ private fun CaptureContent(
             RecordTopBar(title = journeyName, onBack = onBack)
             Spacer(Modifier.height(12.dp))
 
-            // 여정 진행 중 · 지금 시각
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(LogUsColors.profileBox, RoundedCornerShape(16.dp)),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
+            // 여정 진행 중 · 지금 시각 + 오른쪽 카메라 전환 버튼
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
                     Modifier
-                        .size(8.dp)
-                        .background(Success, CircleShape),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "여정 진행 중 · $clock",
-                    color = LogUsColors.primaryStrong,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                        .weight(1f)
+                        .height(44.dp)
+                        .background(LogUsColors.profileBox, RoundedCornerShape(16.dp)),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(Success, CircleShape),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "여정 진행 중 · $clock",
+                        color = LogUsColors.primaryStrong,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                val toggleEnabled = canToggleCamera && !recording
+                Surface(
+                    onClick = onToggleCamera,
+                    enabled = toggleEnabled,
+                    shape = RoundedCornerShape(16.dp),
+                    color = LogUsColors.profileBox,
+                    contentColor = LogUsColors.primaryStrong,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .alpha(if (toggleEnabled) 1f else 0.4f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(R.drawable.ic_flip_camera),
+                            contentDescription = if (state.useFrontCamera) "후면 카메라로 바꾸기" else "전면 카메라로 바꾸기",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(12.dp))
 

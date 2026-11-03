@@ -321,6 +321,7 @@ fun MainScreen(
                         capturing = false
                     },
                     onStart = { controller, withAudio -> captureViewModel.startRecording(context, controller, withAudio) },
+                    onToggleCamera = captureViewModel::toggleCamera, // 여정 진행 중 상자 오른쪽: 전면 ↔ 후면
                 )
             }
         }
