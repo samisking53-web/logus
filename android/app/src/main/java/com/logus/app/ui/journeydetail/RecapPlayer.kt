@@ -87,7 +87,7 @@ private const val POSTER_ONLY_MS = 3_000L
 
 /**
  * S17 DAY RECAP 재생기: 지도 장면(2단계, RecapMapView)과 영상 3분할 장면을 차례대로 튼다.
- * - 위 "11:00"(이동 장면은 "11:00 → 13:00")·"장면 1 / 4" → 지도 또는 영상 칸(구성원 수만큼 위·가운데·아래로 나눔, 1명이면 가득) → 장면 진행 막대.
+ * - 위 "11:00"(이동 장면은 "11:00 → 13:00")·"장면 1 / 4" → 지도 또는 영상 칸(사람 수만큼 위에서 아래로 최대 4칸, 1명이면 자르지 않고 원래 비율) → 장면 진행 막대.
  * - 지도 장면은 정해진 시간(약 2~3초) 동안 움직이고 다음 장면으로 넘어간다. 멈춰 있으면 도착한 모습을 보여 준다.
  * - ▶ 를 누르면 그 장면 영상들을 동시에 틀고, 모두 끝나면 다음 장면으로 저절로 넘어간다. 마지막 장면이 끝나면 처음으로.
  * - 재생 중 영상을 누르면 멈춘다(다시 ▶ 를 누르면 그 장면 처음부터). 앱을 내리면 멈춘다.
@@ -111,7 +111,7 @@ fun RecapPlayer(
     val mapController = rememberRecapMapController()
     val hasMap = scenes.any { it is RecapMapScene }
 
-    // 영상 칸마다 재생기 하나(최대 3개). 처음 영상 장면을 틀 때 만들고, 화면을 떠나면 모두 정리한다
+    // 영상 칸마다 재생기 하나(최대 4개). 처음 영상 장면을 틀 때 만들고, 화면을 떠나면 모두 정리한다
     var players by remember { mutableStateOf<List<ExoPlayer>>(emptyList()) }
     DisposableEffect(Unit) {
         onDispose { players.forEach { it.release() } }
@@ -196,7 +196,8 @@ fun RecapPlayer(
             // 지도는 장면이 바뀌어도 계속 두고(다시 받지 않게), 영상 장면일 때는 영상 칸이 위를 덮는다
             if (hasMap) RecapMapView(mapController, members, Modifier.fillMaxSize())
             if (step is RecapScene) {
-                // 구성원 수만큼 위·가운데·아래로 나눈다. 칸 사이 틈 없이 한 덩어리(바깥 모서리만 둥글게, 칸 사이는 얇은 흰 선)
+                // 사람 수만큼(최대 4칸) 위에서 아래로 나눈다. 칸 사이 틈 없이 한 덩어리(바깥 모서리만 둥글게, 칸 사이는 얇은 흰 선).
+                // 혼자면 한 칸에 영상을 자르지 않고 원래 비율 그대로(2026-11-04 팀 결정)
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -218,6 +219,7 @@ fun RecapPlayer(
                             player = players.getOrNull(i),
                             showVideo = playing,
                             previewUrl = previewUrl,
+                            fit = step.clips.size == 1,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
@@ -330,7 +332,7 @@ private fun SceneProgressBar(count: Int, current: Int, progress: Float) {
 
 /**
  * 영상 칸 하나: 대표 화면(첫 장면) 위에 재생 중이면 영상, 왼쪽 위 작은 프로필(구성원 색 테두리), 왼쪽 아래 장소 이름.
- * 영상은 16:9 로 찍혀 있어서 칸을 꽉 채우도록 가운데를 잘라 보여 준다.
+ * 영상은 16:9 로 찍혀 있어서 칸을 꽉 채우도록 가운데를 잘라 보여 준다. fit 이면(혼자일 때) 자르지 않고 칸 안에 원래 비율 그대로 둔다.
  * 이 차례에 그 사람 영상이 없으면(clip.log == null) 검은 화면에 작은 프로필만 둔다(누구 자리인지 알 수 있게).
  */
 @Composable
@@ -340,6 +342,7 @@ private fun RecapClipView(
     player: ExoPlayer?,
     showVideo: Boolean,
     previewUrl: suspend (FeedLog) -> String?,
+    fit: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val log = clip.log
@@ -349,7 +352,7 @@ private fun RecapClipView(
         modifier
             .clipToBounds()
             .background(
-                if (log == null) Brush.linearGradient(listOf(BackgroundDark, BackgroundDark))
+                if (log == null || fit) Brush.linearGradient(listOf(BackgroundDark, BackgroundDark))
                 else Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)),
             )
             .clearAndSetSemantics {
@@ -358,13 +361,20 @@ private fun RecapClipView(
             },
     ) {
         if (poster != null) {
-            AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = poster,
+                contentDescription = null,
+                contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         if (showVideo && player != null && log != null) {
-            // 16:9 영상을 칸보다 크거나 같게 키워 가운데에 두면, 둥근 칸 밖으로 나간 부분이 잘려 "꽉 채우기"가 된다
+            // 16:9 영상을 칸보다 크거나 같게 키워 가운데에 두면, 둥근 칸 밖으로 나간 부분이 잘려 "꽉 채우기"가 된다.
+            // fit 이면 반대로 칸 안에 들어가는 가장 큰 16:9 크기로 둔다(잘리지 않음)
             BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val byWidth = maxWidth * 9f / 16f
-                val (w, h) = if (byWidth >= maxHeight) maxWidth to byWidth else (maxHeight * 16f / 9f) to maxHeight
+                val useWidth = if (fit) byWidth <= maxHeight else byWidth >= maxHeight
+                val (w, h) = if (useWidth) maxWidth to byWidth else (maxHeight * 16f / 9f) to maxHeight
                 AndroidView(
                     factory = { TextureView(it).also { view -> player.setVideoTextureView(view) } },
                     update = { player.setVideoTextureView(it) },

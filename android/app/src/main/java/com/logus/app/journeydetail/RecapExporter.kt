@@ -218,7 +218,7 @@ class RecapExporter(
                             .build(),
                     )
                         .setRemoveAudio(true) // 소리는 아래 소리 전용 줄에서
-                        .setEffects(Effects(emptyList(), listOf(laneSize(height))))
+                        .setEffects(Effects(emptyList(), listOf(laneSize(height, fit = scene.lanes.size == 1))))
                         .build()
                 } else {
                     // 칸이 비거나(검은 화면) 칸이 없는 때: 검은 그림을 장면 길이만큼
@@ -232,7 +232,7 @@ class RecapExporter(
             EditedMediaItemSequence(items)
         }
 
-        // 소리 전용 줄(영상 칸 줄 뒤에 둬서 칸 번호 0~2 는 그대로)
+        // 소리 전용 줄(영상 칸 줄 뒤에 둬서 칸 번호 0~3 은 그대로)
         val soundSource = scenes.map { scene ->
             val clip = scene.audioLane?.let { (scene.step as? RecapScene)?.clips?.getOrNull(it)?.log }
             clip?.takeIf { it.id in withSound }?.let { files[it.id] }
@@ -280,9 +280,16 @@ class RecapExporter(
         return file
     }
 
-    /** 칸 크기로 맞추고 넘치는 부분은 가운데를 잘라 꽉 채운다(앱 재생 화면과 같게) */
-    private fun laneSize(height: Int) =
-        Presentation.createForWidthAndHeight(ReelLayout.WIDTH, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
+    /**
+     * 칸 크기로 맞추고 넘치는 부분은 가운데를 잘라 꽉 채운다(앱 재생 화면과 같게).
+     * fit 이면(혼자일 때, 2026-11-04 팀 결정) 자르지 않고 원래 비율 그대로 넣고 남는 위아래는 검게 둔다
+     */
+    private fun laneSize(height: Int, fit: Boolean = false) =
+        Presentation.createForWidthAndHeight(
+            ReelLayout.WIDTH,
+            height,
+            if (fit) Presentation.LAYOUT_SCALE_TO_FIT else Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
+        )
 
     /** Transformer 로 파일을 만든다. 취소되면 만들던 것을 멈춘다 */
     private suspend fun runTransformer(composition: Composition, output: File, onProgress: (Float) -> Unit) =

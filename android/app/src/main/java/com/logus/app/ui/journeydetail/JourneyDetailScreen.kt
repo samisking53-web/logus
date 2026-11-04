@@ -103,7 +103,7 @@ enum class DetailTab(val label: String) { RECORDS("기록"), MAP("추억 지도"
  *   카드를 누르면 원본 영상 팝업(LogVideoDialog, N01 과 같다).
  * - S16 추억 지도: 고른 날 위치를 남긴 기록을 MapLibre 지도에 구성원별 색 번호 핀(찍은 순서)과 선으로 보여 주고,
  *   아래에 범례(색 + 이름 첫 글자 + 이름 · N곳)를 둔다(2026-10-15 팀 결정 A안: 개념도 대신 실제 지도).
- * - S17 DAY RECAP: 시간대마다 구성원 영상(최대 3개)을 위·가운데·아래로 동시에 틀고 다음 시간대로 저절로 넘어간다
+ * - S17 DAY RECAP: 구성원 모두 올린 시간대마다 영상(최대 4개)을 위에서 아래로 나눈 칸에 동시에 틀고 다음 시간대로 저절로 넘어간다
  *   (RecapPlayer). 시간대 사이에는 구성원 위치 지도 장면(2단계, RecapMapView)이 들어간다. 아래 "영상 저장하기"는 흐리게(준비 중).
  */
 @Composable
@@ -572,7 +572,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
                     TextButton(onClick = onRetry) { Text("다시 불러오기", color = LogUsColors.primaryStrong) }
                 }
                 state.recapScenes.isEmpty() -> Text(
-                    "이날은 영상 기록이 없어서\nDAY RECAP을 만들 수 없어요.",
+                    if (state.recapHasVideos) "이날은 구성원 모두가 함께 올린 시간대가 없어서\nDAY RECAP을 만들 수 없어요."
+                    else "이날은 영상 기록이 없어서\nDAY RECAP을 만들 수 없어요.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,

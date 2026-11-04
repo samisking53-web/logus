@@ -10,10 +10,13 @@ import com.logus.app.feed.groupByWindows
 import com.logus.app.journey.Journey
 import com.logus.app.journey.JourneyRepository
 import com.logus.app.journey.Member
+import com.logus.app.journey.MemberPeriod
 import com.logus.app.record.FeedLog
 import com.logus.app.record.GeoPoint
 import com.logus.app.record.LogRepository
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,8 +62,10 @@ data class JourneyDetailUiState(
     /** S16: 구성원별 경로, 위치 없이 올린 기록 수 */
     val routes: List<MemberRoute> = emptyList(),
     val unlocatedCount: Int = 0,
-    /** S17: DAY RECAP 장면들(지도 장면 + 시간대마다 구성원 영상 최대 3개를 차례대로) */
+    /** S17: DAY RECAP 장면들(지도 장면 + 시간대마다 구성원 영상 최대 4개를 차례대로) */
     val recapScenes: List<RecapStep> = emptyList(),
+    /** S17: 그날 영상 기록이 하나라도 있는지(장면이 없을 때 "영상이 없어요"와 "모두 함께 올린 시간대가 없어요"를 가른다) */
+    val recapHasVideos: Boolean = false,
 )
 
 /** S17 DAY RECAP 의 장면 하나: 영상 장면(RecapScene) 또는 지도 장면(RecapMapScene). startMinute 은 화면 위 "11:00" */
@@ -69,8 +74,8 @@ sealed interface RecapStep {
 }
 
 /**
- * S17 DAY RECAP 의 영상 장면(한 차례): 한 시간대 안에서 구성원 칸(최대 3칸)마다 n번째 영상을 위·가운데·아래로 동시에 튼다.
- * 한 시간대는 가장 많이 올린 사람의 영상 개수만큼 장면(차례)이 생긴다.
+ * S17 DAY RECAP 의 영상 장면(한 차례): 한 시간대 안에서 구성원 칸(최대 4칸)마다 n번째 영상을 위에서 아래로 나눈 칸에 동시에 튼다.
+ * 한 시간대는 가장 적게 올린 사람의 영상 개수만큼 장면(차례)이 생긴다(2026-11-04 팀 결정).
  */
 data class RecapScene(
     /** 시간대 시작·끝(그날 0시부터 분). 화면 위 "11:00" */
@@ -98,7 +103,7 @@ data class RecapPin(val uid: String, val colorIndex: Int, val from: GeoPoint?, v
 
 /**
  * 장면 속 칸 하나: 그 칸의 구성원, 구성원 구분색 번호(추억 지도와 같은 색), 이번 차례에 틀 영상.
- * log 가 null 이면 그 사람은 이 차례에 올린 영상이 없어서 검은 화면을 보여 준다.
+ * 2026-11-04 팀 결정 뒤로는 모두 올린 시간대만 넣어서 늘 영상이 있다. log 가 null 이면(영상을 못 받는 등) 검은 화면을 보여 준다.
  */
 data class RecapClip(val uid: String, val colorIndex: Int, val log: FeedLog?)
 
@@ -134,6 +139,9 @@ class JourneyDetailViewModel(
 
     private var mapJob: Job? = null
 
+    /** 구성원마다 여정에 있던 기간(S17 DAY RECAP). 여정을 열 때 한 번 읽기 시작하고, 장면을 만들 때 기다린다. 못 읽으면 빈 맵 */
+    private var periodsJob: Deferred<Map<String, MemberPeriod>>? = null
+
     /** 대표 화면 주소를 한 번 받으면 기억해 둔다(스크롤·날짜를 오갈 때 Storage 에 또 묻지 않게) */
     private val previewUrls = mutableMapOf<String, String?>()
     private val videoUrls = mutableMapOf<String, String?>()
@@ -144,6 +152,11 @@ class JourneyDetailViewModel(
         loadJob?.cancel() // 전에 보던 여정의 읽기가 늦게 끝나 덮어쓰지 않게
         mapJob?.cancel()
         _state.value = JourneyDetailUiState(journey = journey, days = days)
+        periodsJob = viewModelScope.async {
+            runCatching { journeys.loadMemberPeriods(journey.id, limit = MAX_MEMBERS.toLong()) }
+                .onFailure { Log.w(TAG, "구성원 기간 읽기 실패", it) }
+                .getOrDefault(emptyMap())
+        }
         viewModelScope.launch {
             val interval = runCatching { journeys.loadCommonNotifyInterval(journey) }.getOrNull() ?: DEFAULT_INTERVAL_HOURS
             val members = runCatching { journeys.loadMembers(journey.memberIds, limit = MAX_MEMBERS) }
@@ -241,20 +254,22 @@ class JourneyDetailViewModel(
         _state.update {
             it.copy(
                 dayAllIndex = index, dayAllLoading = true, dayAllError = null, dayAllTruncated = false,
-                routes = emptyList(), unlocatedCount = 0, recapScenes = emptyList(),
+                routes = emptyList(), unlocatedCount = 0, recapScenes = emptyList(), recapHasVideos = false,
             )
         }
         val (from, to) = dayRange(day)
         mapJob = viewModelScope.launch {
             try {
                 val page = logs.loadLogs(journey.id, from, to, after = null, limit = DAY_LIMIT)
+                val periods = periodsJob?.await().orEmpty()
                 _state.update {
                     it.copy(
                         dayAllLoading = false,
                         dayAllTruncated = page.last != null,
                         routes = buildRoutes(page.logs, journey.memberIds),
                         unlocatedCount = page.logs.count { log -> log.location == null },
-                        recapScenes = buildRecapScenes(page.logs, journey.memberIds, it.intervalHours, ZoneId.systemDefault()),
+                        recapScenes = buildRecapScenes(page.logs, journey.memberIds, it.intervalHours, ZoneId.systemDefault(), day, periods),
+                        recapHasVideos = page.logs.any { log -> log.mediaType == "video" && log.mediaPath != null },
                     )
                 }
             } catch (e: Exception) {
@@ -317,34 +332,56 @@ fun buildRoutes(logs: List<FeedLog>, memberIds: List<String>): List<MemberRoute>
     }
 }
 
-/** 장면 하나에 동시에 트는 영상 수(위·가운데·아래) */
-const val RECAP_MAX_CLIPS = 3
+/** 장면 하나에 동시에 트는 영상 수(위에서 아래로 최대 4칸, 2026-11-04 팀 결정) */
+const val RECAP_MAX_CLIPS = 4
 
 /** 지도 장면에서 같은 건물로 보고 프로필을 한 말풍선에 묶는 거리(미터, 2026-10-21 팀 결정) */
 const val GROUP_METERS = 50.0
 
 /**
  * 기록들 → DAY RECAP 장면들(S17). 영상 기록(mediaType video, 파일 경로 있음)만 쓰고,
- * N01 과 같은 시간대로 나눈다(영상이 없는 시간대는 건너뜀). 시간대마다:
- * - 지도 장면(2단계, 2026-10-21 팀 결정): 그 시간대에 위치를 남긴 구성원마다 그 시간대 첫 위치. 위치가 있는 사람이 없으면 지도 장면을 건너뛴다.
- *   앞 지도 장면에 있던 사람은 그 위치에서 이번 위치로 움직이고, 이번에 위치가 없는 사람은 사라진다(다음에 위치가 생기면 다시 나타남).
- * - 영상 장면(2026-10-22 팀 결정):
- *   - 칸 = 여정 구성원 전원(memberIds 순서, 혼자면 한 칸). 4명 이상이면 그 시간대에 영상을 많이 올린 3명(같으면 구성원 순서)
- *   - 장면(차례) 수 = 그 시간대에 가장 많이 올린 사람의 영상 개수. n번째 장면에는 칸마다 그 사람의 n번째 영상(찍은 순서)
- *   - 영상이 모자라거나 없는 사람의 칸은 log = null(검은 화면)
- * 색 번호는 구성원 순서(추억 지도와 같은 색). memberIds 에 없는 사람(나간 구성원)의 영상도 뒤에 붙여 보여 준다.
- * logs 는 찍은 시각 순서여야 한다.
+ * N01 과 같은 시간대로 나눈다(영상이 없는 시간대는 건너뜀). 2026-11-04 팀 결정(10-22 결정을 대신함):
+ * - 넣는 시간대: 그 시간대에 있어야 할 사람 모두가 영상을 1개 이상 올린 시간대만. 한 명이라도 안 올렸으면 그 시간대는 뺀다.
+ *   있어야 할 사람 = 시간대가 시작할 때 구성원이던 사람(joinedAt ≤ 시작, 시작 전에 "여정 저장"(finishedAt)을 하지 않음).
+ *   기간을 모르는 구성원(periods 에 없거나 시각이 없음)은 처음부터 끝까지 있던 것으로 본다.
+ *   시간대 중간에 들어온 사람은 꼭 올려야 하지는 않고, 올렸으면 칸에 함께 넣는다.
+ * - 칸 = 그 시간대에 영상을 올린 사람(구성원 순서, memberIds 에 없는 사람은 뒤에), 최대 RECAP_MAX_CLIPS 칸.
+ *   5명 이상이면 모두 올려야 넣지만 칸에는 앞의 4명만(프로토타입).
+ * - 장면(차례) 수 = 칸 중 가장 적게 올린 사람의 영상 개수. n번째 장면에는 칸마다 그 사람의 n번째 영상(찍은 순서),
+ *   그보다 많이 올린 영상은 넣지 않는다. 그래서 빈 칸은 생기지 않는다.
+ * - 지도 장면(2단계, 2026-10-21 팀 결정): 칸마다 그 사람이 이 시간대에 넣은 첫 영상의 위치. 그 영상에 위치가 없으면 그 사람은 지도에서 빠진다.
+ *   위치가 있는 사람이 없으면 지도 장면을 건너뛴다. 앞 지도 장면에 있던 사람은 그 위치에서 이번 위치로 움직인다.
+ * 색 번호는 구성원 순서(추억 지도와 같은 색). logs 는 찍은 시각 순서여야 한다. day 는 시간대 분을 실제 시각으로 바꿀 때 쓴다.
  */
-fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours: Int, zone: ZoneId): List<RecapStep> {
+fun buildRecapScenes(
+    logs: List<FeedLog>,
+    memberIds: List<String>,
+    intervalHours: Int,
+    zone: ZoneId,
+    day: LocalDate,
+    periods: Map<String, MemberPeriod>,
+): List<RecapStep> {
     val videos = logs.filter { it.mediaType == "video" && it.mediaPath != null }
     val people = memberIds + videos.map { it.authorId }.distinct().filterNot { it in memberIds }
     var lastMap: RecapMapScene? = null
     return groupByWindows(videos, intervalHours, zone).flatMap { window ->
         val byAuthor = window.logs.groupBy { it.authorId }
+        val windowStart = day.atStartOfDay().plusMinutes(window.startMinute.toLong()).atZone(zone).toInstant().toEpochMilli()
+        val required = memberIds.filter { uid ->
+            val period = periods[uid]
+            val joined = period?.joinedAtMillis
+            val finished = period?.finishedAtMillis
+            (joined == null || joined <= windowStart) && (finished == null || finished > windowStart)
+        }
+        if (required.any { byAuthor[it].isNullOrEmpty() }) return@flatMap emptyList()
 
-        // 지도 장면: 구성원마다 이 시간대 첫 위치
-        val here = people.withIndex().mapNotNull { (index, uid) ->
-            byAuthor[uid]?.firstNotNullOfOrNull { it.location }?.let { Triple(uid, index, it) }
+        val lanes = people.withIndex().filter { !byAuthor[it.value].isNullOrEmpty() }.take(RECAP_MAX_CLIPS)
+        if (lanes.isEmpty()) return@flatMap emptyList()
+        val rounds = lanes.minOf { byAuthor.getValue(it.value).size }
+
+        // 지도 장면: 칸마다 이 시간대에 넣은 첫 영상의 위치
+        val here = lanes.mapNotNull { (index, uid) ->
+            byAuthor.getValue(uid).first().location?.let { Triple(uid, index, it) }
         }
         val mapScene = if (here.isEmpty()) null else {
             val before = lastMap?.pins.orEmpty().filter { it.to != null }.associateBy { it.uid }
@@ -360,17 +397,11 @@ fun buildRecapScenes(logs: List<FeedLog>, memberIds: List<String>, intervalHours
         }
 
         // 영상 장면들
-        val count = { uid: String -> byAuthor[uid]?.size ?: 0 }
-        val lanes = people.withIndex()
-            .sortedWith(compareByDescending<IndexedValue<String>> { count(it.value) }.thenBy { it.index })
-            .take(RECAP_MAX_CLIPS)
-            .sortedBy { it.index }
-        val rounds = lanes.maxOfOrNull { count(it.value) } ?: 0
         listOfNotNull(mapScene) + (0 until rounds).map { round ->
             RecapScene(
                 startMinute = window.startMinute,
                 endMinute = window.endMinute,
-                clips = lanes.map { (index, uid) -> RecapClip(uid, index, byAuthor[uid]?.getOrNull(round)) },
+                clips = lanes.map { (index, uid) -> RecapClip(uid, index, byAuthor.getValue(uid)[round]) },
             )
         }
     }
