@@ -4,7 +4,13 @@ import { randomUUID } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { describe, expect, it } from "vitest";
 import { db, storage } from "../../functions/src/admin";
-import { DAILY_COIN_LIMIT, INVITE_REWARD_COINS, inviteExpiresAtMillis, utcToday } from "../../functions/src/common";
+import {
+  DAILY_COIN_LIMIT,
+  INVITE_REWARD_COINS,
+  inviteExpiresAtMillis,
+  localDateIn,
+  utcToday,
+} from "../../functions/src/common";
 import { createJourney } from "../../functions/src/createJourney";
 import { deleteJourney } from "../../functions/src/deleteJourney";
 import { getInviteCode } from "../../functions/src/getInviteCode";
@@ -106,8 +112,26 @@ describe("createJourney", () => {
 
   it("종료일이 시작일보다 앞이면 거부", async () => {
     await expect(createJourney.run(req({
-      name: "x", city: "포르투", startDate: "2026-09-26", endDate: "2026-09-24",
-    }, newUid()))).rejects.toMatchObject({ code: "invalid-argument" });
+      name: "x", city: "포르투", startDate: START, endDate: dateFromToday(-1),
+    }, newUid()))).rejects.toMatchObject({ code: "invalid-argument", message: expect.stringContaining("종료일") });
+  });
+
+  it("시작일은 오늘만(폰 시간대 기준): 내일·어제 시작하는 여정은 만들 수 없다", async () => {
+    const make = (startDate: string, endDate: string, timeZone?: string) => createJourney.run(req({
+      name: "x", city: "포르투", startDate, endDate, notifyIntervalHours: 2, ...(timeZone ? { timeZone } : {}),
+    }, newUid()));
+    const seoulToday = localDateIn("Asia/Seoul")!;
+    const seoulPlus = (days: number) =>
+      new Date(Date.parse(`${seoulToday}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+    // 폰 시간대의 오늘이면 만든다
+    await expect(make(seoulToday, seoulPlus(2), "Asia/Seoul")).resolves.toMatchObject({ journeyId: expect.any(String) });
+    // 내일·어제 시작은 거부
+    await expect(make(seoulPlus(1), seoulPlus(3), "Asia/Seoul"))
+      .rejects.toMatchObject({ code: "invalid-argument", message: expect.stringContaining("오늘") });
+    await expect(make(seoulPlus(-1), seoulPlus(1), "Asia/Seoul")).rejects.toMatchObject({ code: "invalid-argument" });
+    // 시간대를 보내지 않는 예전 앱: UTC 어제~내일만 받고 그보다 먼 미래는 거부
+    await expect(make(START, END)).resolves.toMatchObject({ journeyId: expect.any(String) });
+    await expect(make(dateFromToday(3), dateFromToday(5))).rejects.toMatchObject({ code: "invalid-argument" });
   });
 });
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 /** Firestore journeys/{journeyId} 문서 중 홈 화면에 필요한 값 (CLAUDE.md "데이터 모델") */
@@ -27,6 +28,11 @@ data class Journey(
     val ownerId: String? = null,
     /** 여정 도시 이름(위치 확인 지도에서 GPS 를 못 쓸 때 시작 위치) */
     val city: String = "",
+    /**
+     * 여정을 만든 시각(밀리초). 촬영 알림 시각과 N01·S15·DAY RECAP 시간대가 이 시각(10분 단위로 내림)에서
+     * 알림 간격마다 시작한다(2026-11-04 팀 결정). 예전 데이터에 없으면 null(그날 첫 기록 기준).
+     */
+    val createdAtMillis: Long? = null,
 )
 
 /** 새로 만든 여정: ID 와 6자리 초대 코드(여정이 끝날 때까지 쓸 수 있다) */
@@ -76,6 +82,7 @@ class JourneyRepository {
      * S02 새 여정 만들기: 서버 함수 createJourney 를 부른다.
      * 여정 문서·내 멤버 문서(알림 간격)·초대 요약을 서버가 한 번에 만든다(앱은 journeys 를 직접 만들 수 없다).
      * 날짜는 "YYYY-MM-DD", notifyIntervalHours 는 1·2·3 또는 null(촬영 알림 받지 않기).
+     * 시작일은 오늘만 된다(2026-11-04 팀 결정). 서버가 "오늘"을 폰 시간대로 확인하도록 시간대 이름(예: Asia/Seoul)도 보낸다.
      * 돌려주는 값: 새 여정 ID 와 6자리 초대 코드
      */
     suspend fun createJourney(
@@ -95,6 +102,7 @@ class JourneyRepository {
                     "startDate" to startDate,
                     "endDate" to endDate,
                     "notifyIntervalHours" to notifyIntervalHours,
+                    "timeZone" to ZoneId.systemDefault().id,
                 ),
             )
             .await()
@@ -332,5 +340,6 @@ private fun DocumentSnapshot.toJourney(): Journey? {
         inviteCode = getString("inviteCode"),
         ownerId = getString("ownerId"),
         city = getString("city").orEmpty(),
+        createdAtMillis = getTimestamp("createdAt")?.toDate()?.time,
     )
 }

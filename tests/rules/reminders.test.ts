@@ -4,20 +4,30 @@ import { randomUUID } from "node:crypto";
 import type { Message, SendResponse } from "firebase-admin/messaging";
 import { describe, expect, it } from "vitest";
 import { db } from "../../functions/src/admin";
-import { isReminderTime, localTimeIn, runCaptureReminders } from "../../functions/src/sendCaptureReminders";
+import {
+  isReminderSlot,
+  isReminderTime,
+  localTimeIn,
+  reminderAnchor,
+  runCaptureReminders,
+} from "../../functions/src/sendCaptureReminders";
 
 const id = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
 
 // 다른 테스트의 여정과 섞이지 않게 먼 미래 날짜를 쓴다(여정 조회가 "종료일이 지금 - 1일 이후"라서 예전 여정은 빠진다)
 const START = "2031-05-09";
 const END = "2031-05-11";
-/** 2031-05-10 의 한국 시각 hour 시 정각 */
-const seoulAt = (hour: number) => new Date(Date.UTC(2031, 4, 10, hour - 9, 0, 0));
+/** 2031-05-10 의 한국 시각 hour 시 minute 분(second 초) */
+const seoulAt = (hour: number, minute = 0, second = 0) => new Date(Date.UTC(2031, 4, 10, hour - 9, minute, second));
+/** 테스트 여정을 만든 시각: 2031-05-09 한국 19:23 → 알림 기준 19:20(2시간이면 21:20·23:20, 다음 날 09:20·11:20 …) */
+const CREATED = new Date(Date.UTC(2031, 4, 9, 19 - 9, 23, 40));
 
 /** 여정 + 구성원 + 기기를 만든다. 돌려주는 값: 여정 ID 와 구성원별 토큰 */
 async function seed(options: {
   interval: number | null;
   members: { finished?: boolean; timeZone?: string }[];
+  /** 여정을 만든 시각(null 이면 createdAt 없음 = 예전 여정) */
+  createdAt?: Date | null;
 }) {
   const journeyId = id("j");
   const uids = options.members.map(() => id("u"));
@@ -29,6 +39,7 @@ async function seed(options: {
     ownerId: uids[0],
     memberIds: uids,
     memberCount: uids.length,
+    ...(options.createdAt === null ? {} : { createdAt: options.createdAt ?? CREATED }),
   });
   const tokens: string[] = [];
   await Promise.all(
@@ -69,21 +80,38 @@ describe("촬영 알림 시각 계산", () => {
     expect(localTimeIn("없는/시간대", new Date())).toBeNull();
   });
 
-  it("여정 기간 안, 09~23시, 9시부터 간격마다만 보낸다", () => {
+  it("여정을 만든 시각(10분 단위로 내림)부터 간격마다가 알림 시각이다", () => {
+    const anchor = reminderAnchor(CREATED.getTime()); // 한국 19:20
+    expect(anchor).toBe(Date.UTC(2031, 4, 9, 10, 20));
+    const at = (day: number, hour: number, minute: number) => Date.UTC(2031, 4, day, hour - 9, minute);
+    // 2시간: 21:20·23:20, 다음 날 09:20·11:20 …(정각·다른 분·홀수 간격은 아님)
+    expect(isReminderSlot(at(9, 21, 20), anchor, 2)).toBe(true);
+    expect(isReminderSlot(at(9, 23, 20), anchor, 2)).toBe(true);
+    expect(isReminderSlot(at(10, 9, 20), anchor, 2)).toBe(true);
+    expect(isReminderSlot(at(9, 21, 0), anchor, 2)).toBe(false);
+    expect(isReminderSlot(at(9, 21, 30), anchor, 2)).toBe(false);
+    expect(isReminderSlot(at(9, 22, 20), anchor, 2)).toBe(false);
+    // 3시간: 22:20, 다음 날 10:20·13:20 …
+    expect(isReminderSlot(at(9, 22, 20), anchor, 3)).toBe(true);
+    expect(isReminderSlot(at(10, 10, 20), anchor, 3)).toBe(true);
+    expect(isReminderSlot(at(10, 9, 20), anchor, 3)).toBe(false);
+    // 만든 바로 그 시각·그 전, 알림 받지 않기는 보내지 않는다
+    expect(isReminderSlot(anchor, anchor, 1)).toBe(false);
+    expect(isReminderSlot(anchor - 3_600_000, anchor, 1)).toBe(false);
+    expect(isReminderSlot(at(9, 21, 20), anchor, null)).toBe(false);
+    // 만든 시각이 없는 예전 여정은 UTC 정각 기준(한국 9·11·13…시)
+    expect(isReminderSlot(at(10, 11, 0), reminderAnchor(undefined), 2)).toBe(true);
+    expect(isReminderSlot(at(10, 10, 0), reminderAnchor(undefined), 2)).toBe(false);
+  });
+
+  it("여정 기간 안, 폰 시각 09:00~23:59 에만 보낸다", () => {
     const at = (date: string, hour: number) => ({ date, hour });
-    // 2시간: 9·11·…·23시
-    expect(isReminderTime(at("2031-05-10", 9), START, END, 2)).toBe(true);
-    expect(isReminderTime(at("2031-05-10", 23), START, END, 2)).toBe(true);
-    expect(isReminderTime(at("2031-05-10", 10), START, END, 2)).toBe(false);
-    // 3시간: 9·12·15·18·21시
-    expect(isReminderTime(at("2031-05-10", 12), START, END, 3)).toBe(true);
-    expect(isReminderTime(at("2031-05-10", 23), START, END, 3)).toBe(false);
-    // 밤·새벽, 여정 기간 밖, 알림 받지 않기는 보내지 않는다
-    expect(isReminderTime(at("2031-05-10", 8), START, END, 1)).toBe(false);
-    expect(isReminderTime(at("2031-05-10", 0), START, END, 1)).toBe(false);
-    expect(isReminderTime(at("2031-05-08", 9), START, END, 1)).toBe(false);
-    expect(isReminderTime(at("2031-05-12", 9), START, END, 1)).toBe(false);
-    expect(isReminderTime(at("2031-05-10", 9), START, END, null)).toBe(false);
+    expect(isReminderTime(at("2031-05-10", 9), START, END)).toBe(true);
+    expect(isReminderTime(at("2031-05-10", 23), START, END)).toBe(true);
+    expect(isReminderTime(at("2031-05-10", 8), START, END)).toBe(false);
+    expect(isReminderTime(at("2031-05-10", 0), START, END)).toBe(false);
+    expect(isReminderTime(at("2031-05-08", 9), START, END)).toBe(false);
+    expect(isReminderTime(at("2031-05-12", 9), START, END)).toBe(false);
   });
 });
 
@@ -91,7 +119,8 @@ describe("촬영 알림 보내기", () => {
   it("간격에 맞는 시각에 여정을 마치지 않은 구성원 폰으로 보낸다(누르면 앱 홈)", async () => {
     const { journeyId, tokens } = await seed({ interval: 2, members: [{}, {}, { finished: true }] });
     const fake = fakeSend();
-    await runCaptureReminders(seoulAt(11), fake.send);
+    // 예약 함수가 몇 초 늦게 돌아도(11:20:07) 11:20 칸으로 계산한다
+    await runCaptureReminders(seoulAt(11, 20, 7), fake.send);
     const mine = fake.sent.filter((m) => m.data?.journeyId === journeyId);
     expect(mine.map((m) => (m as { token: string }).token).sort()).toEqual([tokens[0], tokens[1]].sort());
     expect(mine[0].notification?.title).toBe("지금 기록할 시간이에요");
@@ -99,28 +128,38 @@ describe("촬영 알림 보내기", () => {
     expect(mine[0].android?.notification?.clickAction).toBe("com.logus.app.CAPTURE_REMINDER");
   });
 
-  it("간격에 맞지 않는 시각·밤에는 보내지 않는다", async () => {
+  it("간격에 맞지 않는 시각(정각·다른 분)·밤에는 보내지 않는다", async () => {
     const { tokens } = await seed({ interval: 2, members: [{}] });
-    for (const hour of [10, 12, 8]) {
+    for (const [hour, minute] of [[11, 0], [11, 30], [12, 20], [7, 20]]) {
       const fake = fakeSend();
-      await runCaptureReminders(seoulAt(hour), fake.send);
+      await runCaptureReminders(seoulAt(hour, minute), fake.send);
       expect(fake.tokens()).not.toContain(tokens[0]);
     }
+  });
+
+  it("만든 시각이 없는 예전 여정은 정각(한국 9·11·13…시)에 보낸다", async () => {
+    const { tokens } = await seed({ interval: 2, members: [{}], createdAt: null });
+    const fake = fakeSend();
+    await runCaptureReminders(seoulAt(11), fake.send);
+    expect(fake.tokens()).toContain(tokens[0]);
+    const late = fakeSend();
+    await runCaptureReminders(seoulAt(11, 20), late.send);
+    expect(late.tokens()).not.toContain(tokens[0]);
   });
 
   it("만든 사람이 '촬영 알림 받지 않기'면 아무에게도 보내지 않는다", async () => {
     const { tokens } = await seed({ interval: null, members: [{}, {}] });
     const fake = fakeSend();
-    await runCaptureReminders(seoulAt(11), fake.send);
+    await runCaptureReminders(seoulAt(11, 20), fake.send);
     expect(fake.tokens()).not.toContain(tokens[0]);
     expect(fake.tokens()).not.toContain(tokens[1]);
   });
 
   it("폰마다 그 폰의 시간대로 시각을 계산한다", async () => {
-    // 한국 11시 = 리스본 3시(밤) → 리스본 폰은 받지 않는다
+    // 한국 11:20 = 리스본 3:20(밤) → 리스본 폰은 받지 않는다
     const { tokens } = await seed({ interval: 1, members: [{}, { timeZone: "Europe/Lisbon" }] });
     const fake = fakeSend();
-    await runCaptureReminders(seoulAt(11), fake.send);
+    await runCaptureReminders(seoulAt(11, 20), fake.send);
     expect(fake.tokens()).toContain(tokens[0]);
     expect(fake.tokens()).not.toContain(tokens[1]);
   });
@@ -136,7 +175,7 @@ describe("촬영 알림 보내기", () => {
             } as unknown as SendResponse)
           : { success: true, messageId: "fake" },
       );
-    await runCaptureReminders(seoulAt(10), send);
+    await runCaptureReminders(seoulAt(10, 20), send);
     expect((await db.doc(`users/${uids[0]}/devices/${tokens[0]}`).get()).exists).toBe(false);
   });
 });

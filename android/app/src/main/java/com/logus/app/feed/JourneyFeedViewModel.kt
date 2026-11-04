@@ -167,7 +167,7 @@ class JourneyFeedViewModel(
                         loading = false,
                         intervalHours = interval,
                         members = members.ifEmpty { it.members },
-                        windows = groupByWindows(loaded, interval, zone),
+                        windows = groupByWindows(loaded, interval, zone, journey.createdAtMillis),
                         endReached = page.last == null,
                     )
                 }
@@ -205,7 +205,7 @@ class JourneyFeedViewModel(
                 _state.update {
                     it.copy(
                         loadingMore = false,
-                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault(), journey?.createdAtMillis),
                         endReached = page.last == null,
                     )
                 }
@@ -260,7 +260,7 @@ class JourneyFeedViewModel(
         loaded = loaded.filterNot { it.id == log.id }
         _state.update {
             it.copy(
-                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault(), journey?.createdAtMillis),
                 dayCount = it.dayCount?.minus(1)?.coerceAtLeast(0),
                 myDayCount = it.myDayCount?.minus(1)?.coerceAtLeast(0),
                 justDeleted = log,
@@ -310,7 +310,7 @@ class JourneyFeedViewModel(
         loaded = (loaded + log).sortedBy { it.capturedAtMillis }
         _state.update {
             it.copy(
-                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault(), journey?.createdAtMillis),
                 dayCount = it.dayCount?.plus(1),
                 myDayCount = it.myDayCount?.plus(1),
             )
@@ -397,19 +397,31 @@ private class PendingDelete(val journeyId: String, val log: FeedLog, val timer: 
 private val deleteScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
 /**
- * 기록을 시간대로 나눈다. 시작점은 첫 기록 시각(그날 몇 분째)을 10분 단위로 내린 값이고,
- * 거기서부터 intervalHours 시간씩 자른다. 기록이 없는 시간대는 만들지 않는다. logs 는 찍은 시각 순서여야 한다.
+ * 기록을 intervalHours 시간씩 시간대로 나눈다. 기록이 없는 시간대는 만들지 않는다. logs 는 찍은 시각 순서여야 한다.
+ * 시작점(2026-11-04 팀 결정): 여정을 만든 시각(anchorMillis, 폰 시간대로 그날 몇 분째인지를 10분 단위로 내림)에서 간격마다.
+ *   촬영 알림(서버 sendCaptureReminders)도 같은 시각에 오므로 알림이 오면 새 시간대가 시작한다.
+ *   예) 19:23 에 만든 2시간 여정 → 그날은 19:20 ~ 21:20 · 21:20 ~ 23:20, 다음 날은 09:20 ~ 11:20 · 11:20 ~ 13:20 …
+ *   자정을 넘는 시간대는 "23:20 ~ 01:20"처럼 보인다(시작 분이 0보다 작을 수 있다).
+ * anchorMillis 가 없으면(예전 데이터) 예전처럼 첫 기록 시각을 10분 단위로 내린 값에서 시작한다.
  */
-fun groupByWindows(logs: List<FeedLog>, intervalHours: Int, zone: ZoneId): List<FeedWindow> {
+fun groupByWindows(logs: List<FeedLog>, intervalHours: Int, zone: ZoneId, anchorMillis: Long? = null): List<FeedWindow> {
     if (logs.isEmpty()) return emptyList()
-    fun minuteOfDay(log: FeedLog): Int {
-        val time = Instant.ofEpochMilli(log.capturedAtMillis).atZone(zone).toLocalTime()
+    fun minuteOfDay(millis: Long): Int {
+        val time = Instant.ofEpochMilli(millis).atZone(zone).toLocalTime()
         return time.hour * 60 + time.minute
     }
     val length = intervalHours.coerceIn(1, 24) * 60
-    val anchor = minuteOfDay(logs.first()) / 10 * 10
+    val anchor = if (anchorMillis != null) {
+        // 여정을 만든 시각에서 간격만큼씩 앞뒤로 옮겨, 그날 0시 이후 첫 시간대 시작점으로 맞춘다
+        Math.floorMod(minuteOfDay(anchorMillis) / 10 * 10, length)
+    } else {
+        minuteOfDay(logs.first().capturedAtMillis) / 10 * 10
+    }
     return logs
-        .groupBy { ((minuteOfDay(it) - anchor).coerceAtLeast(0)) / length }
+        .groupBy {
+            val offset = minuteOfDay(it.capturedAtMillis) - anchor
+            if (anchorMillis != null) Math.floorDiv(offset, length) else offset.coerceAtLeast(0) / length
+        }
         .toSortedMap()
         .map { (index, inWindow) ->
             val start = anchor + index * length

@@ -50,6 +50,31 @@ export function requireDate(value: unknown, field: string): string {
   return value;
 }
 
+/** 그 시간대(timeZone, 예: Asia/Seoul)의 지금 날짜 "YYYY-MM-DD". 시간대 이름이 틀리면 null */
+export function localDateIn(timeZone: string, now: Date = new Date()): string | null {
+  try {
+    // en-CA 는 날짜를 "YYYY-MM-DD" 모양으로 쓴다
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 여정은 오늘 시작하는 것만 만들 수 있다(2026-11-04 팀 결정: 미래 여정·지난 여정 금지).
+ * "오늘"은 앱이 보낸 폰 시간대(timeZone) 기준. 시간대를 모르면(예전 앱) 세계 어딘가에서 오늘일 수 있는 날
+ * (UTC 어제 ~ 내일)만 받는다.
+ */
+export function requireStartsToday(startDate: string, timeZone: unknown, now: Date = new Date()): void {
+  const local = typeof timeZone === "string" && timeZone.length <= 64 ? localDateIn(timeZone, now) : null;
+  const ok = local !== null
+    ? startDate === local
+    : [-1, 0, 1].some((days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10) === startDate);
+  if (!ok) {
+    throw new HttpsError("invalid-argument", "여정은 오늘 시작하는 것만 만들 수 있어요. 시작일을 오늘로 골라 주세요.");
+  }
+}
+
 /** 알림 주기: 1·2·3시간 또는 받지 않음(null) */
 export function requireNotifyInterval(value: unknown): 1 | 2 | 3 | null {
   if (value === undefined || value === null) return null;
