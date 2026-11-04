@@ -76,7 +76,6 @@ fun NewJourneyFlow(
         )
 
         NewJourneyStep.CALENDAR -> PeriodCalendarScreen(
-            initialStart = state.startDate,
             initialEnd = state.endDate,
             onBack = viewModel::closeCalendar,
             onConfirm = viewModel::confirmPeriod,

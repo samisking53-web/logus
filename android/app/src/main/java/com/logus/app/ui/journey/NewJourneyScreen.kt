@@ -76,7 +76,7 @@ import java.time.LocalDate
  * 여정 이름·국가와 도시·여행 기간·촬영 알림을 정하는 화면.
  * - 도시: ① 화면을 열면 현재 위치(GPS)의 도시를 먼저 추천 ② 입력하면 내장 목록(journey/Cities.kt)에서 바로 추천
  *   ③ "지도에서 찾기"로 오픈스트리트맵 지도 데이터에서 세계 도시를 찾는다. 어디에도 없으면 입력한 글자 그대로 저장한다.
- * - 여행 기간: 누르면 S03 달력이 열린다.
+ * - 여행 기간: 누르면 S03 달력이 열린다. 시작일은 늘 오늘(미래 여정 금지, 2026-11-04 팀 결정)이고 끝나는 날만 고른다.
  * - 촬영 알림: 1·2·3시간 중 하나, 또는 "촬영 알림 받지 않기".
  * - 친구 초대하기: 여정을 저장하고 6자리 초대 코드 팝업(InviteCodeDialog)을 띄운다. 덜 채웠으면 안내만 보여 준다.
  * - 위쪽 "저장 →": 모두 채우면 켜진다. 누르면 서버 함수 createJourney 로 여정을 만든다.
@@ -497,7 +497,7 @@ private fun PeriodField(start: LocalDate?, end: LocalDate?, onClick: () -> Unit)
         Icon(Icons.Outlined.DateRange, contentDescription = null, tint = LogUsColors.primaryStrong)
         Spacer(Modifier.width(12.dp))
         Text(
-            if (start != null && end != null) periodLabel(start, end) else "시작일과 종료일을 골라 주세요",
+            if (start != null && end != null) periodLabel(start, end) else "오늘부터 언제까지인지 골라 주세요",
             color = if (start != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 16.sp,
             fontWeight = if (start != null) FontWeight.SemiBold else FontWeight.Normal,

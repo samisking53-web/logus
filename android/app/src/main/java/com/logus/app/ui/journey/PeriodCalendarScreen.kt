@@ -55,45 +55,33 @@ import java.time.YearMonth
 // S03 여행 기간 달력
 /**
  * 한 달 전체가 보이는 달력에서 여행 기간을 고른다.
- * - 끌어서 고르기: 시작일을 누른 채 종료일까지 손가락을 끌면 그 사이가 모두 선택된다.
- * - 눌러서 고르기: 시작일을 누르고, 이어서 종료일을 누른다(같은 날을 두 번 누르면 하루 여행).
+ * - 여정은 오늘 시작하는 것만 만들 수 있다(2026-11-04 팀 결정: 미래 여정 금지). 시작일은 늘 오늘이고, 끝나는 날만 고른다.
+ * - 눌러서 고르기: 끝나는 날을 누른다(오늘을 누르면 하루 여행). 처음에는 오늘 하루로 골라져 있다.
+ * - 끌어서 고르기: 손가락을 끌면 오늘부터 손가락이 있는 날까지 선택된다.
  * - 지난 날짜는 고를 수 없다. 위쪽 ‹ › 로 달을 넘긴다.
  * 외부 달력 라이브러리 없이 직접 그렸다(색은 팀 팔레트만 사용).
  */
 @Composable
 fun PeriodCalendarScreen(
-    initialStart: LocalDate?,
     initialEnd: LocalDate?,
     onBack: () -> Unit,
     onConfirm: (start: LocalDate, end: LocalDate) -> Unit,
     today: LocalDate = LocalDate.now(),
 ) {
-    // 화면을 돌려도 고른 날짜가 남도록 글자("YYYY-MM-DD")로 기억한다
-    var startText by rememberSaveable { mutableStateOf(initialStart?.toString()) }
-    var endText by rememberSaveable { mutableStateOf(initialEnd?.toString()) }
-    var pickingEnd by rememberSaveable { mutableStateOf(false) } // 시작일만 누르고 종료일을 기다리는 중
-    var monthText by rememberSaveable { mutableStateOf(YearMonth.from(initialStart ?: today).toString()) }
+    // 시작일은 늘 오늘(미래 여정 금지). 화면을 돌려도 고른 종료일이 남도록 글자("YYYY-MM-DD")로 기억한다
+    val start: LocalDate = today
+    var endText by rememberSaveable {
+        mutableStateOf((initialEnd?.takeIf { !it.isBefore(today) } ?: today).toString())
+    }
+    var monthText by rememberSaveable { mutableStateOf(YearMonth.from(today).toString()) }
 
-    val start = startText?.let(LocalDate::parse)
-    val end = endText?.let(LocalDate::parse)
+    val end = LocalDate.parse(endText)
     val month = YearMonth.parse(monthText)
     val thisMonth = YearMonth.from(today)
 
-    fun setRange(a: LocalDate, b: LocalDate) {
-        startText = minOf(a, b).toString()
-        endText = maxOf(a, b).toString()
-    }
-
-    /** 눌러서 고르기 */
+    /** 눌러서 고르기: 누른 날이 종료일(지난 날짜는 달력이 막는다) */
     fun tap(day: LocalDate) {
-        if (pickingEnd && start != null && !day.isBefore(start)) {
-            endText = day.toString()
-            pickingEnd = false
-        } else {
-            startText = day.toString()
-            endText = day.toString()
-            pickingEnd = true
-        }
+        endText = maxOf(day, today).toString()
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -152,15 +140,13 @@ fun PeriodCalendarScreen(
                 start = start,
                 end = end,
                 onTap = ::tap,
-                onDragRange = { a, b ->
-                    setRange(a, b)
-                    pickingEnd = false
-                },
+                // 끌어서 고르기: 오늘부터 손가락이 있는 날까지
+                onDragRange = { a, b -> tap(maxOf(a, b)) },
             )
 
             Spacer(Modifier.weight(1f))
             Text(
-                "시작일을 누른 채 종료일까지 끌거나, 시작일과 종료일을 차례로 눌러 주세요",
+                "여정은 오늘 시작해요. 끝나는 날을 눌러 주세요(오늘을 누르면 하루 여행)",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
@@ -169,8 +155,8 @@ fun PeriodCalendarScreen(
             Spacer(Modifier.height(12.dp))
             // 고른 기간
             Text(
-                if (start != null && end != null) periodLabel(start, end) else "아직 고르지 않았어요",
-                color = if (start != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                periodLabel(start, end) + if (start == end) " (오늘 하루)" else "",
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -182,8 +168,7 @@ fun PeriodCalendarScreen(
         }
 
         Button(
-            onClick = { if (start != null && end != null) onConfirm(start, end) },
-            enabled = start != null && end != null,
+            onClick = { onConfirm(start, end) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -337,7 +322,6 @@ private fun PeriodCalendarPreview() {
     val today = LocalDate.of(2026, 9, 20)
     LogUsTheme {
         PeriodCalendarScreen(
-            initialStart = LocalDate.of(2026, 9, 24),
             initialEnd = LocalDate.of(2026, 9, 26),
             onBack = {},
             onConfirm = { _, _ -> },

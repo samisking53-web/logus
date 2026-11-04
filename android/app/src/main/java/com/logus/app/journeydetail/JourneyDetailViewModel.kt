@@ -201,7 +201,7 @@ class JourneyDetailViewModel(
                 _state.update {
                     it.copy(
                         loading = false,
-                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault(), journey.createdAtMillis),
                         endReached = page.last == null,
                     )
                 }
@@ -229,7 +229,7 @@ class JourneyDetailViewModel(
                 _state.update {
                     it.copy(
                         loadingMore = false,
-                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault()),
+                        windows = groupByWindows(loaded, it.intervalHours, ZoneId.systemDefault(), journey.createdAtMillis),
                         endReached = page.last == null,
                     )
                 }
@@ -268,7 +268,10 @@ class JourneyDetailViewModel(
                         dayAllTruncated = page.last != null,
                         routes = buildRoutes(page.logs, journey.memberIds),
                         unlocatedCount = page.logs.count { log -> log.location == null },
-                        recapScenes = buildRecapScenes(page.logs, journey.memberIds, it.intervalHours, ZoneId.systemDefault(), day, periods),
+                        recapScenes = buildRecapScenes(
+                            page.logs, journey.memberIds, it.intervalHours, ZoneId.systemDefault(), day, periods,
+                            anchorMillis = journey.createdAtMillis,
+                        ),
                         recapHasVideos = page.logs.any { log -> log.mediaType == "video" && log.mediaPath != null },
                     )
                 }
@@ -352,6 +355,7 @@ const val GROUP_METERS = 50.0
  * - 지도 장면(2단계, 2026-10-21 팀 결정): 칸마다 그 사람이 이 시간대에 넣은 첫 영상의 위치. 그 영상에 위치가 없으면 그 사람은 지도에서 빠진다.
  *   위치가 있는 사람이 없으면 지도 장면을 건너뛴다. 앞 지도 장면에 있던 사람은 그 위치에서 이번 위치로 움직인다.
  * 색 번호는 구성원 순서(추억 지도와 같은 색). logs 는 찍은 시각 순서여야 한다. day 는 시간대 분을 실제 시각으로 바꿀 때 쓴다.
+ * anchorMillis = 여정을 만든 시각(시간대 시작점, groupByWindows 와 같다. 촬영 알림과 같은 칸).
  */
 fun buildRecapScenes(
     logs: List<FeedLog>,
@@ -360,11 +364,12 @@ fun buildRecapScenes(
     zone: ZoneId,
     day: LocalDate,
     periods: Map<String, MemberPeriod>,
+    anchorMillis: Long? = null,
 ): List<RecapStep> {
     val videos = logs.filter { it.mediaType == "video" && it.mediaPath != null }
     val people = memberIds + videos.map { it.authorId }.distinct().filterNot { it in memberIds }
     var lastMap: RecapMapScene? = null
-    return groupByWindows(videos, intervalHours, zone).flatMap { window ->
+    return groupByWindows(videos, intervalHours, zone, anchorMillis).flatMap { window ->
         val byAuthor = window.logs.groupBy { it.authorId }
         val windowStart = day.atStartOfDay().plusMinutes(window.startMinute.toLong()).atZone(zone).toInstant().toEpochMilli()
         val required = memberIds.filter { uid ->

@@ -88,8 +88,8 @@ data class NewJourneyUiState(
 
 /**
  * S02 새 여정 만들기·S03 여행 기간 달력 상태 관리.
- * 저장하면 서버 함수 createJourney 가 여정을 만든다. 만든 뒤 홈으로 돌아가면, 시작일이 오늘인 여정은
- * 홈이 폰 카메라를 연다(미래 여정은 시작일에 앱을 열 때 연다. ui/MainScreen.kt 참고).
+ * 저장하면 서버 함수 createJourney 가 여정을 만든다. 시작일은 늘 오늘이다(2026-11-04 팀 결정: 미래 여정 금지,
+ * 서버도 폰 시간대 기준으로 확인한다). 만든 뒤 홈으로 돌아가면 S01-A 에 방금 만든 여정 카드가 보인다.
  */
 class NewJourneyViewModel(
     private val repository: JourneyRepository = JourneyRepository(),
@@ -170,7 +170,7 @@ class NewJourneyViewModel(
 
     fun closeCalendar() = update { it.copy(step = NewJourneyStep.FORM) }
 
-    /** S03 "기간 선택 완료" */
+    /** S03 "기간 선택 완료". 시작일은 늘 오늘이다(2026-11-04 팀 결정: 미래 여정 금지) */
     fun confirmPeriod(start: LocalDate, end: LocalDate) = update {
         it.copy(startDate = start, endDate = end, step = NewJourneyStep.FORM, error = null, inviteHint = null)
     }
@@ -222,8 +222,13 @@ class NewJourneyViewModel(
     private fun createJourney(onDone: () -> Unit) {
         val s = _state.value
         if (!s.canSave) return
-        val start = s.startDate ?: return
+        // 여정은 오늘 시작하는 것만 만든다. 달력에서 고른 뒤 자정이 지났으면 오늘로 다시 맞춘다
+        val start = LocalDate.now()
         val end = s.endDate ?: return
+        if (end.isBefore(start)) {
+            _state.value = s.copy(startDate = start, endDate = null, error = "날짜가 바뀌었어요. 여행 기간을 다시 골라 주세요.")
+            return
+        }
         _state.value = s.copy(saving = true, error = null, inviteHint = null)
         viewModelScope.launch {
             try {
@@ -238,6 +243,7 @@ class NewJourneyViewModel(
                 )
                 _state.value = _state.value.copy(
                     saving = false,
+                    startDate = start,
                     createdJourneyId = created.journeyId,
                     inviteCode = created.inviteCode,
                 )
