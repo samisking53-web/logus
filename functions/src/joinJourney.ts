@@ -1,8 +1,9 @@
 // joinJourney: 6자리 초대 코드로 여정에 참여한다 (I01 초대 확인의 "초대 수락하기"에서 호출)
 // memberIds·memberCount, 멤버 문서, invites 요약의 인원수를 한 트랜잭션으로 함께 고친다.
-// 새 친구가 들어오면 그 코드의 주인(초대한 사람, invites.inviterId)에게 INVITE_REWARD_COINS(30)코인을 준다.
+// 새 친구가 들어오면 그 코드의 주인(초대한 사람, invites.inviterId)에게 INVITE_REWARD_COINS(5)코인을 준다.
 //   - 코인 내역 users/{초대한 사람}/coinLedger/invite_{여정 ID}_{새 구성원 uid} 가 이미 있으면 주지 않는다(같은 친구로 두 번 받지 않음)
 //   - 이미 구성원인 사람이 코드를 다시 넣거나, 초대한 사람이 구성원이 아니거나 프로필이 없으면 주지 않는다
+//   - 초대한 사람이 오늘(UTC) 받은 코인과 합쳐 DAILY_COIN_LIMIT(50)까지만 준다(넘으면 0코인, 코인 내역은 남겨 같은 친구로 다시 받지 않음)
 // 코드가 짧은 대신(6자리) 아래로 보완한다.
 //   - 로그인한 사람만 쓸 수 있다(invites 는 앱이 직접 읽지 못하고 이 함수만 읽는다)
 //   - 한 사람당 하루 INVITE_ATTEMPTS_PER_DAY 번까지만 입력할 수 있다(여러 코드를 넣어 보는 것 방지)
@@ -12,7 +13,10 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db } from "./admin";
 import {
   countInviteAttempt,
+  grantDailyCoins,
   INVITE_REWARD_COINS,
+  limitDailyCoins,
+  readDailyCoins,
   requireAuth,
   requireInviteCode,
   requireInviteOpen,
@@ -57,10 +61,11 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
     const inviterRef = db.collection("users").doc(inviterId);
     const ledgerRef = inviterRef.collection("coinLedger").doc(`invite_${journeyId}_${uid}`);
     // 트랜잭션에서는 읽기를 모두 끝낸 뒤 쓴다.
-    const [ownerMemberSnap, inviterSnap, ledgerSnap] = await Promise.all([
+    const [ownerMemberSnap, inviterSnap, ledgerSnap, inviterDaily] = await Promise.all([
       tx.get(journeyRef.collection("members").doc(ownerId)),
       tx.get(inviterRef),
       tx.get(ledgerRef),
+      readDailyCoins(tx, inviterId), // 초대한 사람이 오늘(UTC) 받은 코인
     ]);
     const notifyIntervalHours = (ownerMemberSnap.get("notifyIntervalHours") as number | null) ?? null;
 
@@ -76,16 +81,21 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
     });
     tx.update(inviteRef, { memberCount });
 
-    // 초대 보상: 초대한 사람이 이 여정의 구성원이고 프로필이 있을 때, 이 친구로 처음 받는 코인만 준다.
+    // 초대 보상: 초대한 사람이 이 여정의 구성원이고 프로필이 있을 때, 이 친구로 처음 받는 코인만 준다(하루 50코인까지만).
     if (memberIds.includes(inviterId) && inviterSnap.exists && !ledgerSnap.exists) {
+      const granted = limitDailyCoins(inviterDaily, INVITE_REWARD_COINS);
       tx.create(ledgerRef, {
         reason: "inviteFriend",
-        amount: INVITE_REWARD_COINS,
+        amount: granted,
         journeyId,
         invitedUid: uid,
+        ...(granted < INVITE_REWARD_COINS ? { dailyLimited: true } : {}),
         createdAt: FieldValue.serverTimestamp(),
       });
-      tx.update(inviterRef, { coins: FieldValue.increment(INVITE_REWARD_COINS) });
+      if (granted > 0) {
+        grantDailyCoins(tx, inviterDaily, granted);
+        tx.update(inviterRef, { coins: FieldValue.increment(granted) });
+      }
     }
 
     return { journeyId, alreadyMember: false };

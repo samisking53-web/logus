@@ -3,8 +3,10 @@
 import "./globalOptions"; // 반드시 맨 위에 둔다
 
 export { createJourney } from "./createJourney";
+export { deleteJourney } from "./deleteJourney";
 export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
+export { leaveJourney } from "./leaveJourney";
 export { previewInvite } from "./previewInvite";
 export { saveLogLocation } from "./saveLogLocation";
 export { sendCaptureReminders } from "./sendCaptureReminders";

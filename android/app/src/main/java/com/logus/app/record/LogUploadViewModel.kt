@@ -38,6 +38,8 @@ data class LogUploadUiState(
     val done: Boolean = false,
     /** 위치와 함께 올려서 받은 코인 수 */
     val coinsGranted: Int = 0,
+    /** 하루 50코인 제한 때문에 10코인보다 적게 받았다(오늘 받을 수 있는 코인을 다 받음) */
+    val coinLimitReached: Boolean = false,
     /** 기록은 올렸지만 위치 저장(saveLogLocation)에 실패했다 */
     val locationSaveFailed: Boolean = false,
     /** 인터넷이 없어 폰에 보관했다(인터넷이 연결되면 자동으로 올라간다, PendingLogs) */
@@ -176,14 +178,16 @@ class LogUploadViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(uploading = false, done = true) }
                     return@launch
                 }
-                val coins = try {
+                val reward = try {
                     repository.saveLocation(journeyId, logId, place)
                 } catch (e: Exception) {
                     Log.w(TAG, "위치 저장 실패 (saveLogLocation 함수 배포 확인)", e)
                     _state.update { it.copy(uploading = false, done = true, locationSaveFailed = true) }
                     return@launch
                 }
-                _state.update { it.copy(uploading = false, done = true, coinsGranted = coins) }
+                _state.update {
+                    it.copy(uploading = false, done = true, coinsGranted = reward.coins, coinLimitReached = reward.dailyLimitReached)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 if (e.isNetworkProblem()) {

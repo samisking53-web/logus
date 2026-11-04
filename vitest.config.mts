@@ -11,6 +11,8 @@ export default defineConfig({
     env: {
       // 테스트 전용 가짜 프로젝트. "demo-"로 시작하면 실제 Firebase에 절대 연결되지 않는다.
       GCLOUD_PROJECT: "demo-logus",
+      // 서버 함수(Admin SDK)가 쓰는 기본 Storage 버킷(deleteJourney·leaveJourney 가 파일을 지운다). 실제 서버에서는 자동으로 정해진다
+      FIREBASE_CONFIG: JSON.stringify({ projectId: "demo-logus", storageBucket: "demo-logus.appspot.com" }),
     },
   },
 });

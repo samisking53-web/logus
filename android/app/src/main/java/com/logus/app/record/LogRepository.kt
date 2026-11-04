@@ -216,9 +216,10 @@ class LogRepository {
     /**
      * 기록에 위치를 저장한다: 서버 함수 saveLogLocation 이 위치·장소 이름을 채우고 10코인을 준다
      * (같은 기록으로는 한 번만, 코인 내역 users/{uid}/coinLedger/{logId}). 탐색 공개(isPublic)는 아직 false.
-     * 돌려주는 값: 이번에 받은 코인 수(이미 받았으면 0)
+     * 하루(UTC)에 받을 수 있는 코인은 50개까지라서(Coins.DAILY_LIMIT) 10코인보다 적게 받을 수 있다.
+     * 돌려주는 값: 이번에 받은 코인 수(이미 받았으면 0)와 하루 제한 때문에 덜 받았는지
      */
-    suspend fun saveLocation(journeyId: String, logId: String, place: PickedPlace): Int {
+    suspend fun saveLocation(journeyId: String, logId: String, place: PickedPlace): LocationReward {
         val result = functions.getHttpsCallable("saveLogLocation")
             .call(
                 hashMapOf(
@@ -231,9 +232,15 @@ class LogRepository {
             )
             .await()
         val data = result.getData() as? Map<*, *>
-        return (data?.get("coinsGranted") as? Number)?.toInt() ?: 0
+        return LocationReward(
+            coins = (data?.get("coinsGranted") as? Number)?.toInt() ?: 0,
+            dailyLimitReached = data?.get("dailyLimitReached") == true,
+        )
     }
 }
+
+/** 위치 저장으로 받은 코인. dailyLimitReached = 하루 50코인 제한 때문에 10코인보다 적게(0개일 수도) 받았다 */
+data class LocationReward(val coins: Int, val dailyLimitReached: Boolean = false)
 
 /** 기록 보기 한 쪽에 읽는 기록 수 */
 private const val PAGE_SIZE = 30L

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.logus.app.auth.Coins
 import com.logus.app.R
 import com.logus.app.journey.InviteCode
 import com.logus.app.ui.theme.LogUsColors
@@ -169,7 +170,7 @@ fun InviteCodeDialog(code: String, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "친구가 이 코드로 들어오면 나에게 ${InviteCode.REWARD_COINS}코인이 쌓여요\n코드는 여정이 끝날 때까지 쓸 수 있어요",
+                    "친구가 이 코드로 들어오면 나에게 ${InviteCode.REWARD_COINS}코인이 쌓여요 (하루 최대 ${Coins.DAILY_LIMIT}코인)\n코드는 여정이 끝날 때까지 쓸 수 있어요",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,

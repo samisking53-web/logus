@@ -344,6 +344,13 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
     await assertFails(deleteDoc(doc(db, "users", ALICE, "coinLedger", "oldLog")));
   });
 
+  it("오늘 받은 코인 합(coinDaily, 하루 50코인 제한)은 본인도 읽거나 쓸 수 없다(서버만)", async () => {
+    const db = dbAs(ALICE);
+    await assertFails(getDoc(doc(db, "coinDaily", ALICE)));
+    await assertFails(setDoc(doc(db, "coinDaily", ALICE), { date: "2026-11-04", earned: 0 }));
+    await assertFails(deleteDoc(doc(db, "coinDaily", ALICE)));
+  });
+
   it("약관 동의 기록: 본인만 필수 항목을 모두 동의한 기록을 한 번 만든다", async () => {
     const ok = { ageOver14: true, terms: true, location: true, notifyNewLogs: false, agreedAt: serverTimestamp() };
     const ref = (uid: string, version = "2026-10-03") => doc(dbAs(uid), "users", uid, "agreements", version);

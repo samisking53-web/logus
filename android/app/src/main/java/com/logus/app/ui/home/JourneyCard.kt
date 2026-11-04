@@ -1,8 +1,9 @@
 package com.logus.app.ui.home
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +34,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -52,13 +55,16 @@ import com.logus.app.ui.theme.OnPrimary
 import com.logus.app.ui.theme.Success
 
 /**
- * S01-A 진행 중인 여정 카드: 위쪽 대표 사진 + "진행 중" 표시 + 오른쪽 위 전환(대표 사진 바꾸기) 버튼, 아래쪽 여정 이름·구성원·기간.
+ * S01-A 진행 중인 여정 카드: 위쪽 대표 사진 + "진행 중" 표시 + 오른쪽 위 연필(대표 사진 바꾸기) 버튼, 아래쪽 여정 이름·구성원·기간.
  * coverPhoto: 내가 고른 대표 사진(내려받기 주소). 없으면 "사진이 들어갈 자리" 그림을 보여 준다.
- * 전환 버튼(onChangeCover)은 대표 사진 선택 팝업(CoverPhotoDialog)을 연다. 고른 사진은 내 홈에서만 보인다.
+ * 사진 위 연필 버튼(onChangeCover)은 대표 사진 선택 팝업(CoverPhotoDialog)을 연다. 고른 사진은 내 홈에서만 보인다.
  * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는
  * "여정에 초대하기" 팝업(ui/journey/JourneyInviteDialog.kt)을 연다(MainScreen 이 연결).
  * 카드의 나머지 부분을 누르면(onOpen) N01 기록 보기(ui/feed/JourneyFeedScreen.kt)를 연다.
+ * 길게 누르면(onLongPress, 진동) 삭제·나가기 팝업(RemoveJourneyDialog, 2026-11-04 팀 그림)을 연다.
+ * longPressLabel 은 화면 읽기 프로그램(TalkBack)이 읽는 길게 누르기 동작 이름("여정 삭제"·"여정 나가기").
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun JourneyCard(
     journey: Journey,
@@ -68,16 +74,28 @@ fun JourneyCard(
     onInviteFriends: () -> Unit = {},
     onOpen: () -> Unit = {},
     onChangeCover: () -> Unit = {},
+    onLongPress: () -> Unit = {},
+    longPressLabel: String = "여정 삭제",
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(20.dp)
+    val haptic = LocalHapticFeedback.current
     Column(
         modifier
             .fillMaxWidth()
             .clip(shape)
             .background(LogUsColors.card)
             .border(1.dp, LogUsColors.line, shape)
-            .clickable(role = Role.Button, onClickLabel = "오늘 기록 보기", onClick = onOpen),
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = "오늘 기록 보기",
+                onLongClickLabel = longPressLabel,
+                onClick = onOpen,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress()
+                },
+            ),
     ) {
         // 대표 사진 자리
         Box(
@@ -101,7 +119,7 @@ fun JourneyCard(
                     .align(Alignment.TopStart)
                     .padding(14.dp),
             )
-            // 오른쪽 위 전환 버튼: 흰 동그라미 + 도는 화살표 → 대표 사진 선택 팝업
+            // 오른쪽 위 대표 사진 바꾸기 버튼: 흰 동그라미 + 연필(2026-11-04 팀 그림) → 대표 사진 선택 팝업
             Surface(
                 onClick = onChangeCover,
                 shape = CircleShape,
@@ -115,7 +133,7 @@ fun JourneyCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painterResource(R.drawable.ic_swap),
+                        painterResource(R.drawable.ic_edit_pencil),
                         contentDescription = "${journey.name} 대표 사진 바꾸기",
                         modifier = Modifier.size(20.dp),
                     )

@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.TimeUnit
 
 /** Firestore journeys/{journeyId} 문서 중 홈 화면에 필요한 값 (CLAUDE.md "데이터 모델") */
 data class Journey(
@@ -137,7 +138,7 @@ class JourneyRepository {
 
     /**
      * 이 여정에서 쓰는 "내" 초대 코드(구성원마다 다르고, 한 번 만들면 바뀌지 않는다).
-     * 이 코드로 새 친구가 들어오면 나에게 30코인이 쌓인다(서버 joinJourney).
+     * 이 코드로 새 친구가 들어오면 나에게 5코인이 쌓인다(서버 joinJourney).
      * - 여정을 만든 사람: 여정 문서의 inviteCode
      * - 다른 구성원: 내 멤버 문서(members/{uid})의 inviteCode. 아직 없으면 서버 함수 getInviteCode 가 새로 만들어 준다
      *   (앱은 invites 를 직접 쓸 수 없어서 코드는 서버만 만든다)
@@ -154,6 +155,30 @@ class JourneyRepository {
             .await()
         val data = result.getData() as? Map<*, *>
         return data?.get("inviteCode") as? String ?: error("서버가 초대 코드를 돌려주지 않았어요.")
+    }
+
+    /**
+     * 내가 만든 여정을 통째로 지운다(S01-A 여정 카드를 길게 눌러 "여정 삭제", 2026-11-04 팀 그림).
+     * 서버 함수 deleteJourney 가 만든 사람인지 확인하고 모든 구성원의 기록·영상·대표 사진·초대 코드를 함께 지운다.
+     * 다른 구성원의 파일은 보안 규칙상 앱이 지울 수 없어서 서버가 지운다. 되돌릴 수 없다. 받은 코인은 그대로 남는다.
+     * 기록이 많으면 오래 걸릴 수 있어 5분까지 기다린다.
+     */
+    suspend fun deleteJourney(journeyId: String) {
+        functions.getHttpsCallable("deleteJourney")
+            .withTimeout(5, TimeUnit.MINUTES)
+            .call(hashMapOf("journeyId" to journeyId))
+            .await()
+    }
+
+    /**
+     * 초대받아 들어온 여정에서 나간다(S01-A 여정 카드를 길게 눌러 "여정 나가기", 2026-11-04 팀 결정).
+     * 서버 함수 leaveJourney 가 구성원 목록에서 나를 빼고 내 멤버 문서·내 초대 코드를 지운다.
+     * 내가 올린 기록은 다른 구성원의 여정에 그대로 남는다. 여정을 만든 사람은 나갈 수 없다(삭제를 쓴다).
+     */
+    suspend fun leaveJourney(journeyId: String) {
+        functions.getHttpsCallable("leaveJourney")
+            .call(hashMapOf("journeyId" to journeyId))
+            .await()
     }
 
     /** 여정 문서 한 개 읽기(내가 구성원인 여정만 읽을 수 있다). 없으면 null */

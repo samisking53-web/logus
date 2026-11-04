@@ -70,6 +70,12 @@ object LogUsColors {
     /** 주의 글자(N03 저장 팝업 "저장한 뒤에는 …"): 라이트는 warning #A8620A, 다크는 앰버 #E0930F(어두운 카드 위 대비 4.5:1 이상) */
     val warning: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) AmberTextDark else Warning
+    /**
+     * 주의 상자 바탕(S01-A 여정 삭제·나가기 팝업의 "기록이 모두 사라지고 …"): 라이트는 amber-soft #FDF0DC,
+     * 다크는 바탕색. 위 글자는 amberText(라이트 #8A5606 대비 5.5:1, 다크 #E0930F 대비 7.3:1)
+     */
+    val warningBox: androidx.compose.ui.graphics.Color
+        @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else AmberSoft
     /** 프로필 상자 안 코인 상자: 라이트는 흰색, 다크는 바탕색(상자보다 어둡게) */
     val coinChip: androidx.compose.ui.graphics.Color
         @Composable get() = if (isSystemInDarkTheme()) BackgroundDark else Card
