@@ -68,8 +68,8 @@ export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const INVITE_CODE_LENGTH = 6;
 /** 한 사람이 하루(UTC)에 초대 코드를 입력할 수 있는 횟수 */
 export const INVITE_ATTEMPTS_PER_DAY = 20;
-/** 내 초대 코드로 새 친구가 여정에 들어오면 나(코드 주인)에게 주는 코인. 새 친구 1명당 한 번 */
-export const INVITE_REWARD_COINS = 30;
+/** 내 초대 코드로 새 친구가 여정에 들어오면 나(코드 주인)에게 주는 코인. 새 친구 1명당 한 번(2026-11-04 팀 결정: 30 → 5) */
+export const INVITE_REWARD_COINS = 5;
 /** 6자리 코드가 이미 있으면 새 코드로 다시 시도하는 횟수 */
 export const MAX_INVITE_CODE_TRIES = 5;
 

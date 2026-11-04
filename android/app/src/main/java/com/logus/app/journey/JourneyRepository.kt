@@ -137,7 +137,7 @@ class JourneyRepository {
 
     /**
      * 이 여정에서 쓰는 "내" 초대 코드(구성원마다 다르고, 한 번 만들면 바뀌지 않는다).
-     * 이 코드로 새 친구가 들어오면 나에게 30코인이 쌓인다(서버 joinJourney).
+     * 이 코드로 새 친구가 들어오면 나에게 5코인이 쌓인다(서버 joinJourney).
      * - 여정을 만든 사람: 여정 문서의 inviteCode
      * - 다른 구성원: 내 멤버 문서(members/{uid})의 inviteCode. 아직 없으면 서버 함수 getInviteCode 가 새로 만들어 준다
      *   (앱은 invites 를 직접 쓸 수 없어서 코드는 서버만 만든다)

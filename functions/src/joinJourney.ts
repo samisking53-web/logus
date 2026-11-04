@@ -1,6 +1,6 @@
 // joinJourney: 6자리 초대 코드로 여정에 참여한다 (I01 초대 확인의 "초대 수락하기"에서 호출)
 // memberIds·memberCount, 멤버 문서, invites 요약의 인원수를 한 트랜잭션으로 함께 고친다.
-// 새 친구가 들어오면 그 코드의 주인(초대한 사람, invites.inviterId)에게 INVITE_REWARD_COINS(30)코인을 준다.
+// 새 친구가 들어오면 그 코드의 주인(초대한 사람, invites.inviterId)에게 INVITE_REWARD_COINS(5)코인을 준다.
 //   - 코인 내역 users/{초대한 사람}/coinLedger/invite_{여정 ID}_{새 구성원 uid} 가 이미 있으면 주지 않는다(같은 친구로 두 번 받지 않음)
 //   - 이미 구성원인 사람이 코드를 다시 넣거나, 초대한 사람이 구성원이 아니거나 프로필이 없으면 주지 않는다
 // 코드가 짧은 대신(6자리) 아래로 보완한다.

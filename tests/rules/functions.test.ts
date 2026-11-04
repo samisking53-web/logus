@@ -170,9 +170,9 @@ describe("joinJourney", () => {
   });
 });
 
-describe("초대 보상(코드 주인에게 30코인)과 구성원별 초대 코드", () => {
-  it("만든 사람의 코드로 새 친구가 들어오면 만든 사람이 30코인을 한 번만 받는다", async () => {
-    expect(INVITE_REWARD_COINS).toBe(30);
+describe("초대 보상(코드 주인에게 5코인)과 구성원별 초대 코드", () => {
+  it("만든 사람의 코드로 새 친구가 들어오면 만든 사람이 5코인을 한 번만 받는다", async () => {
+    expect(INVITE_REWARD_COINS).toBe(5);
     const owner = newUid();
     const guest = newUid();
     await makeUser(owner, "성연");
@@ -181,16 +181,16 @@ describe("초대 보상(코드 주인에게 30코인)과 구성원별 초대 코
     expect((await db.doc(`invites/${inviteCode}`).get()).get("inviterId")).toBe(owner);
 
     await joinJourney.run(req({ inviteCode }, guest));
-    expect(await coinsOf(owner)).toBe(30);
+    expect(await coinsOf(owner)).toBe(5);
     const ledger = (await db.doc(`users/${owner}/coinLedger/invite_${journeyId}_${guest}`).get()).data();
-    expect(ledger).toMatchObject({ reason: "inviteFriend", amount: 30, journeyId, invitedUid: guest });
+    expect(ledger).toMatchObject({ reason: "inviteFriend", amount: 5, journeyId, invitedUid: guest });
 
     // 같은 친구가 코드를 다시 넣어도(이미 구성원) 더 주지 않는다
     await joinJourney.run(req({ inviteCode }, guest));
-    expect(await coinsOf(owner)).toBe(30);
-    // 다른 친구가 들어오면 또 30
+    expect(await coinsOf(owner)).toBe(5);
+    // 다른 친구가 들어오면 또 5
     await joinJourney.run(req({ inviteCode }, newUid()));
-    expect(await coinsOf(owner)).toBe(60);
+    expect(await coinsOf(owner)).toBe(10);
   });
 
   it("구성원마다 자기 코드를 받고(바뀌지 않음), 그 코드로 들어오면 코드를 공유한 사람이 코인을 받는다", async () => {
@@ -219,7 +219,7 @@ describe("초대 보상(코드 주인에게 30코인)과 구성원별 초대 코
 
     const ownerCoinsBefore = await coinsOf(owner);
     await joinJourney.run(req({ inviteCode: bobCode }, carol));
-    expect(await coinsOf(bob)).toBe(30);
+    expect(await coinsOf(bob)).toBe(5);
     expect(await coinsOf(owner)).toBe(ownerCoinsBefore); // 만든 사람은 이번에는 받지 않는다
     expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner, bob, carol]);
   });
