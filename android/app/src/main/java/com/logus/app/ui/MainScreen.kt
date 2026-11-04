@@ -109,7 +109,7 @@ fun MainScreen(
     // S01-A 에서 고른 여정(카드를 누르거나 카드의 버튼을 누른 여정). 기록 보기·카메라·초대 팝업은 이 여정으로 연다
     var activeJourneyId by rememberSaveable { mutableStateOf<String?>(null) }
     val active: Journey? = ongoing?.journeys?.firstOrNull { it.journey.id == activeJourneyId }?.journey
-    // 대표 사진 선택 팝업(S01-A 여정 카드 사진 위 전환 버튼)
+    // 대표 사진 선택 팝업(S01-A 여정 카드 사진 위 연필 버튼)
     val coverState by coverPhotoViewModel.state.collectAsStateWithLifecycle()
 
     // S01-A 여정 카드의 친구 추가 버튼 → 여정에 초대하기 팝업(뒤는 S01-A 그대로)
@@ -423,7 +423,7 @@ fun MainScreen(
                             feedViewModel.open(journey, uid)
                             viewingFeed = true
                         },
-                        // S01-A 여정 카드 사진 위 전환 버튼 → 대표 사진 선택 팝업
+                        // S01-A 여정 카드 사진 위 연필 버튼 → 대표 사진 선택 팝업
                         onChangeCover = { card -> coverPhotoViewModel.open(context, card.journey.id, card.coverPath) },
                         coverUrl = homeViewModel::coverUrl,
                     )

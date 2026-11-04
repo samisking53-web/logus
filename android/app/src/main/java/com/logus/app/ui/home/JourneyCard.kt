@@ -54,7 +54,7 @@ import com.logus.app.ui.theme.Success
 /**
  * S01-A 진행 중인 여정 카드: 위쪽 대표 사진 + "진행 중" 표시 + 오른쪽 위 전환(대표 사진 바꾸기) 버튼, 아래쪽 여정 이름·구성원·기간.
  * coverPhoto: 내가 고른 대표 사진(내려받기 주소). 없으면 "사진이 들어갈 자리" 그림을 보여 준다.
- * 전환 버튼(onChangeCover)은 대표 사진 선택 팝업(CoverPhotoDialog)을 연다. 고른 사진은 내 홈에서만 보인다.
+ * 사진 위 연필 버튼(onChangeCover)은 대표 사진 선택 팝업(CoverPhotoDialog)을 연다. 고른 사진은 내 홈에서만 보인다.
  * 여정 이름 오른쪽의 사람+ 버튼(onInviteFriends)은 여행 중에도 새 사람을 초대하는
  * "여정에 초대하기" 팝업(ui/journey/JourneyInviteDialog.kt)을 연다(MainScreen 이 연결).
  * 카드의 나머지 부분을 누르면(onOpen) N01 기록 보기(ui/feed/JourneyFeedScreen.kt)를 연다.
@@ -101,7 +101,7 @@ fun JourneyCard(
                     .align(Alignment.TopStart)
                     .padding(14.dp),
             )
-            // 오른쪽 위 전환 버튼: 흰 동그라미 + 도는 화살표 → 대표 사진 선택 팝업
+            // 오른쪽 위 대표 사진 바꾸기 버튼: 흰 동그라미 + 연필(2026-11-04 팀 그림) → 대표 사진 선택 팝업
             Surface(
                 onClick = onChangeCover,
                 shape = CircleShape,
@@ -115,7 +115,7 @@ fun JourneyCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painterResource(R.drawable.ic_swap),
+                        painterResource(R.drawable.ic_edit_pencil),
                         contentDescription = "${journey.name} 대표 사진 바꾸기",
                         modifier = Modifier.size(20.dp),
                     )
