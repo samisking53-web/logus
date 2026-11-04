@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.logus.app.auth.Coins
 import com.logus.app.R
 import com.logus.app.record.LogUploadUiState
 import com.logus.app.record.MAX_THEMES
@@ -490,7 +491,7 @@ private fun LogUploadContent(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            if (state.withoutLocation) "위치 없이 여정에 올려요 (코인은 쌓이지 않아요)" else "지도에 핀이 찍히고 코인 10개가 쌓여요",
+            if (state.withoutLocation) "위치 없이 여정에 올려요 (코인은 쌓이지 않아요)" else "지도에 핀이 찍히고 코인 10개가 쌓여요 (하루 최대 ${Coins.DAILY_LIMIT}개)",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
             textAlign = TextAlign.Center,

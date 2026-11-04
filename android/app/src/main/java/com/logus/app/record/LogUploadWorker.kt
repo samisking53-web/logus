@@ -73,7 +73,7 @@ class LogUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             picked
         }
         return try {
-            logs.saveLocation(item.journeyId, item.logId, place)
+            logs.saveLocation(item.journeyId, item.logId, place).coins
         } catch (e: Exception) {
             if (e is FirebaseNetworkException ||
                 (e is FirebaseFunctionsException && e.code == FirebaseFunctionsException.Code.UNAVAILABLE)

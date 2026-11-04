@@ -16,6 +16,7 @@ val Background = Color(0xFFF7F5FB)
 val Error = Color(0xFFC0392B)
 val AmberText = Color(0xFF8A5606)
 val Amber = Color(0xFFE0930F) // 코인 채움(위 글자는 본문색, 흰 글자 금지)
+val AmberSoft = Color(0xFFFDF0DC) // 주의 상자 바탕(S01-A 여정 삭제·나가기 팝업). 위 글자는 AmberText(대비 5.5:1)
 val Line = Color(0xFFE3E0EC) // 구분선(하단 탭 위 선)
 val Success = Color(0xFF17795A) // "진행 중" 점
 val Warning = Color(0xFFA8620A) // 주의 글자(흰 카드 위 대비 4.7:1). 다크 모드는 AmberTextDark 를 쓴다(LogUsColors.warning)

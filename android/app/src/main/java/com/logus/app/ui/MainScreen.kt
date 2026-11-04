@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,10 +20,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.logus.app.auth.Coins
 import com.logus.app.auth.Profile
 import com.logus.app.feed.JourneyFeedViewModel
 import com.logus.app.home.HomeUiState
@@ -46,10 +50,12 @@ import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
 import com.logus.app.ui.explore.ExploreScreen
 import com.logus.app.ui.feed.JourneyFeedScreen
+import com.logus.app.ui.feed.UndoDeleteBar
 import com.logus.app.ui.home.CoverPhotoDialog
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.home.ProfileEditDialog
+import com.logus.app.ui.home.RemoveJourneyDialog
 import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.JourneyInviteDialog
@@ -106,6 +112,10 @@ fun MainScreen(
 
     val ongoing = homeState as? HomeUiState.Ongoing
     val myInviteCode by homeViewModel.myInviteCode.collectAsStateWithLifecycle()
+    // S01-A 여정 카드를 길게 눌러 연 삭제·나가기 팝업과, 지운 뒤 5초 동안 보여 주는 "되돌리기"
+    val removeDialog by homeViewModel.removeDialog.collectAsStateWithLifecycle()
+    val justRemoved by homeViewModel.justRemoved.collectAsStateWithLifecycle()
+    val removeError by homeViewModel.removeError.collectAsStateWithLifecycle()
     // S01-A 에서 고른 여정(카드를 누르거나 카드의 버튼을 누른 여정). 기록 보기·카메라·초대 팝업은 이 여정으로 연다
     var activeJourneyId by rememberSaveable { mutableStateOf<String?>(null) }
     val active: Journey? = ongoing?.journeys?.firstOrNull { it.journey.id == activeJourneyId }?.journey
@@ -176,10 +186,14 @@ fun MainScreen(
             val message = when {
                 uploadState.queued -> "인터넷이 없어서 폰에 보관했어요. 연결되면 자동으로 올라가요."
                 uploadState.locationSaveFailed -> "여정에 올렸어요. 위치는 저장하지 못했어요."
+                // 하루 50코인 제한(UTC 하루): 덜 받았으면 오늘 받을 수 있는 코인을 다 받았다고 알려 준다
+                uploadState.coinLimitReached && uploadState.coinsGranted > 0 ->
+                    "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요 (오늘 받을 수 있는 코인 ${Coins.DAILY_LIMIT}개를 다 받았어요)"
+                uploadState.coinLimitReached -> "여정에 올렸어요 · 오늘 받을 수 있는 코인 ${Coins.DAILY_LIMIT}개를 다 받아서 코인은 쌓이지 않았어요"
                 uploadState.coinsGranted > 0 -> "여정에 올렸어요 · 코인 ${uploadState.coinsGranted}개가 쌓였어요"
                 else -> "여정에 올렸어요"
             }
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, message, if (uploadState.coinLimitReached) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
         }
     }
     fun openCapture(journey: Journey) {
@@ -218,6 +232,12 @@ fun MainScreen(
             Toast.makeText(context, "폰에 보관했던 기록을 여정에 올렸어요$coins", Toast.LENGTH_SHORT).show()
             if (viewingFeed && feedViewModel.state.value.journeyId == done.journeyId) feedViewModel.reload()
         }
+    }
+    // 여정을 지우거나 나가지 못했으면 알려 준다(여정 카드는 다시 보인다)
+    LaunchedEffect(removeError) {
+        val message = removeError ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        homeViewModel.consumeRemoveError()
     }
     // 기록을 지우지 못했으면 알려 준다(기록은 다시 보인다)
     LaunchedEffect(feedState.deleteError) {
@@ -425,6 +445,9 @@ fun MainScreen(
                         },
                         // S01-A 여정 카드 사진 위 연필 버튼 → 대표 사진 선택 팝업
                         onChangeCover = { card -> coverPhotoViewModel.open(context, card.journey.id, card.coverPath) },
+                        // S01-A 여정 카드 길게 누르기 → 삭제(내가 만든 여정)·나가기(초대받은 여정) 팝업
+                        onLongPressJourney = { card -> homeViewModel.openRemove(card, uid) },
+                        myUid = uid,
                         coverUrl = homeViewModel::coverUrl,
                     )
                     MainTab.EXPLORE -> ExploreScreen()
@@ -441,6 +464,17 @@ fun MainScreen(
                         onHide = myLogViewModel::hide,
                         onMessageShown = myLogViewModel::messageShown,
                         coverUrl = myLogViewModel::coverUrl,
+                    )
+                }
+                // 여정을 지우거나 나온 뒤 5초 동안 아래에 "✓ 여정을 삭제했어요 · 되돌리기"(N01 기록 삭제와 같은 모양)
+                val removed = justRemoved
+                if (removed != null && tab == MainTab.HOME && invitePreview == null) {
+                    UndoDeleteBar(
+                        onUndo = homeViewModel::undoRemove,
+                        message = if (removed.deleted) "여정을 삭제했어요" else "여정에서 나왔어요",
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
             }
@@ -479,6 +513,16 @@ fun MainScreen(
                 endDate = active.endDate,
                 inviterName = profile.nickname,
                 onClose = { invitingToJourney = false },
+            )
+        }
+        // 여정 삭제·나가기 팝업(S01-A 위, 여정 카드를 길게 누르면 뜬다. 2026-11-04 팀 그림)
+        val removing = removeDialog
+        if (removing != null && tab == MainTab.HOME && invitePreview == null) {
+            RemoveJourneyDialog(
+                state = removing,
+                coverUrl = homeViewModel::coverUrl,
+                onConfirm = homeViewModel::confirmRemove,
+                onDismiss = homeViewModel::closeRemove,
             )
         }
         // 대표 사진 선택 팝업(S01-A 위). 고른 사진은 내 홈에서만 보인다

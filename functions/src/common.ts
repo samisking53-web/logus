@@ -1,5 +1,6 @@
 // 여러 함수가 함께 쓰는 확인·검증 도우미
 import { randomInt } from "node:crypto";
+import type { DocumentReference, Transaction } from "firebase-admin/firestore";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { db } from "./admin";
 
@@ -72,6 +73,44 @@ export const INVITE_ATTEMPTS_PER_DAY = 20;
 export const INVITE_REWARD_COINS = 5;
 /** 6자리 코드가 이미 있으면 새 코드로 다시 시도하는 횟수 */
 export const MAX_INVITE_CODE_TRIES = 5;
+
+/**
+ * 한 사람이 하루(UTC 0시 ~ 24시)에 받을 수 있는 코인(2026-11-04 팀 결정). 위치 저장·초대 보상을 모두 합친 값이다.
+ * 넘으면 50까지만 채워 준다(예: 오늘 45코인 받았는데 위치 저장 10코인 → 5코인만). 앱 Coins.DAILY_LIMIT 과 같아야 한다.
+ */
+export const DAILY_COIN_LIMIT = 50;
+
+/** 오늘 받은 코인 문서(coinDaily/{uid}) 정보. 트랜잭션 안에서 readDailyCoins 로 읽고 grantDailyCoins 로 쓴다 */
+export type DailyCoins = { ref: DocumentReference; today: string; earned: number };
+
+/** 오늘(UTC) 날짜 "YYYY-MM-DD" */
+export function utcToday(nowMillis: number = Date.now()): string {
+  return new Date(nowMillis).toISOString().slice(0, 10);
+}
+
+/**
+ * 오늘(UTC) 이 사람이 받은 코인을 읽는다. 트랜잭션에서는 읽기를 모두 끝낸 뒤 써야 하므로 다른 읽기와 함께 먼저 부른다.
+ * coinDaily/{uid}: date("YYYY-MM-DD", UTC), earned(그날 받은 코인 합). 서버만 읽고 쓴다(보안 규칙 기본 거부).
+ * 날짜가 오늘이 아니면(어제 문서) 오늘은 0코인 받은 것으로 본다.
+ */
+export async function readDailyCoins(tx: Transaction, uid: string): Promise<DailyCoins> {
+  const ref = db.collection("coinDaily").doc(uid);
+  const snap = await tx.get(ref);
+  const today = utcToday();
+  const earned = snap.get("date") === today ? ((snap.get("earned") as number | undefined) ?? 0) : 0;
+  return { ref, today, earned };
+}
+
+/** 주려는 코인(wanted) 중 오늘 실제로 줄 수 있는 코인: 오늘 합이 DAILY_COIN_LIMIT 을 넘지 않게 자른다 */
+export function limitDailyCoins(daily: DailyCoins, wanted: number): number {
+  return Math.max(0, Math.min(wanted, DAILY_COIN_LIMIT - daily.earned));
+}
+
+/** 오늘 받은 코인 합에 granted 를 더한다(읽기를 모두 끝낸 뒤 부른다). 0이면 쓰지 않는다 */
+export function grantDailyCoins(tx: Transaction, daily: DailyCoins, granted: number): void {
+  if (granted <= 0) return;
+  tx.set(daily.ref, { date: daily.today, earned: daily.earned + granted });
+}
 
 export function createInviteCode(): string {
   let code = "";

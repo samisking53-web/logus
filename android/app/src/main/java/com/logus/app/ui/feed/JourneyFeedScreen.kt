@@ -578,11 +578,14 @@ private fun dayCountLabel(state: JourneyFeedUiState, memberCount: Int): String =
     else -> "전체 ${memberCount}명"
 }
 
-/** 안내 띠 "ⓘ 내가 올린 기록을 길게 누르면 삭제할 수 있어요" */
+/** 안내 띠 "ⓘ 내가 올린 기록을 길게 누르면 삭제할 수 있어요"(S01-A 홈의 "내가 만든 여정은 길게 눌러 삭제할 수 있어요"도 같은 모양) */
 @Composable
-private fun DeleteHint() {
+internal fun DeleteHint(
+    text: String = "내가 올린 기록을 길게 누르면 삭제할 수 있어요",
+    modifier: Modifier = Modifier,
+) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(LogUsColors.profileBox, RoundedCornerShape(14.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -591,13 +594,16 @@ private fun DeleteHint() {
     ) {
         Icon(Icons.Outlined.Info, contentDescription = null, tint = LogUsColors.primaryStrong, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
-        Text("내가 올린 기록을 길게 누르면 삭제할 수 있어요", color = LogUsColors.primaryStrong, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(text, color = LogUsColors.primaryStrong, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
-/** 지운 뒤 아래에 잠깐 뜨는 안내와 "되돌리기"(5초가 지나면 저절로 사라지고 그때 진짜로 지운다) */
+/**
+ * 지운 뒤 아래에 잠깐 뜨는 안내와 "되돌리기"(5초가 지나면 저절로 사라지고 그때 진짜로 지운다).
+ * S01-A 홈의 여정 삭제·나가기("여정을 삭제했어요"·"여정에서 나왔어요")도 같은 모양을 쓴다.
+ */
 @Composable
-private fun UndoDeleteBar(onUndo: () -> Unit, modifier: Modifier = Modifier) {
+internal fun UndoDeleteBar(onUndo: () -> Unit, modifier: Modifier = Modifier, message: String = "내 기록을 삭제했어요") {
     Row(
         modifier
             .fillMaxWidth()
@@ -609,7 +615,7 @@ private fun UndoDeleteBar(onUndo: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Icon(Icons.Filled.Check, contentDescription = null, tint = TextDark, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
-        Text("내 기록을 삭제했어요", color = TextDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text(message, color = TextDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         Surface(
             onClick = onUndo,
             shape = RoundedCornerShape(50),

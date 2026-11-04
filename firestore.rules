@@ -8,10 +8,11 @@ rules_version = '2';
 //
 // 서버 함수(Admin SDK)는 이 규칙을 거치지 않는다. 그래서 아래 쓰기는 클라이언트에게 막혀 있고
 // 서버 함수로만 일어난다.
-//   - journeys 문서와 members 문서 생성·참여 → createJourney, joinJourney
+//   - journeys 문서와 members 문서 생성·참여·삭제·나가기 → createJourney, joinJourney, deleteJourney, leaveJourney
 //   - 기록의 location·placeName·isPublic → saveLogLocation
-//   - users.coins, coinLedger → saveLogLocation
+//   - users.coins, coinLedger, coinDaily(하루 50코인 제한) → saveLogLocation, joinJourney
 //   - invites, inviteAttempts, publicLogs, sharedRecaps, recaps → 서버 함수
+//   (coinDaily·inviteAttempts·invites 는 아래에 match 가 없어서 앱이 읽지도 쓰지도 못한다)
 //
 // 클라이언트가 쓰는 문서 요약 (필드: 타입, 제한)
 //   users/{uid}: nickname 1~20자, photoURL(https 주소 500자 이하 또는 null), createdAt(서버 시각)

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.logus.app.auth.Coins
 import com.logus.app.R
 import com.logus.app.journey.InviteCode
 import com.logus.app.ui.theme.LogUsColors
@@ -196,7 +197,7 @@ fun JourneyInviteDialog(
                 Text(
                     when {
                         code != null ->
-                            "내 초대 코드예요. 친구가 이 코드로 들어오면 나에게 ${InviteCode.REWARD_COINS}코인이 쌓여요.\n" +
+                            "내 초대 코드예요. 친구가 이 코드로 들어오면 나에게 ${InviteCode.REWARD_COINS}코인이 쌓여요(하루 최대 ${Coins.DAILY_LIMIT}코인).\n" +
                                 "여정이 끝나는 ${monthDay(endDate)}까지 쓸 수 있어요."
                         loadingCode -> "내 초대 코드를 불러오는 중이에요…"
                         else -> "초대 코드를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요."

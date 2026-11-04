@@ -3,11 +3,13 @@
 import { randomUUID } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { describe, expect, it } from "vitest";
-import { db } from "../../functions/src/admin";
-import { INVITE_REWARD_COINS, inviteExpiresAtMillis } from "../../functions/src/common";
+import { db, storage } from "../../functions/src/admin";
+import { DAILY_COIN_LIMIT, INVITE_REWARD_COINS, inviteExpiresAtMillis, utcToday } from "../../functions/src/common";
 import { createJourney } from "../../functions/src/createJourney";
+import { deleteJourney } from "../../functions/src/deleteJourney";
 import { getInviteCode } from "../../functions/src/getInviteCode";
 import { joinJourney } from "../../functions/src/joinJourney";
+import { leaveJourney } from "../../functions/src/leaveJourney";
 import { previewInvite } from "../../functions/src/previewInvite";
 import { LOCATION_REWARD_COINS, saveLogLocation } from "../../functions/src/saveLogLocation";
 
@@ -64,6 +66,21 @@ async function makeUser(uid: string, nickname: string) {
 
 async function coinsOf(uid: string): Promise<number> {
   return ((await db.doc(`users/${uid}`).get()).get("coins") as number | undefined) ?? 0;
+}
+
+/** 오늘(또는 date 날) 이미 받은 코인 합을 정해 둔다(하루 50코인 제한 확인용) */
+async function setDailyCoins(uid: string, earned: number, date = utcToday()) {
+  await db.doc(`coinDaily/${uid}`).set({ date, earned });
+}
+
+/** 에뮬레이터 Storage 에 파일을 하나 올린다(서버가 지우는지 확인용) */
+async function putFile(path: string) {
+  await storage.bucket().file(path).save(Buffer.from("x"), { contentType: "video/mp4", resumable: false });
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  const [exists] = await storage.bucket().file(path).exists();
+  return exists;
 }
 
 describe("createJourney", () => {
@@ -367,3 +384,162 @@ describe("previewInvite", () => {
   });
 });
 
+
+describe("하루 코인 제한(UTC 하루 50코인)", () => {
+  it("위치 코인은 하루 50코인까지만 쌓이고, 넘으면 0코인과 dailyLimitReached 를 돌려준다", async () => {
+    expect(DAILY_COIN_LIMIT).toBe(50);
+    const owner = newUid();
+    const { journeyId } = await makeJourney(owner);
+    for (let i = 0; i < 5; i++) {
+      const logId = await makeLog(journeyId, owner);
+      const result = await saveLogLocation.run(req({ journeyId, logId, location: porto, placeName: "히베이라" }, owner));
+      expect(result).toEqual({ coinsGranted: 10, dailyLimitReached: false });
+    }
+    expect(await coinsOf(owner)).toBe(50);
+    expect((await db.doc(`coinDaily/${owner}`).get()).data()).toEqual({ date: utcToday(), earned: 50 });
+
+    const sixth = await makeLog(journeyId, owner);
+    const over = await saveLogLocation.run(req({ journeyId, logId: sixth, location: porto }, owner));
+    expect(over).toEqual({ coinsGranted: 0, dailyLimitReached: true });
+    expect(await coinsOf(owner)).toBe(50);
+    // 위치는 저장되고, 코인 내역은 0코인으로 남아 다음 날 다시 불러도 이 기록으로는 주지 않는다
+    expect((await db.doc(`journeys/${journeyId}/logs/${sixth}`).get()).get("location")).toEqual(porto);
+    expect((await db.doc(`users/${owner}/coinLedger/${sixth}`).get()).data())
+      .toMatchObject({ reason: "saveLogLocation", amount: 0, dailyLimited: true });
+    await setDailyCoins(owner, 0, "2000-01-01");
+    expect((await saveLogLocation.run(req({ journeyId, logId: sixth, location: porto }, owner))).coinsGranted).toBe(0);
+  });
+
+  it("50에 가까우면 50까지만 채운다(오늘 45코인 → 위치 저장 5코인)", async () => {
+    const owner = newUid();
+    await makeUser(owner, "성연");
+    const { journeyId } = await makeJourney(owner);
+    await setDailyCoins(owner, 45);
+    const logId = await makeLog(journeyId, owner);
+    const result = await saveLogLocation.run(req({ journeyId, logId, location: porto }, owner));
+    expect(result).toEqual({ coinsGranted: 5, dailyLimitReached: true });
+    expect(await coinsOf(owner)).toBe(5);
+    expect((await db.doc(`coinDaily/${owner}`).get()).get("earned")).toBe(50);
+    expect((await db.doc(`users/${owner}/coinLedger/${logId}`).get()).data()).toMatchObject({ amount: 5, dailyLimited: true });
+  });
+
+  it("어제(UTC) 받은 코인은 오늘 제한에 세지 않는다", async () => {
+    const owner = newUid();
+    const { journeyId } = await makeJourney(owner);
+    await setDailyCoins(owner, 50, "2000-01-01");
+    const logId = await makeLog(journeyId, owner);
+    expect(await saveLogLocation.run(req({ journeyId, logId, location: porto }, owner)))
+      .toEqual({ coinsGranted: 10, dailyLimitReached: false });
+    expect((await db.doc(`coinDaily/${owner}`).get()).data()).toEqual({ date: utcToday(), earned: 10 });
+  });
+
+  it("초대 코인도 같은 하루 50코인 안에서 준다(오늘 48코인 → 2코인, 그다음 친구는 0코인)", async () => {
+    const owner = newUid();
+    await makeUser(owner, "성연");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await setDailyCoins(owner, 48);
+
+    const first = newUid();
+    await joinJourney.run(req({ inviteCode }, first));
+    expect(await coinsOf(owner)).toBe(2);
+    expect((await db.doc(`users/${owner}/coinLedger/invite_${journeyId}_${first}`).get()).data())
+      .toMatchObject({ reason: "inviteFriend", amount: 2, dailyLimited: true });
+
+    const second = newUid();
+    await joinJourney.run(req({ inviteCode }, second));
+    expect(await coinsOf(owner)).toBe(2);
+    expect((await db.doc(`users/${owner}/coinLedger/invite_${journeyId}_${second}`).get()).get("amount")).toBe(0);
+    // 코인이 0이어도 참여는 그대로 된다
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner, first, second]);
+  });
+});
+
+describe("deleteJourney (만든 사람의 여정 삭제)", () => {
+  it("여정·구성원·기록·초대 코드·파일이 모두 지워지고, 받은 코인은 남는다", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    await makeUser(owner, "성연");
+    await makeUser(guest, "민지");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode }, guest));
+    const guestCode = (await getInviteCode.run(req({ journeyId }, guest))).inviteCode;
+    const logId = await makeLog(journeyId, guest);
+    await putFile(`journeys/${journeyId}/${guest}/${logId}.mp4`);
+    await putFile(`journeys/${journeyId}/${owner}/cover_1.jpg`);
+    const { journeyId: otherJourney } = await makeJourney(owner);
+    await putFile(`journeys/${otherJourney}/${owner}/keep.mp4`);
+
+    expect(await deleteJourney.run(req({ journeyId }, owner))).toEqual({ deleted: true });
+
+    expect((await db.doc(`journeys/${journeyId}`).get()).exists).toBe(false);
+    expect((await db.collection(`journeys/${journeyId}/members`).get()).empty).toBe(true);
+    expect((await db.collection(`journeys/${journeyId}/logs`).get()).empty).toBe(true);
+    expect((await db.doc(`invites/${inviteCode}`).get()).exists).toBe(false);
+    expect((await db.doc(`invites/${guestCode}`).get()).exists).toBe(false);
+    expect(await fileExists(`journeys/${journeyId}/${guest}/${logId}.mp4`)).toBe(false);
+    expect(await fileExists(`journeys/${journeyId}/${owner}/cover_1.jpg`)).toBe(false);
+    // 다른 여정은 그대로, 받은 초대 코인과 코인 내역도 그대로
+    expect(await fileExists(`journeys/${otherJourney}/${owner}/keep.mp4`)).toBe(true);
+    expect((await db.doc(`journeys/${otherJourney}`).get()).exists).toBe(true);
+    expect(await coinsOf(owner)).toBe(INVITE_REWARD_COINS);
+    expect((await db.doc(`users/${owner}/coinLedger/invite_${journeyId}_${guest}`).get()).exists).toBe(true);
+
+    // 두 번 불러도 안전하다
+    expect(await deleteJourney.run(req({ journeyId }, owner))).toEqual({ deleted: false });
+  });
+
+  it("만든 사람이 아니면(참여자·남·로그인 안 함) 지울 수 없다", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode }, guest));
+    await expect(deleteJourney.run(req({ journeyId }, guest))).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(deleteJourney.run(req({ journeyId }, newUid()))).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(deleteJourney.run(req({ journeyId }))).rejects.toMatchObject({ code: "unauthenticated" });
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner, guest]);
+  });
+});
+
+describe("leaveJourney (참여자의 여정 나가기)", () => {
+  it("구성원에서 빠지고 내 초대 코드·대표 사진은 지워지며, 내가 올린 기록은 남는다", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    await makeUser(owner, "성연");
+    await makeUser(guest, "민지");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode }, guest));
+    const guestCode = (await getInviteCode.run(req({ journeyId }, guest))).inviteCode;
+    const logId = await makeLog(journeyId, guest);
+    const cover = `journeys/${journeyId}/${guest}/cover_1.jpg`;
+    await putFile(cover);
+    await putFile(`journeys/${journeyId}/${guest}/${logId}.mp4`);
+    await db.doc(`journeys/${journeyId}/members/${guest}`).update({ coverPath: cover });
+
+    expect(await leaveJourney.run(req({ journeyId }, guest))).toEqual({ left: true });
+
+    const journey = (await db.doc(`journeys/${journeyId}`).get()).data();
+    expect(journey).toMatchObject({ memberIds: [owner], memberCount: 1 });
+    expect((await db.doc(`journeys/${journeyId}/members/${guest}`).get()).exists).toBe(false);
+    expect((await db.doc(`invites/${guestCode}`).get()).exists).toBe(false);
+    expect((await db.doc(`invites/${inviteCode}`).get()).exists).toBe(true); // 만든 사람의 코드는 그대로
+    expect((await db.doc(`journeys/${journeyId}/logs/${logId}`).get()).exists).toBe(true);
+    expect(await fileExists(`journeys/${journeyId}/${guest}/${logId}.mp4`)).toBe(true);
+    expect(await fileExists(cover)).toBe(false);
+
+    // 두 번 불러도 안전하다
+    expect(await leaveJourney.run(req({ journeyId }, guest))).toEqual({ left: false });
+    // 다시 들어오면 구성원이 되지만, 같은 친구로 초대 코인을 또 주지는 않는다
+    await joinJourney.run(req({ inviteCode }, guest));
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner, guest]);
+    expect(await coinsOf(owner)).toBe(INVITE_REWARD_COINS);
+  });
+
+  it("만든 사람은 나갈 수 없고, 구성원이 아니면 아무것도 바뀌지 않는다", async () => {
+    const owner = newUid();
+    const { journeyId } = await makeJourney(owner);
+    await expect(leaveJourney.run(req({ journeyId }, owner))).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(await leaveJourney.run(req({ journeyId }, newUid()))).toEqual({ left: false });
+    await expect(leaveJourney.run(req({ journeyId }))).rejects.toMatchObject({ code: "unauthenticated" });
+    expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner]);
+  });
+});
