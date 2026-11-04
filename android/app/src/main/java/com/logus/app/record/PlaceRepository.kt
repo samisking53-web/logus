@@ -15,6 +15,12 @@ import java.util.Locale
 /** 지도 위의 한 점(위도·경도) */
 data class GeoPoint(val lat: Double, val lng: Double)
 
+/** 장소 이름을 못 찾았을 때 이름 */
+const val UNKNOWN_PLACE_NAME = "선택한 위치"
+
+/** 인터넷이 없어 주소를 못 찾았을 때 주소 칸(폰에 보관했다가 올릴 때 장소 이름을 다시 찾는 표시) */
+const val OFFLINE_PLACE_ADDRESS = "주소를 찾지 못했어요. 인터넷 연결을 확인해 주세요."
+
 /**
  * 고른 장소: 핀 좌표 + 오픈스트리트맵이 알려준 장소 이름·주소(L01 → S05).
  * name 은 기록의 placeName 으로 저장한다(출처 © OpenStreetMap 을 화면에 표시).
@@ -69,7 +75,7 @@ class PlaceRepository {
             ?: street
             ?: part("neighbourhood", "suburb", "quarter")
             ?: city
-            ?: "선택한 위치"
+            ?: UNKNOWN_PLACE_NAME
         return PickedPlace(point = point, name = name.take(100), address = shortAddress.take(200))
     }
 

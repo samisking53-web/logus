@@ -30,10 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.logus.app.auth.AuthUiState
 import com.logus.app.auth.AuthViewModel
 import com.logus.app.auth.SignupStep
 import com.logus.app.notify.CaptureReminder
+import com.logus.app.notify.UploadNotification
+import com.logus.app.record.PendingLogs
 import com.logus.app.ui.MainScreen
 import com.logus.app.ui.SplashScreen
 import com.logus.app.ui.WelcomeScreen
@@ -44,6 +47,7 @@ import com.logus.app.ui.signup.ProfileSetupScreen
 import com.logus.app.ui.signup.TermsScreen
 import com.logus.app.ui.theme.LogUsTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 앱 시작 지점. 로그인·회원가입 상태에 따라 화면을 고른다.
@@ -59,6 +63,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CaptureReminder.createChannel(this)
+        // 인터넷이 없을 때 폰에 보관한 기록을 읽어 두고, 올리기 예약이 빠졌으면 다시 건다(PendingLogs)
+        lifecycleScope.launch { PendingLogs.load(this@MainActivity) }
         // 꺼져 있던 앱을 촬영 알림으로 켠 경우(화면을 돌려 다시 만들어질 때는 또 처리하지 않는다)
         if (savedInstanceState == null) handleReminder(intent)
         enableEdgeToEdge()
@@ -120,6 +126,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** 앱 화면이 보일 때: 보관했던 기록이 올라가도 폰 알림 대신 화면 안 안내를 띄우고, 쌓인 "올렸어요" 알림은 지운다 */
+    override fun onStart() {
+        super.onStart()
+        UploadNotification.appVisible = true
+        UploadNotification.reset(this)
+    }
+
+    override fun onStop() {
+        UploadNotification.appVisible = false
+        super.onStop()
     }
 
     /** 앱을 보고 있거나 뒤에 있을 때 촬영 알림을 누른 경우(singleTop 이라 새 화면을 만들지 않고 여기로 온다) */

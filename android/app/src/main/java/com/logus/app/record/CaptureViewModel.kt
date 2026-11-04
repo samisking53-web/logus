@@ -49,6 +49,8 @@ data class CaptureUiState(
     val notifyIntervalHours: Int? = null,
     /** 알림 간격을 다 읽었는지(읽기 전에는 아래 알림 문구를 숨긴다) */
     val notifyLoaded: Boolean = false,
+    /** 전면(셀카) 카메라로 찍는지. "여정 진행 중" 상자 오른쪽 전환 버튼으로 바꾼다(2026-11-03 팀 그림) */
+    val useFrontCamera: Boolean = false,
 )
 
 /** 영상 길이: 늘 3초로 고정(2026-10-14 팀 결정). 중간에 멈출 수 없다 */
@@ -78,10 +80,10 @@ class CaptureViewModel(
     /** true 면 녹화가 끝났을 때 파일을 지운다(뒤로 가기로 나갈 때) */
     private var discardOnFinish = false
 
-    /** S04 를 열 때: 상태를 처음으로 되돌리고 공통 알림 간격을 읽는다 */
+    /** S04 를 열 때: 상태를 처음으로 되돌리고 공통 알림 간격을 읽는다. 고른 카메라(전면·후면)는 앱을 끌 때까지 기억한다 */
     fun open(journey: Journey) {
         discardAndStop()
-        _state.value = CaptureUiState()
+        _state.value = CaptureUiState(useFrontCamera = _state.value.useFrontCamera)
         viewModelScope.launch {
             val hours = runCatching { repository.loadCommonNotifyInterval(journey) }
                 .onFailure { Log.w(TAG, "공통 알림 간격 읽기 실패", it) }
@@ -121,6 +123,12 @@ class CaptureViewModel(
             _state.update { it.copy(phase = CapturePhase.Ready, error = "카메라를 준비하는 중이에요. 잠시 후 다시 눌러 주세요.") }
             null
         }
+    }
+
+    /** 전환 버튼: 전면 ↔ 후면 카메라. 녹화 중에는 바꾸지 않는다(버튼도 꺼져 있다) */
+    fun toggleCamera() {
+        if (_state.value.phase == CapturePhase.Recording) return
+        _state.update { it.copy(useFrontCamera = !it.useFrontCamera, error = null) }
     }
 
     /** 뒤로 가기로 나갈 때(S04), S05 에서 뒤로 갈 때, 여정에 다 올렸을 때: 녹화 중이면 멈추고 영상 파일은 지운다 */
