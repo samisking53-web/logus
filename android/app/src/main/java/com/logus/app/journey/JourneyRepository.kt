@@ -49,6 +49,12 @@ data class InvitePreview(
 /** 진행 중인 내 여정 하나 + 내 멤버 문서의 대표 사진 Storage 경로(내 홈에서만 보인다, 없으면 null → 기본 그림) */
 data class MyOngoingJourney(val journey: Journey, val coverPath: String?)
 
+/**
+ * 구성원 한 명이 여정에 있던 기간(S17 DAY RECAP 의 "그 시간대에 있어야 할 사람"을 가릴 때 쓴다).
+ * joinedAt: 들어온 시각, finishedAt: N01 "여정 저장"으로 끝낸 시각(밀리초, UTC). 문서에 없으면 null
+ */
+data class MemberPeriod(val joinedAtMillis: Long?, val finishedAtMillis: Long?)
+
 /** 여정 한 쪽(페이지): 여정들 + 다음 쪽을 읽을 때 이어서 읽을 마지막 문서(더 없으면 null) */
 data class JourneyPage(val journeys: List<Journey>, val last: DocumentSnapshot?)
 
@@ -281,6 +287,24 @@ class JourneyRepository {
             .get()
             .await()
         return snap.getLong("notifyIntervalHours")?.toInt()
+    }
+
+    /**
+     * 구성원마다 여정에 있던 기간(members/{uid} 의 joinedAt·finishedAt). uid → 기간, 최대 limit 명.
+     * 보안 규칙: 여정 구성원은 members 문서를 모두 읽을 수 있다.
+     */
+    suspend fun loadMemberPeriods(journeyId: String, limit: Long = 30): Map<String, MemberPeriod> {
+        val snap = db.collection("journeys").document(journeyId)
+            .collection("members")
+            .limit(limit)
+            .get()
+            .await()
+        return snap.documents.associate { doc ->
+            doc.id to MemberPeriod(
+                joinedAtMillis = doc.getTimestamp("joinedAt")?.toDate()?.time,
+                finishedAtMillis = doc.getTimestamp("finishedAt")?.toDate()?.time,
+            )
+        }
     }
 
     /** 구성원 닉네임·프로필 사진(최대 limit 명). users/{uid} 를 한 명씩 동시에 읽는다. */
