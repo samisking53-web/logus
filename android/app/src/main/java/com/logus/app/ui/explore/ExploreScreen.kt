@@ -153,6 +153,7 @@ fun ExploreScreen(
                 onLoadMore = { viewModel.loadMore(search = false) },
                 onRetry = viewModel::refreshFeed,
                 emptyText = "아직 탐색에 올라온 DAY RECAP이 없어요\n여정의 DAY RECAP을 공개하면 여기에 보여요",
+                onRefresh = viewModel::refreshFeed,
             )
             is ExploreRoute.Search -> FeedPage(
                 title = "검색 결과",
@@ -224,6 +225,8 @@ private fun FeedPage(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     emptyText: String,
+    /** 빈 화면의 "새로고침"(S08 피드만) */
+    onRefresh: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         ExploreLogo()
@@ -243,6 +246,9 @@ private fun FeedPage(
                     lineHeight = 22.sp,
                     textAlign = TextAlign.Center,
                 )
+                if (onRefresh != null) {
+                    TextButton(onClick = onRefresh) { Text("새로고침", color = LogUsColors.primaryStrong, fontWeight = FontWeight.Bold) }
+                }
             }
             else -> RecapPager(title = title, recaps = list.recaps, actions = actions, onLoadMore = onLoadMore)
         }

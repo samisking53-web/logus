@@ -90,11 +90,23 @@ class ExploreViewModel : ViewModel() {
 
     private var uid: String? = null
     private var searchJob: Job? = null
+    /** 피드를 마지막으로 처음부터 읽은 시각(탭에 다시 들어올 때 오래됐으면 새로 읽는다) */
+    private var feedLoadedAt = 0L
 
-    /** 탭을 처음 열 때(로그인한 사람이 바뀌면 다시) */
+    /**
+     * 탐색 탭에 들어올 때마다 부른다. 처음(또는 로그인한 사람이 바뀌면) 모두 읽고,
+     * 그 뒤에는 피드를 30초 넘게 안 읽었으면 처음부터 다시 읽는다(그사이 새로 공개된 리캡이 보이게).
+     */
     fun start(uid: String) {
-        if (this.uid == uid) return
+        if (this.uid == uid) {
+            val s = _state.value
+            if (s.routes.isEmpty() && !s.feed.loading && System.currentTimeMillis() - feedLoadedAt > REFRESH_AFTER_MILLIS) {
+                refreshFeed()
+            }
+            return
+        }
         this.uid = uid
+        feedLoadedAt = System.currentTimeMillis()
         _state.value = ExploreUiState()
         loadMore(search = false)
         viewModelScope.launch {
@@ -106,6 +118,7 @@ class ExploreViewModel : ViewModel() {
 
     /** 피드를 처음부터 다시 읽는다(당겨서 새로 고침·오류 뒤 다시 시도) */
     fun refreshFeed() {
+        feedLoadedAt = System.currentTimeMillis()
         _state.update { it.copy(feed = RecapListState()) }
         loadMore(search = false)
     }
@@ -305,5 +318,6 @@ class ExploreViewModel : ViewModel() {
 
     private companion object {
         const val TAG = "Explore"
+        const val REFRESH_AFTER_MILLIS = 30_000L
     }
 }
