@@ -52,6 +52,7 @@ import com.logus.app.explore.ExploreRoute
 import com.logus.app.explore.ExploreViewModel
 import com.logus.app.explore.RecapConsentViewModel
 import com.logus.app.ui.explore.ExploreScreen
+import com.logus.app.ui.explore.PublishConfirmDialog
 import com.logus.app.ui.explore.RecapConsentDialog
 import com.logus.app.ui.feed.JourneyFeedScreen
 import com.logus.app.ui.feed.UndoDeleteBar
@@ -391,6 +392,8 @@ fun MainScreen(
                 previewUrl = detailViewModel::previewUrl,
                 exportState = exportState,
                 onExportDownload = { exportViewModel.start(detailState) },
+                // "탐색에 자동 올리기" → 확인 팝업 → 구성원 모두에게 동의 요청(아래 PublishConfirmDialog)
+                onExportPublish = { consentViewModel.askPublish(detailState) },
                 onExportCancel = exportViewModel::cancel,
                 onExportDismiss = exportViewModel::dismiss,
             )
@@ -577,7 +580,14 @@ fun MainScreen(
         }
     }
     // 업로드 동의 팝업(카메라·새 여정 만들기 중에는 띄우지 않고, 끝나면 띄운다)
-    if (consentState.request != null && !capturing && !creatingJourney) {
+    consentState.publishAsk?.let { ask ->
+        PublishConfirmDialog(
+            ask = ask,
+            onConfirm = consentViewModel::confirmPublish,
+            onDismiss = consentViewModel::dismissPublish,
+        )
+    }
+    if (consentState.request != null && consentState.publishAsk == null && !capturing && !creatingJourney) {
         RecapConsentDialog(
             state = consentState,
             onAnswer = consentViewModel::answer,

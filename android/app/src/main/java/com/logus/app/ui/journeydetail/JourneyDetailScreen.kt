@@ -121,6 +121,8 @@ fun JourneyDetailScreen(
     /** S17 영상 추출: 만들기 상태, "영상 다운로드", 만드는 중 취소, 완료·실패 팝업 닫기 */
     exportState: RecapExportState = RecapExportState.Idle,
     onExportDownload: () -> Unit = {},
+    /** "탐색에 자동 올리기"(구성원 동의 요청 → 모두 동의하면 탐색에 공개, 2026-11-08) */
+    onExportPublish: () -> Unit = {},
     onExportCancel: () -> Unit = {},
     onExportDismiss: () -> Unit = {},
 ) {
@@ -157,6 +159,7 @@ fun JourneyDetailScreen(
         previewUrl = previewUrl,
         videoUrl = videoUrl,
         onExportDownload = onExportDownload,
+        onExportPublish = onExportPublish,
         onOpenVideo = { videoOf = it.id },
     )
     videoOf?.let { startId ->
@@ -188,6 +191,7 @@ private fun JourneyDetailContent(
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
     onExportDownload: () -> Unit = {},
+    onExportPublish: () -> Unit = {},
     /** S15 기록 카드를 누르면 원본 영상 팝업 */
     onOpenVideo: (FeedLog) -> Unit = {},
 ) {
@@ -225,6 +229,7 @@ private fun JourneyDetailContent(
                 previewUrl = previewUrl,
                 videoUrl = videoUrl,
                 onExportDownload = onExportDownload,
+                onExportPublish = onExportPublish,
             )
         }
     }
@@ -508,7 +513,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
 
 /**
  * S17 DAY RECAP: 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 추출"(2026-10-28 팀 요청).
- * "영상 추출" → 아래에서 올라오는 창 [영상 다운로드] [탐색에 자동 올리기(준비 중)].
+ * "영상 추출" → 아래에서 올라오는 창 [영상 다운로드] [탐색에 자동 올리기(구성원 동의 요청)].
  * 안드로이드 9 이하는 갤러리에 저장하려면 저장 공간 권한이 필요해서, 다운로드를 누를 때 먼저 묻는다.
  * 그날 영상 기록이 없으면 안내 글(영상 추출도 누를 수 없음).
  */
@@ -519,6 +524,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
     previewUrl: suspend (FeedLog) -> String?,
     videoUrl: suspend (FeedLog) -> String?,
     onExportDownload: () -> Unit,
+    onExportPublish: () -> Unit,
 ) {
     val context = LocalContext.current
     var sheetOpen by remember { mutableStateOf(false) }
@@ -546,6 +552,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
             ).joinToString(" · "),
             onDismiss = { sheetOpen = false },
             onDownload = startDownload,
+            onPublish = {
+                sheetOpen = false
+                onExportPublish()
+            },
         )
     }
     Column(

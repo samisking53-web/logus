@@ -55,11 +55,12 @@ import com.logus.app.ui.theme.Success
 /**
  * "영상 추출"을 누르면 아래에서 올라오는 창.
  * - 영상 다운로드: 폰에서 릴스 크기 영상을 만들어 갤러리 "LOG US" 앨범에 저장한다(onDownload).
- * - 탐색에 자동 올리기: 탐색 화면이 아직 없어서 흐리게 둔다(눌리지 않음). 탐색을 만들 때 연결한다.
+ * - 탐색에 자동 올리기(2026-11-08 탐색과 연결): 확인 팝업 → 구성원 모두에게 동의 요청 → 모두 동의하면 탐색(S08)에 전체 공개.
+ *   onPublish 가 null 이면 예전처럼 흐리게 둔다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecapExportSheet(summary: String, onDismiss: () -> Unit, onDownload: () -> Unit) {
+fun RecapExportSheet(summary: String, onDismiss: () -> Unit, onDownload: () -> Unit, onPublish: (() -> Unit)? = null) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -88,9 +89,9 @@ fun RecapExportSheet(summary: String, onDismiss: () -> Unit, onDownload: () -> U
                 icon = R.drawable.ic_download,
                 filled = false,
                 title = "탐색에 자동 올리기",
-                badge = "준비 중",
-                body = "탐색 화면이 생기면 연결돼요",
-                onClick = null,
+                badge = if (onPublish == null) "준비 중" else null,
+                body = if (onPublish == null) "탐색 화면이 생기면 연결돼요" else "구성원 모두 동의하면 탐색에 전체 공개로 올라가요",
+                onClick = onPublish,
                 upload = true,
             )
         }
