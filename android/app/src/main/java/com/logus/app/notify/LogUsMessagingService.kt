@@ -32,7 +32,7 @@ class LogUsMessagingService : FirebaseMessagingService() {
         if (message.data["type"] in RecapConsent.TYPES) {
             RecapConsent.show(
                 context = this,
-                title = notification.title ?: "탐색 업로드 요청이 왔어요",
+                title = notification.title ?: "DAY RECAP 공개 동의 요청",
                 body = notification.body.orEmpty(),
                 tag = message.data["requestId"]?.let { "recap_$it" },
             )

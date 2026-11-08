@@ -328,7 +328,7 @@ export const requestRecapPublish = onCall({ timeoutSeconds: 300 }, async (reques
     const nickname = (me.get("nickname") as string | undefined) ?? "구성원";
     await notify(
       memberIds,
-      "탐색 업로드 요청이 왔어요",
+      "DAY RECAP 공개 동의 요청",
       `${nickname} 님이 '${journey.get("name")}' ${shortDate(date)} DAY RECAP을 탐색에 올리려고 해요. 눌러서 동의해 주세요`,
       { type: "recapConsent", requestId },
     );
