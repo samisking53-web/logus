@@ -443,3 +443,80 @@ describe("촬영 알림 기기", () => {
     await assertFails(setDoc(ref, { ...device(), updatedAt: new Date() }));
   });
 });
+
+describe("탐색 공개 DAY RECAP·좋아요·저장·장소 열람", () => {
+  const RECAP = `${JOURNEY_ID}_2026-09-24`;
+  const mark = (thumbPath: string | null = `public/recaps/${RECAP}/log1.jpg`) => ({
+    journeyName: "우리의 포르투", city: "포르투", date: "2026-09-24", thumbPath, createdAt: serverTimestamp(),
+  });
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "publicRecaps", RECAP), {
+        journeyId: JOURNEY_ID, journeyName: "우리의 포르투", city: "포르투", date: "2026-09-24",
+        memberIds: [ALICE, BOB], keywords: ["포르투"], createdAt: past,
+      });
+      await setDoc(doc(db, "publicRecaps", RECAP, "places", LOG_ID), {
+        authorId: ALICE, location: { lat: 41.14, lng: -8.61 }, placeName: "상벤투역", capturedAt: past,
+      });
+      await setDoc(doc(db, "recapPublishRequests", RECAP), {
+        journeyId: JOURNEY_ID, memberIds: [ALICE, BOB], status: "pending", approvals: { [ALICE]: true },
+      });
+    });
+  });
+
+  it("공개 리캡은 로그인한 사람이 읽고, 아무도 쓰지 못한다", async () => {
+    await assertSucceeds(getDoc(doc(dbAs(CAROL), "publicRecaps", RECAP)));
+    await assertSucceeds(getDocs(query(collection(dbAs(CAROL), "publicRecaps"), where("keywords", "array-contains-any", ["포르투"]))));
+    await assertFails(getDoc(doc(dbAnon(), "publicRecaps", RECAP)));
+    await assertFails(setDoc(doc(dbAs(ALICE), "publicRecaps", "x"), { city: "포르투" }));
+    await assertFails(updateDoc(doc(dbAs(ALICE), "publicRecaps", RECAP), { city: "리스본" }));
+  });
+
+  it("장소는 구성원과 열람한 사람만 읽는다(코인 없이 열람 기록을 만들 수 없다)", async () => {
+    const placeOf = (uid: string) => doc(dbAs(uid), "publicRecaps", RECAP, "places", LOG_ID);
+    await assertSucceeds(getDoc(placeOf(BOB)));
+    await assertFails(getDoc(placeOf(CAROL)));
+    await assertFails(getDocs(collection(dbAs(CAROL), "publicRecaps", RECAP, "places")));
+    await assertFails(setDoc(doc(dbAs(CAROL), "users", CAROL, "placeUnlocks", RECAP), { recapId: RECAP }));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", CAROL, "placeUnlocks", RECAP), { recapId: RECAP, createdAt: past });
+    });
+    await assertSucceeds(getDoc(placeOf(CAROL)));
+    await assertSucceeds(getDocs(collection(dbAs(CAROL), "publicRecaps", RECAP, "places")));
+    await assertSucceeds(getDoc(doc(dbAs(CAROL), "users", CAROL, "placeUnlocks", RECAP)));
+    await assertFails(getDoc(doc(dbAs(BOB), "users", CAROL, "placeUnlocks", RECAP)));
+  });
+
+  it("좋아요·저장은 본인만 만들고 읽고 지운다", async () => {
+    for (const kind of ["recapLikes", "recapSaves"]) {
+      const ref = doc(dbAs(CAROL), "users", CAROL, kind, RECAP);
+      await assertSucceeds(setDoc(ref, mark()));
+      await assertSucceeds(getDoc(ref));
+      await assertFails(getDoc(doc(dbAs(BOB), "users", CAROL, kind, RECAP)));
+      await assertFails(setDoc(doc(dbAs(BOB), "users", CAROL, kind, RECAP), mark()));
+      await assertFails(updateDoc(ref, { city: "리스본" }));
+      await assertSucceeds(deleteDoc(ref));
+    }
+  });
+
+  it("없는 리캡·다른 리캡 파일·추가 필드·서버 시각이 아닌 좋아요는 거부", async () => {
+    const likes = (id: string) => doc(dbAs(CAROL), "users", CAROL, "recapLikes", id);
+    await assertSucceeds(setDoc(likes(RECAP), mark(null)));
+    await assertFails(setDoc(likes("noSuchRecap"), mark(null)));
+    await assertFails(setDoc(likes(RECAP), mark("public/recaps/other/log1.jpg")));
+    await assertFails(setDoc(likes(RECAP), { ...mark(), extra: 1 }));
+    await assertFails(setDoc(likes(RECAP), { ...mark(), createdAt: new Date() }));
+  });
+
+  it("공개 동의 요청은 그 구성원만 읽고, 아무도 직접 쓰지 못한다", async () => {
+    await assertSucceeds(getDoc(doc(dbAs(BOB), "recapPublishRequests", RECAP)));
+    await assertSucceeds(getDocs(query(
+      collection(dbAs(BOB), "recapPublishRequests"),
+      where("memberIds", "array-contains", BOB), where("status", "==", "pending"),
+    )));
+    await assertFails(getDoc(doc(dbAs(CAROL), "recapPublishRequests", RECAP)));
+    await assertFails(updateDoc(doc(dbAs(BOB), "recapPublishRequests", RECAP), { [`approvals.${BOB}`]: true }));
+  });
+});

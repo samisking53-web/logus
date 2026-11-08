@@ -8,5 +8,7 @@ export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
 export { leaveJourney } from "./leaveJourney";
 export { previewInvite } from "./previewInvite";
+export { answerRecapPublish, requestRecapPublish } from "./recapPublish";
 export { saveLogLocation } from "./saveLogLocation";
 export { sendCaptureReminders } from "./sendCaptureReminders";
+export { unlockRecapPlaces } from "./unlockRecapPlaces";

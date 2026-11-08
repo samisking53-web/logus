@@ -49,6 +49,11 @@
                 <action android:name="com.logus.app.CAPTURE_REMINDER" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- DAY RECAP 공개 동의 요청 알림을 누르면 이 동작으로 열린다(서버 recapPublish 의 clickAction) → 업로드 동의 팝업 -->
+            <intent-filter>
+                <action android:name="com.logus.app.RECAP_CONSENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- 촬영 알림 FCM 푸시 받기(토큰 저장, 앱을 보고 있을 때 알림 띄우기) -->

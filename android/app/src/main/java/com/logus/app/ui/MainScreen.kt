@@ -48,7 +48,11 @@ import com.logus.app.record.LocationPickerViewModel
 import com.logus.app.record.LogUploadViewModel
 import com.logus.app.ui.components.BottomTabBar
 import com.logus.app.ui.components.MainTab
+import com.logus.app.explore.ExploreRoute
+import com.logus.app.explore.ExploreViewModel
+import com.logus.app.explore.RecapConsentViewModel
 import com.logus.app.ui.explore.ExploreScreen
+import com.logus.app.ui.explore.RecapConsentDialog
 import com.logus.app.ui.feed.JourneyFeedScreen
 import com.logus.app.ui.feed.UndoDeleteBar
 import com.logus.app.ui.home.CoverPhotoDialog
@@ -91,6 +95,11 @@ fun MainScreen(
     exportViewModel: RecapExportViewModel = viewModel(),
     // 촬영 알림을 누를 때마다 1씩 늘어난다(MainActivity) → 홈(S01-A)으로 간다
     openHomeRequest: Int = 0,
+    // 탐색(S08·S09·모아보기·공개 여정 상세)
+    exploreViewModel: ExploreViewModel = viewModel(),
+    // DAY RECAP 탐색 공개 동의 팝업. consentRequest 는 동의 요청 알림을 누를 때마다 1씩 늘어난다(MainActivity)
+    consentViewModel: RecapConsentViewModel = viewModel(),
+    consentRequest: Int = 0,
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -140,6 +149,16 @@ fun MainScreen(
     var viewingDetail by rememberSaveable { mutableStateOf(false) }
     val detailState by detailViewModel.state.collectAsStateWithLifecycle()
     val exportState by exportViewModel.state.collectAsStateWithLifecycle()
+    val exploreState by exploreViewModel.state.collectAsStateWithLifecycle()
+    // DAY RECAP 탐색 공개 동의: 홈에 들어올 때와 동의 요청 알림을 누를 때 내가 답할 요청이 있는지 본다
+    val consentState by consentViewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(uid, consentRequest) { consentViewModel.check(uid) }
+    LaunchedEffect(consentState.message) {
+        consentState.message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            consentViewModel.consumeMessage()
+        }
+    }
     // 촬영 알림 권한(안드로이드 13 이상): 홈에 처음 들어올 때 한 번만 묻는다. 거절하면 알림이 오지 않는다(폰 설정에서 다시 켤 수 있다)
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(uid) {
@@ -450,7 +469,12 @@ fun MainScreen(
                         myUid = uid,
                         coverUrl = homeViewModel::coverUrl,
                     )
-                    MainTab.EXPLORE -> ExploreScreen()
+                    // S08 공개 영상 피드(‹ 또는 폰의 뒤로 가기 → 홈 탭)
+                    MainTab.EXPLORE -> ExploreScreen(
+                        uid = uid,
+                        onExit = { tab = MainTab.HOME },
+                        viewModel = exploreViewModel,
+                    )
                     // S14 마이로그 여정 목록(폰의 뒤로 가기 → 홈 탭, 위 BackHandler)
                     MainTab.MY_LOG -> MyLogScreen(
                         state = myLogState,
@@ -478,7 +502,10 @@ fun MainScreen(
                     )
                 }
             }
-            BottomTabBar(selected = tab, onSelect = { tab = it })
+            // 탐색의 공개 여정 상세에서는 하단 탭을 숨긴다(마이로그 여정 상세와 같게)
+            if (!(tab == MainTab.EXPLORE && exploreState.route is ExploreRoute.Detail)) {
+                BottomTabBar(selected = tab, onSelect = { tab = it })
+            }
         }
         // 프로필 사진 수정 팝업. 저장하면 홈 프로필은 실시간으로 바뀐다(AuthViewModel 이 users/{uid} 를 지켜봄)
         if (profileEditState.open && tab == MainTab.HOME) {
@@ -548,5 +575,13 @@ fun MainScreen(
                 },
             )
         }
+    }
+    // 업로드 동의 팝업(카메라·새 여정 만들기 중에는 띄우지 않고, 끝나면 띄운다)
+    if (consentState.request != null && !capturing && !creatingJourney) {
+        RecapConsentDialog(
+            state = consentState,
+            onAnswer = consentViewModel::answer,
+            onLater = consentViewModel::later,
+        )
     }
 }
