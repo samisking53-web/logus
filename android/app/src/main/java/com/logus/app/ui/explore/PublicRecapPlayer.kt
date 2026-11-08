@@ -98,7 +98,7 @@ fun PublicRecapPlayer(
     /** 음소거 여부(목록·큰 화면이 함께 쓴다). onToggleMute 가 있으면 오른쪽 아래에 소리 버튼을 둔다 */
     muted: Boolean = false,
     onToggleMute: (() -> Unit)? = null,
-    /** 큰 화면: 아래에 재생 막대([❚❚/▶] 진행 막대 "1 / N" [소리])를 둔다 */
+    /** 큰 화면: 아래에 재생 막대([❚❚/▶] 진행 막대 "1 / N")를 두고, 소리 버튼은 그 위 오른쪽에 따로 둔다 */
     showControls: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -249,7 +249,13 @@ fun PublicRecapPlayer(
             }
         }
         if (showControls) {
-            // 큰 화면: 아래 재생 막대 [❚❚/▶] ━━━━ 1 / N [소리]
+            // 큰 화면: 오른쪽 아래(재생 막대 바로 위) 동그란 소리 버튼을 따로 둔다
+            if (onToggleMute != null) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 68.dp)) {
+                    MuteButton(muted, onToggleMute, background = true)
+                }
+            }
+            // 큰 화면: 아래 재생 막대 [❚❚/▶] ━━━━ 1 / N
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -284,9 +290,8 @@ fun PublicRecapPlayer(
                     color = PhotoFrame,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp),
+                    modifier = Modifier.padding(start = 10.dp, end = 6.dp),
                 )
-                if (onToggleMute != null) MuteButton(muted, onToggleMute, background = false)
             }
         } else {
             // 목록: 오른쪽 아래 소리 버튼 + 아래 얇은 진행 막대

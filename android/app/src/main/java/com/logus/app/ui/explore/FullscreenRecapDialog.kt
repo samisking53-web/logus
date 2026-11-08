@@ -19,6 +19,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
@@ -38,7 +42,7 @@ import com.logus.app.ui.theme.TextSecondaryDark
 // 탐색 영상 큰 화면(2026-11-08 요청: 탐색에서 영상을 누르면 크게 보기)
 /**
  * 어두운 전체 화면에 공개 DAY RECAP 을 크게 재생한다(탐색 피드·검색·내 영상·모아보기 공통).
- * 아래 재생 막대: [❚❚/▶](일시정지·재생) · 진행 막대 · "장면 1 / N" · 오른쪽 끝 소리 버튼(음소거, 목록과 같은 설정).
+ * 아래 재생 막대: [❚❚/▶](일시정지·재생) · 진행 막대 · "장면 1 / N". 그 위 오른쪽에 동그란 소리 버튼(음소거, 목록과 따로).
  * 위: 여정 이름 · "11.4 · 포르투" · X(닫기). 가운데: 같은 3분할 재생기(화면을 꽉 채움, 누르면 멈춤·다시 재생).
  * 닫기: X · 폰의 뒤로 가기. 작은 프로필을 누르면 프로필 팝업(그 위에 뜬다).
  */
@@ -48,9 +52,9 @@ fun FullscreenRecapDialog(
     publicUrl: (String) -> String,
     onProfile: (Member) -> Unit,
     onDismiss: () -> Unit,
-    muted: Boolean = false,
-    onToggleMute: (() -> Unit)? = null,
 ) {
+    // 큰 화면의 음소거는 목록과 따로(열 때마다 소리 켜진 채로 시작, 2026-11-08 요청)
+    var muted by remember { mutableStateOf(false) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -103,7 +107,7 @@ fun FullscreenRecapDialog(
                     onProfileClick = onProfile,
                     cornerRadius = 0.dp,
                     muted = muted,
-                    onToggleMute = onToggleMute,
+                    onToggleMute = { muted = !muted },
                     showControls = true,
                     modifier = Modifier
                         .fillMaxWidth()

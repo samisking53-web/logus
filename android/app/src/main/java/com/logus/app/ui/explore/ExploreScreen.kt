@@ -123,7 +123,7 @@ fun ExploreScreen(
     var profile by remember { mutableStateOf<Member?>(null) }
     // 영상을 누르면 여는 큰 화면(그동안 목록의 작은 재생기는 멈춰 둔다)
     var fullscreen by remember { mutableStateOf<PublicRecap?>(null) }
-    // 음소거(목록·큰 화면이 함께 쓴다, 화면을 돌려도 유지)
+    // 목록 음소거(화면을 돌려도 유지). 큰 화면은 따로 가진다
     var muted by rememberSaveable { mutableStateOf(false) }
 
     // 폰의 뒤로 가기: 연 화면을 하나씩 닫는다(S08 이면 홈 탭으로, MainScreen 이 처리)
@@ -226,8 +226,6 @@ fun ExploreScreen(
             publicUrl = viewModel::publicUrl,
             onProfile = { profile = it },
             onDismiss = { fullscreen = null },
-            muted = muted,
-            onToggleMute = { muted = !muted },
         )
     }
     profile?.let { ProfileDialog(member = it, onDismiss = { profile = null }) }
