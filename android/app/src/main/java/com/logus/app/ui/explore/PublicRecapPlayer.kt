@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -85,6 +86,10 @@ fun PublicRecapPlayer(
     modifier: Modifier = Modifier,
     /** 꾹 눌렀을 때(진동과 함께). [내 영상]의 "탐색에서 내리기" */
     onLongPress: (() -> Unit)? = null,
+    /** 눌렀을 때 할 일(탐색 피드: 큰 화면으로 열기). 없으면 눌러서 멈춤·다시 재생 */
+    onClick: (() -> Unit)? = null,
+    /** 바깥 모서리 둥글기(큰 화면은 0) */
+    cornerRadius: Dp = 20.dp,
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -165,11 +170,11 @@ fun PublicRecapPlayer(
 
     Box(
         modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(cornerRadius))
             .background(BackgroundDark)
             .combinedClickable(
-                enabled = active || onLongPress != null,
-                onClick = { if (active) paused = !paused },
+                enabled = active || onLongPress != null || onClick != null,
+                onClick = { if (onClick != null) onClick() else if (active) paused = !paused },
                 onLongClick = onLongPress?.let {
                     {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -180,7 +185,11 @@ fun PublicRecapPlayer(
             )
             .semantics {
                 contentDescription = "${recap.journeyName} DAY RECAP, ${scene.label} 장면 ${sceneIndex + 1} / ${recap.scenes.size}. " +
-                    if (playing) "누르면 멈춰요" else "누르면 재생해요"
+                    when {
+                        onClick != null -> "누르면 큰 화면으로 봐요"
+                        playing -> "누르면 멈춰요"
+                        else -> "누르면 재생해요"
+                    }
             },
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
