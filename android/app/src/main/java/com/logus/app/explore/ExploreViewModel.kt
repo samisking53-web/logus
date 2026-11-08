@@ -240,7 +240,9 @@ class ExploreViewModel : ViewModel() {
 
     fun selectFeedTab(tab: FeedTab) {
         _state.update { it.copy(feedTab = tab) }
-        if (tab == FeedTab.MINE && !_state.value.mineLoaded) refreshMine()
+        // 처음 고르거나, 지난번에 못 불러왔으면(예: 색인을 만드는 중이었으면) 다시 읽는다
+        val mine = _state.value
+        if (tab == FeedTab.MINE && (!mine.mineLoaded || mine.mine.error != null)) refreshMine()
     }
 
     fun refreshMine() {
