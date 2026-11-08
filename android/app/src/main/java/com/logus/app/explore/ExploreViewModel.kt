@@ -225,6 +225,7 @@ class ExploreViewModel : ViewModel() {
         fun PublicRecap.bump() = if (id != recapId) this else when (kind) {
             MarkKind.LIKE -> copy(likeCount = (likeCount + delta).coerceAtLeast(0))
             MarkKind.SAVE -> copy(saveCount = (saveCount + delta).coerceAtLeast(0))
+            MarkKind.PLACE -> this
         }
         _state.update { s ->
             s.copy(
@@ -345,6 +346,18 @@ class ExploreViewModel : ViewModel() {
             val recap = runCatching { repository.loadRecap(recapId) }.getOrNull()
             _state.update {
                 if (recap == null) it.copy(viewerError = "이 영상은 더 이상 볼 수 없어요.") else it.copy(viewer = recap)
+            }
+        }
+    }
+
+    /** 모아보기 [장소 보기]: 이미 20코인으로 연 여정이라 팝업 없이 바로 여정 상세 */
+    fun openUnlocked(recapId: String) {
+        viewModelScope.launch {
+            val recap = runCatching { repository.loadRecap(recapId) }.getOrNull()
+            if (recap == null) {
+                _state.update { it.copy(message = "이 여정은 탐색에서 내려가서 더 이상 볼 수 없어요.") }
+            } else {
+                openDetail(recap)
             }
         }
     }
