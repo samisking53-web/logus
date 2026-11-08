@@ -36,8 +36,9 @@ import com.logus.app.ui.theme.OnPrimary
 
 // 위치 정보 열람 팝업(스토리보드 v5 22쪽 왼쪽: S08·S09 "장소 보기"를 누르면 뜬다)
 /**
- * "위치 정보 열람" → "현재 보유 N 코인"(연보라 상자) → "20코인을 사용해 열람하시겠습니까?" → [취소] [20코인 사용]
+ * "위치 정보 열람" → "현재 보유 N 코인"(연보라 상자) → "20코인을 차감하겠습니까?" → [취소] [20코인 사용]
  * "20코인 사용" → 서버(unlockRecapPlaces)가 코인을 빼고 → 그 여정의 공개 여정 상세(장소·추억 지도가 보임).
+ * 내가 올린 영상(내 영상)만 팝업 없이 무료로 열리고, 같은 여정 구성원의 영상도 20코인(2026-11-08 팀 요청).
  * 같은 영상은 한 번만 코인을 쓴다(다시 누르면 팝업 없이 바로 열림). 코인이 모자라면 버튼이 꺼지고 안내를 보여 준다.
  */
 @Composable
@@ -80,7 +81,7 @@ fun PlaceUnlockDialog(state: UnlockDialogState, onConfirm: () -> Unit, onDismiss
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                "${PLACE_VIEW_COINS}코인을 사용해\n열람하시겠습니까?",
+                "${PLACE_VIEW_COINS}코인을 차감하겠습니까?",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 18.sp,
                 lineHeight = 26.sp,

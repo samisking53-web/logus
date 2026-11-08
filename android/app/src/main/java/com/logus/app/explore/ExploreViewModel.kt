@@ -353,7 +353,8 @@ class ExploreViewModel : ViewModel() {
 
     fun openPlaces(recap: PublicRecap) {
         val uid = uid ?: return
-        if (uid in recap.memberIds) {
+        // 내가 올린 영상(내 영상)만 코인 없이 바로 연다. 나머지는 모두 "20코인을 차감하겠습니까?"(2026-11-08 팀 요청)
+        if (uid == recap.requesterId) {
             openDetail(recap)
             return
         }

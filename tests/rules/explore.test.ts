@@ -167,7 +167,18 @@ describe("unlockRecapPlaces (장소 보기 20코인)", () => {
     expect((await db.doc(`users/${viewer}/coinLedger/viewPlace_${recapId}`).get()).get("amount")).toBe(-PLACE_VIEW_COINS);
   });
 
-  it("코인이 모자라면 거부하고, 구성원은 코인 없이 본다", async () => {
+  it("같은 여정의 다른 구성원도 올린 사람이 아니면 20코인을 낸다", async () => {
+    const [a, b] = [newUid(), newUid()];
+    const journeyId = await makeJourney([a, b]);
+    const logA = await makeVideo(journeyId, a);
+    const { requestId } = await requestRecapPublish.run(req({ journeyId, date: today, scenes: [{ label: "09:00", logIds: [logA] }] }, a));
+    await answerRecapPublish.run(req({ requestId, approve: true }, b));
+    await db.doc(`users/${b}`).update({ coins: 30 });
+    expect(await unlockRecapPlaces.run(req({ recapId: requestId }, b))).toEqual({ coins: 10, charged: PLACE_VIEW_COINS });
+    expect(await unlockRecapPlaces.run(req({ recapId: requestId }, a))).toMatchObject({ charged: 0 });
+  });
+
+  it("코인이 모자라면 거부하고, 올린 사람은 코인 없이 본다", async () => {
     const { recapId, member } = await publishedRecap();
     const poor = newUid();
     await makeUser(poor, 19);
