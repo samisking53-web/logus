@@ -48,6 +48,11 @@ data class PublicRecap(
     val members: List<Member>,
     val scenes: List<PublicScene>,
     val themes: List<String>,
+    /** 올린 사람(공개를 요청한 구성원). 이 사람만 탐색에서 내릴 수 있다 */
+    val requesterId: String = "",
+    /** 좋아요·저장한 사람 수(서버 트리거가 센다) */
+    val likeCount: Long = 0,
+    val saveCount: Long = 0,
 ) {
     /** 목록에 보여 줄 대표 화면: 첫 장면 첫 칸 */
     val coverThumbPath: String? get() = scenes.firstOrNull()?.clips?.firstOrNull { it.thumbPath != null }?.thumbPath
@@ -103,6 +108,22 @@ class ExploreRepository {
         if (after != null) query = query.startAfter(after)
         val snap = query.get().await()
         return RecapBatch(snap.documents.mapNotNull { it.toRecap() }, snap.documents.lastOrNull()?.takeIf { snap.size() >= EXPLORE_PAGE_SIZE })
+    }
+
+    /** [내 영상]: 내가 올린 공개 리캡(최근 공개 순). 색인 requesterId + createdAt */
+    suspend fun loadMine(uid: String, after: DocumentSnapshot?): RecapBatch {
+        var query = db.collection("publicRecaps")
+            .whereEqualTo("requesterId", uid)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(EXPLORE_PAGE_SIZE.toLong())
+        if (after != null) query = query.startAfter(after)
+        val snap = query.get().await()
+        return RecapBatch(snap.documents.mapNotNull { it.toRecap() }, snap.documents.lastOrNull()?.takeIf { snap.size() >= EXPLORE_PAGE_SIZE })
+    }
+
+    /** 탐색에서 내리기(서버 unpublishRecap: 올린 사람만) */
+    suspend fun unpublish(recapId: String) {
+        functions.getHttpsCallable("unpublishRecap").call(hashMapOf("recapId" to recapId)).await()
     }
 
     suspend fun loadRecap(recapId: String): PublicRecap? =
@@ -223,6 +244,9 @@ class ExploreRepository {
             members = members,
             scenes = scenes,
             themes = (get("themes") as? List<String>).orEmpty(),
+            requesterId = getString("requesterId").orEmpty(),
+            likeCount = (getLong("likeCount") ?: 0L).coerceAtLeast(0L),
+            saveCount = (getLong("saveCount") ?: 0L).coerceAtLeast(0L),
         )
     }
 

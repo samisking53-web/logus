@@ -81,6 +81,7 @@ import com.logus.app.R
 import com.logus.app.explore.ExploreRoute
 import com.logus.app.explore.ExploreUiState
 import com.logus.app.explore.ExploreViewModel
+import com.logus.app.explore.FeedTab
 import com.logus.app.explore.MarkKind
 import com.logus.app.explore.PublicRecap
 import com.logus.app.explore.RecapListState
@@ -142,7 +143,8 @@ fun ExploreScreen(
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val route = state.route) {
-            null -> FeedPage(
+            // S08: 맨 위 [전체] [내 영상](2026-11-08 요청, 내 영상은 꾹 눌러 탐색에서 내리기)
+            null -> if (state.feedTab == FeedTab.ALL) FeedPage(
                 title = "BEST TRAVELER",
                 list = state.feed,
                 query = "",
@@ -154,6 +156,24 @@ fun ExploreScreen(
                 onRetry = viewModel::refreshFeed,
                 emptyText = "아직 탐색에 올라온 DAY RECAP이 없어요\n여정의 DAY RECAP을 공개하면 여기에 보여요",
                 onRefresh = viewModel::refreshFeed,
+                header = { FeedTabs(state.feedTab, viewModel::selectFeedTab) },
+            ) else FeedPage(
+                title = "내 영상",
+                list = state.mine,
+                query = "",
+                actions = actions,
+                onBack = onExit,
+                onSearch = viewModel::search,
+                onOpenCollection = viewModel::openCollection,
+                onLoadMore = viewModel::loadMoreMine,
+                onRetry = viewModel::refreshMine,
+                emptyText = "아직 탐색에 올린 DAY RECAP이 없어요\n마이로그 → DAY RECAP → 영상 추출에서 올릴 수 있어요",
+                onRefresh = viewModel::refreshMine,
+                header = {
+                    FeedTabs(state.feedTab, viewModel::selectFeedTab)
+                    if (state.mine.recaps.isNotEmpty()) LongPressHint()
+                },
+                onLongPress = viewModel::askUnpublish,
             )
             is ExploreRoute.Search -> FeedPage(
                 title = "검색 결과",
@@ -182,6 +202,9 @@ fun ExploreScreen(
         }
     }
 
+    state.unpublish?.let { dialog ->
+        UnpublishDialog(state = dialog, onConfirm = viewModel::confirmUnpublish, onDismiss = viewModel::dismissUnpublish)
+    }
     state.unlock?.let { dialog ->
         PlaceUnlockDialog(
             state = dialog,
@@ -227,11 +250,16 @@ private fun FeedPage(
     emptyText: String,
     /** 빈 화면의 "새로고침"(S08 피드만) */
     onRefresh: (() -> Unit)? = null,
+    /** 검색 줄 아래에 놓을 것([전체] [내 영상] 탭 등) */
+    header: (@Composable () -> Unit)? = null,
+    /** 영상을 꾹 눌렀을 때([내 영상]: 탐색에서 내리기) */
+    onLongPress: ((PublicRecap) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         ExploreLogo()
         SearchRow(initial = query, onBack = onBack, onSearch = onSearch, onOpenCollection = onOpenCollection)
         Spacer(Modifier.height(10.dp))
+        header?.invoke()
         when {
             list.recaps.isEmpty() && list.loading -> Centered { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
             list.recaps.isEmpty() && list.error != null -> Centered {
@@ -250,14 +278,20 @@ private fun FeedPage(
                     TextButton(onClick = onRefresh) { Text("새로고침", color = LogUsColors.primaryStrong, fontWeight = FontWeight.Bold) }
                 }
             }
-            else -> RecapPager(title = title, recaps = list.recaps, actions = actions, onLoadMore = onLoadMore)
+            else -> RecapPager(title = title, recaps = list.recaps, actions = actions, onLoadMore = onLoadMore, onLongPress = onLongPress)
         }
     }
 }
 
 /** 위아래로 넘겨 보는 영상(한 화면에 하나). 끝에서 두 번째에 오면 다음 묶음을 읽는다 */
 @Composable
-private fun RecapPager(title: String, recaps: List<PublicRecap>, actions: RecapActions, onLoadMore: () -> Unit) {
+private fun RecapPager(
+    title: String,
+    recaps: List<PublicRecap>,
+    actions: RecapActions,
+    onLoadMore: () -> Unit,
+    onLongPress: ((PublicRecap) -> Unit)? = null,
+) {
     val pager = rememberPagerState { recaps.size }
     LaunchedEffect(pager, recaps.size) {
         snapshotFlow { pager.currentPage }.collect { page -> if (page >= recaps.size - 2) onLoadMore() }
@@ -273,13 +307,20 @@ private fun RecapPager(title: String, recaps: List<PublicRecap>, actions: RecapA
             recap = recaps[page],
             active = pager.currentPage == page && !pager.isScrollInProgress,
             actions = actions,
+            onLongPress = onLongPress,
         )
     }
 }
 
 /** 공개 리캡 하나: 제목 · 3분할 영상 · 구성원 프로필 · [좋아요] [저장] [장소 보기] */
 @Composable
-internal fun RecapPage(title: String, recap: PublicRecap, active: Boolean, actions: RecapActions) {
+internal fun RecapPage(
+    title: String,
+    recap: PublicRecap,
+    active: Boolean,
+    actions: RecapActions,
+    onLongPress: ((PublicRecap) -> Unit)? = null,
+) {
     Column(Modifier.fillMaxSize().padding(bottom = 8.dp)) {
         Text(
             listOf(title, recap.city.ifEmpty { null }).filterNotNull().joinToString(" · "),
@@ -302,6 +343,7 @@ internal fun RecapPage(title: String, recap: PublicRecap, active: Boolean, actio
             active = active,
             publicUrl = actions.publicUrl,
             onProfileClick = actions.onProfile,
+            onLongPress = onLongPress?.let { { it(recap) } },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -328,12 +370,14 @@ internal fun RecapPage(title: String, recap: PublicRecap, active: Boolean, actio
             val saved = recap.id in actions.saved
             ActionButton(
                 label = "좋아요",
+                count = recap.likeCount,
                 vector = if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                 selected = liked,
                 onClick = { actions.onToggle(MarkKind.LIKE, recap) },
             )
             ActionButton(
                 label = "저장",
+                count = recap.saveCount,
                 drawable = if (saved) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark,
                 selected = saved,
                 onClick = { actions.onToggle(MarkKind.SAVE, recap) },
@@ -351,12 +395,16 @@ private fun ActionButton(
     vector: ImageVector? = null,
     @DrawableRes drawable: Int? = null,
     selected: Boolean? = null,
+    /** 좋아요·저장한 사람 수(있으면 글자 옆에 숫자) */
+    count: Long? = null,
 ) {
     TextButton(
         onClick = onClick,
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
         modifier = Modifier.semantics {
-            if (selected != null) contentDescription = "$label " + if (selected) "취소" else "하기"
+            if (selected != null) {
+                contentDescription = "$label " + (if (selected) "취소" else "하기") + (count?.let { ", ${it}명" } ?: "")
+            }
         },
     ) {
         val tint = LogUsColors.primaryStrong
@@ -364,7 +412,50 @@ private fun ActionButton(
         if (drawable != null) Icon(painterResource(drawable), contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(4.dp))
         Text(label, color = tint, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        if (count != null) {
+            Spacer(Modifier.width(4.dp))
+            Text(count.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+        }
     }
+}
+
+/** 탐색 맨 위 [전체] [내 영상] */
+@Composable
+private fun FeedTabs(selected: FeedTab, onSelect: (FeedTab) -> Unit) {
+    Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FeedTab.entries.forEach { tab ->
+            val on = tab == selected
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (on) MaterialTheme.colorScheme.primary else LogUsColors.card,
+                contentColor = if (on) OnPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                border = if (on) null else BorderStroke(1.dp, LogUsColors.line),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) }),
+            ) {
+                Box(contentAlignment = Alignment.Center) { Text(tab.label, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+}
+
+/** [내 영상] 위 안내 띠(N01 "길게 누르면 삭제" 안내와 같은 모양) */
+@Composable
+private fun LongPressHint() {
+    Text(
+        "ⓘ 내 영상을 꾹 누르면 탐색에서 내릴 수 있어요",
+        color = LogUsColors.primaryStrong,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(LogUsColors.profileBox, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    )
+    Spacer(Modifier.height(10.dp))
 }
 
 /** [‹] [🔍 지역 또는 테마 검색] [🔖] */

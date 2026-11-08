@@ -6,7 +6,9 @@ import { db, storage } from "../../functions/src/admin";
 import { createJourney } from "../../functions/src/createJourney";
 import { joinJourney } from "../../functions/src/joinJourney";
 import { answerRecapPublish, recapNotifier, requestRecapPublish, searchKeywords } from "../../functions/src/recapPublish";
+import { applyMarkCount } from "../../functions/src/recapMarks";
 import { PLACE_VIEW_COINS, unlockRecapPlaces } from "../../functions/src/unlockRecapPlaces";
+import { unpublishRecap } from "../../functions/src/unpublishRecap";
 
 function req<T>(data: T, uid?: string): CallableRequest<T> {
   return {
@@ -174,5 +176,48 @@ describe("unlockRecapPlaces (장소 보기 20코인)", () => {
     expect(await unlockRecapPlaces.run(req({ recapId }, member))).toMatchObject({ charged: 0 });
     await expect(unlockRecapPlaces.run(req({ recapId: "nope" }, poor))).rejects.toMatchObject({ code: "not-found" });
     await expect(unlockRecapPlaces.run(req({ recapId }))).rejects.toMatchObject({ code: "unauthenticated" });
+  });
+});
+
+describe("unpublishRecap (내 영상 꾹 눌러 탐색에서 내리기)", () => {
+  it("올린 사람만 내리고, 파일·장소·공개 사본을 지운 뒤 다시 요청할 수 있다", async () => {
+    const [a, b] = [newUid(), newUid()];
+    const journeyId = await makeJourney([a, b]);
+    const logA = await makeVideo(journeyId, a, { lat: 41.14, lng: -8.61 });
+    const scenes = [{ label: "09:00", logIds: [logA] }];
+    const { requestId } = await requestRecapPublish.run(req({ journeyId, date: today, scenes }, a));
+    await answerRecapPublish.run(req({ requestId, approve: true }, b));
+    expect((await db.doc(`publicRecaps/${requestId}`).get()).get("likeCount")).toBe(0);
+
+    // 다른 구성원(b)·로그인 안 한 사람은 내릴 수 없다
+    await expect(unpublishRecap.run(req({ recapId: requestId }, b))).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(unpublishRecap.run(req({ recapId: requestId }))).rejects.toMatchObject({ code: "unauthenticated" });
+
+    expect(await unpublishRecap.run(req({ recapId: requestId }, a))).toEqual({ removed: true });
+    expect((await db.doc(`publicRecaps/${requestId}`).get()).exists).toBe(false);
+    expect((await db.doc(`publicRecaps/${requestId}/places/${logA}`).get()).exists).toBe(false);
+    expect(await exists(`public/recaps/${requestId}/${logA}.mp4`)).toBe(false);
+    expect((await db.doc(`recapPublishRequests/${requestId}`).get()).get("status")).toBe("unpublished");
+    expect(await unpublishRecap.run(req({ recapId: requestId }, a))).toEqual({ removed: false });
+    // 다시 요청할 수 있다
+    expect(await requestRecapPublish.run(req({ journeyId, date: today, scenes }, a))).toMatchObject({ status: "pending" });
+  });
+});
+
+describe("좋아요·저장 숫자(applyMarkCount)", () => {
+  it("1씩 늘고 줄며 0 밑으로 내려가지 않고, 없는 리캡은 무시한다", async () => {
+    const id = `r_${randomUUID().slice(0, 8)}`;
+    await db.doc(`publicRecaps/${id}`).set({ likeCount: 0, saveCount: 0 });
+    await applyMarkCount(id, "likeCount", 1);
+    await applyMarkCount(id, "likeCount", 1);
+    await applyMarkCount(id, "saveCount", 1);
+    await applyMarkCount(id, "likeCount", -1);
+    await applyMarkCount(id, "saveCount", -1);
+    await applyMarkCount(id, "saveCount", -1);
+    const snap = await db.doc(`publicRecaps/${id}`).get();
+    expect(snap.get("likeCount")).toBe(1);
+    expect(snap.get("saveCount")).toBe(0);
+    await applyMarkCount("noSuchRecap", "likeCount", 1);
+    expect((await db.doc("publicRecaps/noSuchRecap").get()).exists).toBe(false);
   });
 });

@@ -2,7 +2,9 @@ package com.logus.app.ui.explore
 
 import android.view.TextureView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,7 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +75,7 @@ private const val MAX_CLIPS = 4
  * - 재생기는 active 일 때만 만들고, 다른 영상으로 넘기거나 화면을 닫으면 정리한다(동시에 여러 영상 디코더를 잡지 않게).
  * - 영상은 폰 안 캐시(VideoCache)를 거쳐 받아서 한 번 본 영상은 다시 받지 않는다.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PublicRecapPlayer(
     recap: PublicRecap,
@@ -78,8 +83,11 @@ fun PublicRecapPlayer(
     publicUrl: (String) -> String,
     onProfileClick: (Member) -> Unit,
     modifier: Modifier = Modifier,
+    /** 꾹 눌렀을 때(진동과 함께). [내 영상]의 "탐색에서 내리기" */
+    onLongPress: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     var sceneIndex by remember(recap.id) { mutableIntStateOf(0) }
     var paused by remember(recap.id) { mutableStateOf(false) }
     // 장면을 넘길 때마다 1씩 늘린다(장면이 하나뿐이어도 처음부터 다시 재생되게)
@@ -159,7 +167,17 @@ fun PublicRecapPlayer(
         modifier
             .clip(RoundedCornerShape(20.dp))
             .background(BackgroundDark)
-            .clickable(enabled = active) { paused = !paused }
+            .combinedClickable(
+                enabled = active || onLongPress != null,
+                onClick = { if (active) paused = !paused },
+                onLongClick = onLongPress?.let {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        paused = true
+                        it()
+                    }
+                },
+            )
             .semantics {
                 contentDescription = "${recap.journeyName} DAY RECAP, ${scene.label} 장면 ${sceneIndex + 1} / ${recap.scenes.size}. " +
                     if (playing) "누르면 멈춰요" else "누르면 재생해요"

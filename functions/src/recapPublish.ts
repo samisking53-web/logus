@@ -10,7 +10,7 @@
 // recapPublishRequests/{journeyId}_{date}: 한 여정의 같은 날은 요청이 하나뿐이다(거절된 요청만 다시 할 수 있다).
 //   journeyId, journeyName, city, country, date("YYYY-MM-DD"), requesterId, requesterName,
 //   memberIds(요청할 때의 구성원 = 동의해야 하는 사람), approvals({uid: true}), rejectedBy(uid 또는 null),
-//   status(pending|publishing|published|rejected), scenes([{label, logIds}]), publicRecapId, createdAt, updatedAt
+//   status(pending|publishing|published|rejected|unpublished), scenes([{label, logIds}]), publicRecapId, createdAt, updatedAt
 //   앱은 memberIds 에 들어 있는 사람만 읽고, 쓰기는 서버만 한다.
 import { FieldValue, type DocumentSnapshot } from "firebase-admin/firestore";
 import type { Message, SendResponse } from "firebase-admin/messaging";
@@ -215,6 +215,8 @@ export async function publishRecap(requestId: string): Promise<string> {
       themes,
       keywords: searchKeywords([city, country, name, ...themes]),
       clipCount: copied.size,
+      likeCount: 0,
+      saveCount: 0,
       requesterId: request.get("requesterId"),
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -289,7 +291,7 @@ export const requestRecapPublish = onCall({ timeoutSeconds: 300 }, async (reques
       if (status === "pending" || status === "publishing") {
         return { requestId, status, alreadyRequested: true, publishNow: false, journey };
       }
-      // 거절된 요청은 새로 요청할 수 있다
+      // 거절된 요청·탐색에서 내린 요청(unpublished)은 새로 요청할 수 있다
     }
     const publishNow = memberIds.length === 1;
     tx.set(requestRef, {

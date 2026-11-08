@@ -60,9 +60,20 @@ data class CollectionState(
     val error: String? = null,
 )
 
+/** 탐색 맨 위 탭: [전체] [내 영상] */
+enum class FeedTab(val label: String) { ALL("전체"), MINE("내 영상") }
+
+/** 내 영상을 꾹 눌러 연 "탐색에서 내릴까요?" 팝업 */
+data class UnpublishState(val recap: PublicRecap, val busy: Boolean = false, val error: String? = null)
+
 data class ExploreUiState(
     val routes: List<ExploreRoute> = emptyList(),
+    val feedTab: FeedTab = FeedTab.ALL,
     val feed: RecapListState = RecapListState(),
+    /** [내 영상] 목록(처음 탭을 고를 때 읽는다) */
+    val mine: RecapListState = RecapListState(),
+    val mineLoaded: Boolean = false,
+    val unpublish: UnpublishState? = null,
     val search: RecapListState = RecapListState(),
     val liked: Set<String> = emptySet(),
     val saved: Set<String> = emptySet(),
@@ -102,6 +113,7 @@ class ExploreViewModel : ViewModel() {
             val s = _state.value
             if (s.routes.isEmpty() && !s.feed.loading && System.currentTimeMillis() - feedLoadedAt > REFRESH_AFTER_MILLIS) {
                 refreshFeed()
+                if (s.mineLoaded) refreshMine()
             }
             return
         }
@@ -172,6 +184,10 @@ class ExploreViewModel : ViewModel() {
 
     /** 뒤로 가기: 연 화면을 하나 닫는다. 닫을 것이 없으면 false(→ 홈 탭으로) */
     fun back(): Boolean {
+        if (_state.value.unpublish != null) {
+            dismissUnpublish()
+            return true
+        }
         if (_state.value.unlock != null) {
             _state.update { it.copy(unlock = null) }
             return true
@@ -187,6 +203,7 @@ class ExploreViewModel : ViewModel() {
         val uid = uid ?: return
         val on = recap.id !in marks(kind)
         updateMarks(kind) { if (on) it + recap.id else it - recap.id }
+        adjustCount(recap.id, kind, if (on) 1 else -1)
         viewModelScope.launch {
             try {
                 repository.setMark(uid, kind, recap, on)
@@ -197,7 +214,97 @@ class ExploreViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.w(TAG, "${kind.label} 저장 실패", e)
                 updateMarks(kind) { if (on) it - recap.id else it + recap.id }
+                adjustCount(recap.id, kind, if (on) -1 else 1)
                 _state.update { it.copy(message = "${kind.label}을(를) 저장하지 못했어요. 다시 눌러 주세요.") }
+            }
+        }
+    }
+
+    /** 화면의 좋아요·저장 숫자를 바로 바꾼다(서버 트리거가 실제 숫자를 센다. 다음에 읽을 때 맞춰진다) */
+    private fun adjustCount(recapId: String, kind: MarkKind, delta: Int) {
+        fun PublicRecap.bump() = if (id != recapId) this else when (kind) {
+            MarkKind.LIKE -> copy(likeCount = (likeCount + delta).coerceAtLeast(0))
+            MarkKind.SAVE -> copy(saveCount = (saveCount + delta).coerceAtLeast(0))
+        }
+        _state.update { s ->
+            s.copy(
+                feed = s.feed.copy(recaps = s.feed.recaps.map { it.bump() }),
+                search = s.search.copy(recaps = s.search.recaps.map { it.bump() }),
+                mine = s.mine.copy(recaps = s.mine.recaps.map { it.bump() }),
+                viewer = s.viewer?.bump(),
+            )
+        }
+    }
+
+    // ---------- [전체] [내 영상] ----------
+
+    fun selectFeedTab(tab: FeedTab) {
+        _state.update { it.copy(feedTab = tab) }
+        if (tab == FeedTab.MINE && !_state.value.mineLoaded) refreshMine()
+    }
+
+    fun refreshMine() {
+        _state.update { it.copy(mine = RecapListState(), mineLoaded = true) }
+        loadMoreMine()
+    }
+
+    fun loadMoreMine() {
+        val uid = uid ?: return
+        val current = _state.value.mine
+        if (current.loading || current.ended) return
+        _state.update { it.copy(mine = it.mine.copy(loading = true, error = null)) }
+        viewModelScope.launch {
+            try {
+                val page = repository.loadMine(uid, current.next)
+                _state.update {
+                    it.copy(
+                        mine = it.mine.copy(
+                            recaps = (it.mine.recaps + page.recaps).distinctBy { r -> r.id },
+                            loading = false,
+                            next = page.next,
+                            ended = page.next == null,
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "내 영상 읽기 실패", e)
+                _state.update { it.copy(mine = it.mine.copy(loading = false, error = "내 영상을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.")) }
+            }
+        }
+    }
+
+    // ---------- 탐색에서 내리기(내 영상 꾹 누르기, 올린 사람만) ----------
+
+    fun askUnpublish(recap: PublicRecap) {
+        if (recap.requesterId != uid) {
+            _state.update { it.copy(message = "탐색에 올린 사람만 내릴 수 있어요.") }
+            return
+        }
+        _state.update { it.copy(unpublish = UnpublishState(recap)) }
+    }
+
+    fun dismissUnpublish() = _state.update { s -> if (s.unpublish?.busy == true) s else s.copy(unpublish = null) }
+
+    fun confirmUnpublish() {
+        val dialog = _state.value.unpublish ?: return
+        if (dialog.busy) return
+        _state.update { it.copy(unpublish = dialog.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            try {
+                repository.unpublish(dialog.recap.id)
+                val gone = dialog.recap.id
+                _state.update { s ->
+                    s.copy(
+                        unpublish = null,
+                        feed = s.feed.copy(recaps = s.feed.recaps.filterNot { it.id == gone }),
+                        search = s.search.copy(recaps = s.search.recaps.filterNot { it.id == gone }),
+                        mine = s.mine.copy(recaps = s.mine.recaps.filterNot { it.id == gone }),
+                        message = "탐색에서 내렸어요. 여정 기록은 그대로 남아 있어요.",
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "탐색에서 내리기 실패", e)
+                _state.update { s -> s.copy(unpublish = s.unpublish?.copy(busy = false, error = "내리지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.")) }
             }
         }
     }
