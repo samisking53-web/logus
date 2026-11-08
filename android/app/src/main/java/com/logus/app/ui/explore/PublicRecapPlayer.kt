@@ -19,7 +19,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
+import com.logus.app.R
+import com.logus.app.ui.theme.Border
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -90,6 +95,11 @@ fun PublicRecapPlayer(
     onClick: (() -> Unit)? = null,
     /** 바깥 모서리 둥글기(큰 화면은 0) */
     cornerRadius: Dp = 20.dp,
+    /** 음소거 여부(목록·큰 화면이 함께 쓴다). onToggleMute 가 있으면 오른쪽 아래에 소리 버튼을 둔다 */
+    muted: Boolean = false,
+    onToggleMute: (() -> Unit)? = null,
+    /** 큰 화면: 아래에 재생 막대([❚❚/▶] 진행 막대 "1 / N" [소리])를 둔다 */
+    showControls: Boolean = false,
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -134,12 +144,17 @@ fun PublicRecapPlayer(
                 player.clearMediaItems()
             } else {
                 player.setMediaItem(VideoCache.mediaItem(publicUrl(clip.videoPath), clip.videoPath))
-                player.volume = if (i == 0) 1f else 0f
+                player.volume = if (i == 0 && !muted) 1f else 0f
                 player.repeatMode = Player.REPEAT_MODE_OFF
                 player.prepare()
                 player.seekTo(0)
             }
         }
+    }
+
+    // 음소거를 바꾸면 맨 위 칸 소리만 켜고 끈다
+    LaunchedEffect(players, muted) {
+        players.firstOrNull()?.volume = if (muted) 0f else 1f
     }
 
     // 재생·멈춤
@@ -233,21 +248,89 @@ fun PublicRecapPlayer(
                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = PrimaryStrong, modifier = Modifier.size(36.dp))
             }
         }
-        // 아래 진행 막대
-        Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(PhotoScrim),
-        ) {
+        if (showControls) {
+            // 큰 화면: 아래 재생 막대 [❚❚/▶] ━━━━ 1 / N [소리]
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(PhotoScrim)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { if (active) paused = !paused }) {
+                    if (playing) {
+                        Icon(painterResource(R.drawable.ic_pause), contentDescription = "일시정지", tint = PhotoFrame)
+                    } else {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "재생", tint = PhotoFrame)
+                    }
+                }
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Border),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(if (active) progress else 0f)
+                            .height(4.dp)
+                            .background(PhotoFrame),
+                    )
+                }
+                Text(
+                    "${sceneIndex + 1} / ${recap.scenes.size}",
+                    color = PhotoFrame,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                )
+                if (onToggleMute != null) MuteButton(muted, onToggleMute, background = false)
+            }
+        } else {
+            // 목록: 오른쪽 아래 소리 버튼 + 아래 얇은 진행 막대
+            if (onToggleMute != null) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 10.dp)) {
+                    MuteButton(muted, onToggleMute, background = true)
+                }
+            }
             Box(
                 Modifier
-                    .fillMaxWidth(if (active) progress else 0f)
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .height(3.dp)
-                    .background(PhotoFrame),
-            )
+                    .background(PhotoScrim),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(if (active) progress else 0f)
+                        .height(3.dp)
+                        .background(PhotoFrame),
+                )
+            }
         }
+    }
+}
+
+/** 소리 켜기·끄기 버튼(흰 스피커 그림). background 면 사진 위에서도 보이게 어두운 동그라미를 깐다 */
+@Composable
+private fun MuteButton(muted: Boolean, onToggle: () -> Unit, background: Boolean) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .then(if (background) Modifier.background(PhotoScrim) else Modifier)
+            .clickable(onClick = onToggle)
+            .semantics { contentDescription = if (muted) "소리 켜기" else "음소거" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painterResource(if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on),
+            contentDescription = null,
+            tint = PhotoFrame,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 

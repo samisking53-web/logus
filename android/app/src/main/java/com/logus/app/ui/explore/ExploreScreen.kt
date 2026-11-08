@@ -123,6 +123,8 @@ fun ExploreScreen(
     var profile by remember { mutableStateOf<Member?>(null) }
     // 영상을 누르면 여는 큰 화면(그동안 목록의 작은 재생기는 멈춰 둔다)
     var fullscreen by remember { mutableStateOf<PublicRecap?>(null) }
+    // 음소거(목록·큰 화면이 함께 쓴다, 화면을 돌려도 유지)
+    var muted by rememberSaveable { mutableStateOf(false) }
 
     // 폰의 뒤로 가기: 연 화면을 하나씩 닫는다(S08 이면 홈 탭으로, MainScreen 이 처리)
     BackHandler(enabled = state.routes.isNotEmpty() || state.unlock != null) { viewModel.back() }
@@ -143,6 +145,8 @@ fun ExploreScreen(
         publicUrl = viewModel::publicUrl,
         onOpenFull = { fullscreen = it },
         fullscreenOpen = fullscreen != null,
+        muted = muted,
+        onToggleMute = { muted = !muted },
     )
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -222,6 +226,8 @@ fun ExploreScreen(
             publicUrl = viewModel::publicUrl,
             onProfile = { profile = it },
             onDismiss = { fullscreen = null },
+            muted = muted,
+            onToggleMute = { muted = !muted },
         )
     }
     profile?.let { ProfileDialog(member = it, onDismiss = { profile = null }) }
@@ -239,6 +245,9 @@ internal class RecapActions(
     val onOpenFull: (PublicRecap) -> Unit = {},
     /** 큰 화면이 열려 있으면 목록 재생기는 멈춘다 */
     val fullscreenOpen: Boolean = false,
+    /** 음소거(오른쪽 아래 소리 버튼) */
+    val muted: Boolean = false,
+    val onToggleMute: (() -> Unit)? = null,
 )
 
 /** 맨 위: LOG EARTH 로고 */
@@ -361,6 +370,8 @@ internal fun RecapPage(
             onProfileClick = actions.onProfile,
             onLongPress = onLongPress?.let { { it(recap) } },
             onClick = { actions.onOpenFull(recap) },
+            muted = actions.muted,
+            onToggleMute = actions.onToggleMute,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
