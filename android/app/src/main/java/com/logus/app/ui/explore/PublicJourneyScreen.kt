@@ -25,6 +25,9 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -151,7 +154,7 @@ fun PublicJourneyScreen(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 PublicTab.RECORDS -> RecordsTab(state, recap, publicUrl, onProfile, onOpenClip = { openClip = it.logId })
-                PublicTab.MAP -> MapTab(state, recap, onRetry, lookupAddress)
+                PublicTab.MAP -> MapTab(state, recap, onRetry, lookupAddress, publicUrl, onOpenClip = { openClip = it })
                 PublicTab.RECAP -> Column(Modifier.fillMaxSize().padding(bottom = 12.dp)) {
                     PublicRecapPlayer(
                         recap = recap,
@@ -299,7 +302,15 @@ private fun ClipCard(
 
 /** 추억 지도 탭: 위치를 남긴 영상만 구성원 색 번호 핀(찍은 순서)과 선으로 */
 @Composable
-private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> Unit, lookupAddress: suspend (GeoPoint) -> PlaceAddress) {
+private fun MapTab(
+    state: PublicDetailState,
+    recap: PublicRecap,
+    onRetry: () -> Unit,
+    lookupAddress: suspend (GeoPoint) -> PlaceAddress,
+    publicUrl: (String) -> String,
+    /** 핀 카드의 썸네일을 누르면 그 영상 팝업(logId) */
+    onOpenClip: (String) -> Unit,
+) {
     var selected by rememberSaveable(recap.id) { mutableStateOf<String?>(null) }
     when {
         state.loading -> Centered { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
@@ -373,7 +384,16 @@ private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> 
                     val pin = pins.firstOrNull { it.key == selected }
                     if (pin != null) {
                         Spacer(Modifier.height(8.dp))
-                        PinAddressCard(pin, state.places[pin.key], recap, lookupAddress, onClose = { selected = null })
+                        PinAddressCard(
+                            pin = pin,
+                            place = state.places[pin.key],
+                            clip = clips.firstOrNull { it.logId == pin.key },
+                            recap = recap,
+                            lookupAddress = lookupAddress,
+                            publicUrl = publicUrl,
+                            onOpenClip = { onOpenClip(pin.key) },
+                            onClose = { selected = null },
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -407,13 +427,19 @@ private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> 
     }
 }
 
-/** 고른 번호 핀의 상세 주소 카드: "● 성연 2번 · 09:24" · 장소 이름 · 상세 주소(오픈스트리트맵) · X */
+/**
+ * 고른 번호 핀의 카드: 왼쪽 그 위치에서 찍은 영상의 썸네일(번호 배지·▶, 누르면 영상 팝업)
+ * · "성연 2번 · 09:24" · 장소 이름 · 상세 주소(오픈스트리트맵) · 닫기
+ */
 @Composable
 private fun PinAddressCard(
     pin: PlacePin,
     place: PublicPlace?,
+    clip: PublicClip?,
     recap: PublicRecap,
     lookupAddress: suspend (GeoPoint) -> PlaceAddress,
+    publicUrl: (String) -> String,
+    onOpenClip: () -> Unit,
     onClose: () -> Unit,
 ) {
     val name = recap.member(pin.uid)?.nickname ?: "구성원"
@@ -428,11 +454,43 @@ private fun PinAddressCard(
             .padding(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        // 그 위치에서 찍은 영상 썸네일(16:9) + 왼쪽 위 번호 배지 + 가운데 ▶. 누르면 영상 팝업
         Box(
-            Modifier.size(26.dp).background(MemberColors[pin.colorIndex % MemberColors.size], CircleShape),
-            contentAlignment = Alignment.Center,
+            Modifier
+                .size(width = 104.dp, height = 58.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)))
+                .clickable(enabled = clip != null, onClick = onOpenClip)
+                .semantics { contentDescription = "${pin.number}번 위치에서 찍은 영상 보기" },
         ) {
-            Text(pin.number.toString(), color = OnPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            clip?.thumbPath?.let {
+                AsyncImage(
+                    model = publicUrl(it),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
+                    .size(22.dp)
+                    .background(PhotoFrame, CircleShape)
+                    .padding(2.dp)
+                    .background(MemberColors[pin.colorIndex % MemberColors.size], CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(pin.number.toString(), color = OnPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            if (clip != null) {
+                Box(
+                    Modifier.align(Alignment.Center).size(24.dp).background(PhotoScrim, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = PhotoFrame, modifier = Modifier.size(16.dp))
+                }
+            }
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
