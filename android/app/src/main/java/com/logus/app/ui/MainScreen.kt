@@ -70,7 +70,6 @@ import com.logus.app.ui.journeydetail.JourneyDetailScreen
 import com.logus.app.ui.record.CaptureScreen
 import com.logus.app.ui.record.LocationPickerSheet
 import com.logus.app.ui.record.LogUploadScreen
-import java.time.LocalDate
 
 /**
  * 가입한 사람이 보는 메인 화면: 위쪽은 고른 탭의 화면, 아래쪽은 항상 하단 탭(홈 / 탐색 / 마이로그).
@@ -287,17 +286,10 @@ fun MainScreen(
             NewJourneyFlow(
                 viewModel = newJourneyViewModel,
                 onClose = { creatingJourney = false },
-                onSaved = { startDate ->
+                onSaved = {
                     creatingJourney = false
                     tab = MainTab.HOME
-                    if (startDate.isAfter(LocalDate.now())) {
-                        Toast.makeText(
-                            context,
-                            "여정을 만들었어요. ${startDate.monthValue}월 ${startDate.dayOfMonth}일에 시작해요.",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                    // 홈을 다시 읽는다: 오늘이 여행 기간 안이면 S01-A(진행 중 여정 카드들), 아니면 S01.
+                    // 홈을 다시 읽는다: 여정은 오늘 시작하는 것만 만들 수 있어서(2026-11-04 팀 결정) 방금 만든 여정이 S01-A 에 보인다.
                     // 카메라는 자동으로 열지 않는다(2026-10-09 팀 결정). 여정 카드 → N01 "지금 기록하기"로 연다.
                     homeViewModel.load(uid, force = true)
                 },

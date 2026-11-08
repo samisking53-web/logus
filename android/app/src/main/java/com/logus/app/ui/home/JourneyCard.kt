@@ -49,9 +49,8 @@ import coil3.compose.AsyncImage
 import com.logus.app.R
 import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
+import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.theme.LogUsColors
-import com.logus.app.ui.theme.MemberColors
-import com.logus.app.ui.theme.OnPrimary
 import com.logus.app.ui.theme.Success
 
 /**
@@ -208,33 +207,32 @@ private fun OngoingBadge(modifier: Modifier = Modifier) {
     }
 }
 
-/** 구성원 동그라미(겹쳐 놓음). 색만으로 구분하지 않게 이름 첫 글자를 넣는다 */
+/**
+ * 구성원 프로필 사진 동그라미(겹쳐 놓음, 2026-11-04 팀 요청: 색·이름 첫 글자 대신 각자의 프로필 사진).
+ * 사진이 없거나 불러오지 못하면 기본 프로필(지구본, 2026-10-09 팀 결정). 흰 테두리로 겹친 사진을 구분한다.
+ * 화면 읽기 프로그램은 "함께하는 사람: 성연, 민지 …"로 이름을 읽는다.
+ */
 @Composable
 private fun MemberDots(members: List<Member>) {
     val names = members.joinToString(", ") { it.nickname }
     Box(Modifier.clearAndSetSemantics { contentDescription = "함께하는 사람: $names" }) {
         members.forEachIndexed { i, member ->
-            Box(
-                Modifier
-                    .offset(x = (i * 18).dp)
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(MemberColors[i % MemberColors.size])
-                    .border(2.dp, LogUsColors.card, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    member.nickname.firstLetter(),
-                    color = OnPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            Avatar(
+                photo = member.photoUrl,
+                size = AVATAR_SIZE.dp,
+                ringWidth = 2.dp,
+                ringColor = LogUsColors.card,
+                modifier = Modifier.offset(x = (i * AVATAR_STEP).dp),
+            )
         }
         // 겹쳐 놓은 만큼 자리를 차지하게 한다
-        Spacer(Modifier.width((26 + (members.size - 1).coerceAtLeast(0) * 18).dp).height(26.dp))
+        Spacer(Modifier.width((AVATAR_SIZE + (members.size - 1).coerceAtLeast(0) * AVATAR_STEP).dp).height(AVATAR_SIZE.dp))
     }
 }
+
+/** 구성원 프로필 사진 크기와 겹쳐 놓는 간격(dp) */
+private const val AVATAR_SIZE = 28
+private const val AVATAR_STEP = 20
 
 /**
  * 대표 사진이 아직 없을 때 보여 주는 그림: 연보라 바탕에 건물 모양 상자와 물결.
@@ -286,11 +284,4 @@ internal fun journeyPeriod(start: String, end: String): String {
     } else {
         "${s[0]}.${s[1]}.${s[2]} ~ ${e[0]}.${e[1]}.${e[2]}"
     }
-}
-
-/** 이름의 첫 글자(한글·영문·이모지 모두 한 글자로) */
-private fun String.firstLetter(): String {
-    val t = trim()
-    if (t.isEmpty()) return "?"
-    return String(Character.toChars(t.codePointAt(0)))
 }

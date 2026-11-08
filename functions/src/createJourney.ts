@@ -1,4 +1,4 @@
-// createJourney: 새 여정을 만든다 (S02 새 여정 만들기에서 호출)
+// createJourney: 새 여정을 만든다 (S02 새 여정 만들기에서 호출). 시작일은 오늘만(폰 시간대 timeZone 기준, 2026-11-04 팀 결정)
 // 여정 문서, 만든 사람의 멤버 문서, 초대 요약(invites, 6자리 코드·여정이 끝나면 만료)을 한 트랜잭션으로 함께 만든다.
 // 이 코드는 만든 사람의 초대 코드다. 여정 문서(inviteCode)와 만든 사람의 멤버 문서(inviteCode)에 함께 저장한다(바뀌지 않는다).
 // 다른 구성원은 자기 코드를 따로 받는다(getInviteCode). 코드로 새 친구가 들어오면 코드 주인이 코인을 받는다(joinJourney).
@@ -13,6 +13,7 @@ import {
   requireDate,
   requireNotifyInterval,
   requireObject,
+  requireStartsToday,
   requireString,
 } from "./common";
 
@@ -35,6 +36,8 @@ export const createJourney = onCall(async (request): Promise<CreateJourneyResult
   if (endDate < startDate) {
     throw new HttpsError("invalid-argument", "종료일은 시작일과 같거나 뒤여야 해요.");
   }
+  // 시작일은 오늘(폰 시간대 기준)만. 미래에 시작하는 여정은 만들 수 없다(2026-11-04 팀 결정)
+  requireStartsToday(startDate, data.timeZone);
   const notifyIntervalHours = requireNotifyInterval(data.notifyIntervalHours);
 
   const userRef = db.collection("users").doc(uid);
