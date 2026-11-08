@@ -32,10 +32,12 @@ class LogUsMessagingService : FirebaseMessagingService() {
         if (message.data["type"] in RecapConsent.TYPES) {
             RecapConsent.show(
                 context = this,
-                title = notification.title ?: "DAY RECAP 공개 동의 요청",
+                title = notification.title ?: "탐색 업로드 요청이 왔어요",
                 body = notification.body.orEmpty(),
                 tag = message.data["requestId"]?.let { "recap_$it" },
             )
+            // 앱을 보고 있으면 알림 줄과 함께 동의 팝업도 바로 띄운다
+            if (message.data["type"] == "recapConsent") RecapConsent.notifyArrived()
             return
         }
         CaptureReminder.show(

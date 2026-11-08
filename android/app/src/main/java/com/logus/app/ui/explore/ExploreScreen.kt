@@ -204,6 +204,7 @@ fun ExploreScreen(
                     publicUrl = viewModel::publicUrl,
                     onBack = { viewModel.back() },
                     onRetry = viewModel::retryPlaces,
+                    lookupAddress = viewModel::lookupAddress,
                     onProfile = { profile = it },
                 )
             }

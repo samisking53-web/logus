@@ -56,9 +56,12 @@ import com.logus.app.explore.PublicPlace
 import com.logus.app.explore.PublicRecap
 import com.logus.app.journey.Member
 import com.logus.app.journeydetail.MemberRoute
+import com.logus.app.explore.PlaceAddress
+import com.logus.app.record.GeoPoint
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import com.logus.app.ui.components.Avatar
 import com.logus.app.ui.components.ErrorMessage
-import com.logus.app.ui.journeydetail.RouteMap
 import com.logus.app.ui.record.RecordTopBar
 import com.logus.app.ui.theme.BackgroundDark
 import com.logus.app.ui.theme.LogUsColors
@@ -80,8 +83,10 @@ private enum class PublicTab(val label: String) { RECORDS("기록"), MAP("추억
  * 탐색에서 장소를 연 사람이 보는 여정 상세. 남의 여정 원본은 구성원만 읽을 수 있어서, 공개된 그날 DAY RECAP 에
  * 들어간 영상만 보여 준다(마이로그 여정 상세 S15~S17 과 같은 모양).
  * - 위: LOG EARTH → 뒤로 가기+여정 이름 → 날짜·지역 상자("9.24 포르투") → 탭 [기록] [추억 지도] [DAY RECAP]
- * - 기록: 장면(시간대)마다 영상 카드(대표 화면, 왼쪽 위 작은 프로필 → 프로필 팝업, 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름)
- * - 추억 지도: 마이로그 S16 과 같은 지도(MapLibre + OpenFreeMap)에 구성원 색 번호 핀과 선, 아래 범례
+ * - 기록: 장면(시간대)마다 영상 카드(대표 화면, 왼쪽 위 작은 프로필 → 프로필 팝업, 오른쪽 위 찍은 시각, 왼쪽 아래 장소 이름).
+ *   카드를 누르면 영상 팝업(PublicClipDialog: 위에 넓은 지역 주소, 소리까지 재생, ‹ › 로 그날 영상 넘기기)
+ * - 추억 지도: 마이로그 S16 과 같은 지도(MapLibre + OpenFreeMap)에 구성원 색 번호 핀과 선, 아래 범례.
+ *   번호 핀을 누르면 아래 카드에 그 위치의 상세 주소(오픈스트리트맵)
  * - DAY RECAP: 탐색과 같은 3분할 영상(누르면 재생·멈춤)
  */
 @Composable
@@ -92,8 +97,15 @@ fun PublicJourneyScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onProfile: (Member) -> Unit,
+    /** 좌표 → 넓은 지역·상세 주소(오픈스트리트맵, 영상 팝업을 열거나 핀을 누를 때만) */
+    lookupAddress: suspend (GeoPoint) -> PlaceAddress,
 ) {
     var tab by rememberSaveable(recap.id) { mutableStateOf(PublicTab.RECORDS) }
+    // 기록 카드를 눌러 연 영상(logId)
+    var openClip by rememberSaveable(recap.id) { mutableStateOf<String?>(null) }
+    val dayClips = remember(recap) {
+        recap.scenes.flatMap { it.clips }.distinctBy { it.logId }.sortedBy { it.capturedAtMillis ?: 0L }
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -138,8 +150,8 @@ fun PublicJourneyScreen(
         Spacer(Modifier.height(12.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                PublicTab.RECORDS -> RecordsTab(state, recap, publicUrl, onProfile)
-                PublicTab.MAP -> MapTab(state, recap, onRetry)
+                PublicTab.RECORDS -> RecordsTab(state, recap, publicUrl, onProfile, onOpenClip = { openClip = it.logId })
+                PublicTab.MAP -> MapTab(state, recap, onRetry, lookupAddress)
                 PublicTab.RECAP -> Column(Modifier.fillMaxSize().padding(bottom = 12.dp)) {
                     PublicRecapPlayer(
                         recap = recap,
@@ -152,11 +164,28 @@ fun PublicJourneyScreen(
             }
         }
     }
+    openClip?.let { id ->
+        PublicClipDialog(
+            recap = recap,
+            clips = dayClips,
+            startIndex = dayClips.indexOfFirst { it.logId == id }.coerceAtLeast(0),
+            places = state.places,
+            publicUrl = publicUrl,
+            lookupAddress = lookupAddress,
+            onDismiss = { openClip = null },
+        )
+    }
 }
 
 /** 기록 탭: 장면(시간대)마다 제목 + 영상 카드 */
 @Composable
-private fun RecordsTab(state: PublicDetailState, recap: PublicRecap, publicUrl: (String) -> String, onProfile: (Member) -> Unit) {
+private fun RecordsTab(
+    state: PublicDetailState,
+    recap: PublicRecap,
+    publicUrl: (String) -> String,
+    onProfile: (Member) -> Unit,
+    onOpenClip: (PublicClip) -> Unit,
+) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 16.dp),
@@ -183,6 +212,7 @@ private fun RecordsTab(state: PublicDetailState, recap: PublicRecap, publicUrl: 
                     placesLoading = state.loading,
                     publicUrl = publicUrl,
                     onProfile = onProfile,
+                    onClick = { onOpenClip(clip) },
                 )
             }
         }
@@ -199,6 +229,7 @@ private fun ClipCard(
     placesLoading: Boolean,
     publicUrl: (String) -> String,
     onProfile: (Member) -> Unit,
+    onClick: () -> Unit,
 ) {
     val placeName = place?.placeName ?: if (placesLoading) null else "위치 없이 올린 기록"
     Box(
@@ -206,7 +237,9 @@ private fun ClipCard(
             .fillMaxWidth()
             .aspectRatio(3f)
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight))),
+            .background(Brush.linearGradient(listOf(BackgroundDark, Primary, PrimaryLight)))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "${member?.nickname ?: "구성원"} 님의 영상 보기" },
     ) {
         if (clip.thumbPath != null) {
             AsyncImage(
@@ -266,7 +299,8 @@ private fun ClipCard(
 
 /** 추억 지도 탭: 위치를 남긴 영상만 구성원 색 번호 핀(찍은 순서)과 선으로 */
 @Composable
-private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> Unit) {
+private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> Unit, lookupAddress: suspend (GeoPoint) -> PlaceAddress) {
+    var selected by rememberSaveable(recap.id) { mutableStateOf<String?>(null) }
     when {
         state.loading -> Centered { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
         state.error != null -> Centered {
@@ -317,15 +351,30 @@ private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> 
                         )
                     }
                 } else {
-                    RouteMap(
-                        routes = routes,
+                    // 구성원마다 찍은 순서 1, 2, 3 … 번호 핀(누르면 아래에 상세 주소)
+                    val pins = located
+                        .groupBy { it.authorId }
+                        .flatMap { (uid, places) ->
+                            places.sortedBy { it.capturedAtMillis ?: 0L }.mapIndexed { i, p ->
+                                PlacePin(key = p.logId, uid = uid, colorIndex = recap.colorIndex(uid), number = i + 1, point = p.location!!)
+                            }
+                        }
+                    PlaceMap(
+                        pins = pins,
+                        selectedKey = selected,
+                        onPinClick = { selected = it },
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp)),
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text("지도 © OpenStreetMap", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("지도·주소 © OpenStreetMap · 번호를 누르면 상세 주소가 보여요", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    val pin = pins.firstOrNull { it.key == selected }
+                    if (pin != null) {
+                        Spacer(Modifier.height(8.dp))
+                        PinAddressCard(pin, state.places[pin.key], recap, lookupAddress, onClose = { selected = null })
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 // 범례: 색 동그라미 안 이름 첫 글자 + "이름 · N곳"(색만으로 구분하지 않게)
@@ -355,6 +404,55 @@ private fun MapTab(state: PublicDetailState, recap: PublicRecap, onRetry: () -> 
                 }
             }
         }
+    }
+}
+
+/** 고른 번호 핀의 상세 주소 카드: "● 성연 2번 · 09:24" · 장소 이름 · 상세 주소(오픈스트리트맵) · X */
+@Composable
+private fun PinAddressCard(
+    pin: PlacePin,
+    place: PublicPlace?,
+    recap: PublicRecap,
+    lookupAddress: suspend (GeoPoint) -> PlaceAddress,
+    onClose: () -> Unit,
+) {
+    val name = recap.member(pin.uid)?.nickname ?: "구성원"
+    val address by produceState<String?>(null, pin.key) {
+        value = runCatching { lookupAddress(pin.point).detail }.getOrNull() ?: "주소를 찾지 못했어요"
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(LogUsColors.card, RoundedCornerShape(14.dp))
+            .border(1.dp, LogUsColors.border, RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier.size(26.dp).background(MemberColors[pin.colorIndex % MemberColors.size], CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(pin.number.toString(), color = OnPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                listOfNotNull("$name ${pin.number}번", clockLabel(place?.capturedAtMillis)).joinToString(" · "),
+                color = LogUsColors.primaryStrong,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            place?.placeName?.let {
+                Text(it, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                address ?: "주소를 찾는 중…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+        }
+        TextButton(onClick = onClose) { Text("닫기", color = LogUsColors.primaryStrong) }
     }
 }
 

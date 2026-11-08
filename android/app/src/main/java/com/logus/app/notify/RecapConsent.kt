@@ -11,6 +11,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.logus.app.MainActivity
 import com.logus.app.R
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * DAY RECAP 탐색 공개 동의 알림(2026-11-08).
@@ -27,6 +29,15 @@ object RecapConsent {
 
     /** 서버가 보내는 푸시 종류(data.type) */
     val TYPES = setOf("recapConsent", "recapPublished", "recapRejected")
+
+    private val _arrived = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** 앱을 보고 있을 때 동의 요청 푸시가 오면 알린다 → MainScreen 이 바로 업로드 동의 팝업을 띄운다 */
+    val arrived: SharedFlow<Unit> = _arrived
+
+    fun notifyArrived() {
+        _arrived.tryEmit(Unit)
+    }
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return

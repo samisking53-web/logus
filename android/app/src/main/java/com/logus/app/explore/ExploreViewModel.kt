@@ -423,6 +423,11 @@ class ExploreViewModel : ViewModel() {
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
+    private val addresses = AddressRepository()
+
+    /** 좌표의 넓은 지역·상세 주소(오픈스트리트맵). 영상 팝업을 열거나 지도 번호를 누를 때만 부른다 */
+    suspend fun lookupAddress(point: com.logus.app.record.GeoPoint): PlaceAddress = addresses.lookup(point)
+
     /** 공개 파일 주소(영상·대표 화면) */
     fun publicUrl(path: String): String = repository.publicUrl(path)
 

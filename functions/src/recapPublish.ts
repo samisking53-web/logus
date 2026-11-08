@@ -105,6 +105,9 @@ async function notify(uids: string[], title: string, body: string, data: Record<
     }
     if (messages.length === 0) return;
     const responses = await recapNotifier.send(messages);
+    // 몇 대에 보냈고 몇 대가 실패했는지 남긴다(폰에 알림이 안 뜰 때 원인 찾기용)
+    const failed = responses.map((r, i) => (r.success ? null : `${owners[i].uid}:${r.error?.code}`)).filter(Boolean);
+    logger.info("DAY RECAP 알림 보냄", { type: data.type, sent: responses.length - failed.length, failed });
     // 더는 쓸 수 없는 토큰은 기기 문서를 지운다(sendCaptureReminders 와 같은 방식)
     await Promise.all(responses.map(async (res, i) => {
       const code = res.error?.code;
@@ -325,7 +328,7 @@ export const requestRecapPublish = onCall({ timeoutSeconds: 300 }, async (reques
     const nickname = (me.get("nickname") as string | undefined) ?? "구성원";
     await notify(
       memberIds,
-      "DAY RECAP 공개 동의 요청",
+      "탐색 업로드 요청이 왔어요",
       `${nickname} 님이 '${journey.get("name")}' ${shortDate(date)} DAY RECAP을 탐색에 올리려고 해요. 눌러서 동의해 주세요`,
       { type: "recapConsent", requestId },
     );
