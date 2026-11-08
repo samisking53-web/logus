@@ -35,6 +35,7 @@ import com.logus.app.auth.AuthUiState
 import com.logus.app.auth.AuthViewModel
 import com.logus.app.auth.SignupStep
 import com.logus.app.notify.CaptureReminder
+import com.logus.app.notify.RecapConsent
 import com.logus.app.notify.UploadNotification
 import com.logus.app.record.PendingLogs
 import com.logus.app.ui.MainScreen
@@ -60,9 +61,13 @@ class MainActivity : ComponentActivity() {
     /** 촬영 알림을 누를 때마다 1씩 늘린다 → MainScreen 이 홈(S01-A)으로 간다 */
     private val openHomeRequests = mutableIntStateOf(0)
 
+    /** DAY RECAP 공개 동의 요청 알림을 누를 때마다 1씩 늘린다 → MainScreen 이 업로드 동의 팝업을 띄운다 */
+    private val consentRequests = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CaptureReminder.createChannel(this)
+        RecapConsent.createChannel(this)
         // 인터넷이 없을 때 폰에 보관한 기록을 읽어 두고, 올리기 예약이 빠졌으면 다시 건다(PendingLogs)
         lifecycleScope.launch { PendingLogs.load(this@MainActivity) }
         // 꺼져 있던 앱을 촬영 알림으로 켠 경우(화면을 돌려 다시 만들어질 때는 또 처리하지 않는다)
@@ -107,6 +112,7 @@ class MainActivity : ComponentActivity() {
                                     profile = s.profile,
                                     onSignOut = { authViewModel.signOut(this@MainActivity) },
                                     openHomeRequest = openHomeRequests.intValue,
+                                    consentRequest = consentRequests.intValue,
                                 )
 
                                 is AuthUiState.Failed -> Column(
@@ -152,6 +158,10 @@ class MainActivity : ComponentActivity() {
         val fromReminder = intent?.action == CaptureReminder.ACTION_OPEN_HOME ||
             intent?.getStringExtra("type") == "captureReminder"
         if (fromReminder) openHomeRequests.intValue++
+        // DAY RECAP 공개 동의 요청 알림(앱이 뒤에 있을 때는 FCM 이 data 를 extras 로 넘긴다)
+        val fromConsent = intent?.action == RecapConsent.ACTION_OPEN_CONSENT ||
+            intent?.getStringExtra("type") in RecapConsent.TYPES
+        if (fromConsent) consentRequests.intValue++
     }
 
     /** 회원가입 화면들: 약관 동의 → (약관 전문) → P01 프로필 설정 ↔ P02 사진 */

@@ -28,6 +28,16 @@ class LogUsMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val notification = message.notification ?: return
+        // DAY RECAP 탐색 공개 동의 요청·결과 알림
+        if (message.data["type"] in RecapConsent.TYPES) {
+            RecapConsent.show(
+                context = this,
+                title = notification.title ?: "DAY RECAP 공개 동의 요청",
+                body = notification.body.orEmpty(),
+                tag = message.data["requestId"]?.let { "recap_$it" },
+            )
+            return
+        }
         CaptureReminder.show(
             context = this,
             title = notification.title ?: "지금 기록할 시간이에요",
