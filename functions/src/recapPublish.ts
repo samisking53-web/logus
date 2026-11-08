@@ -105,6 +105,9 @@ async function notify(uids: string[], title: string, body: string, data: Record<
     }
     if (messages.length === 0) return;
     const responses = await recapNotifier.send(messages);
+    // 몇 대에 보냈고 몇 대가 실패했는지 남긴다(폰에 알림이 안 뜰 때 원인 찾기용)
+    const failed = responses.map((r, i) => (r.success ? null : `${owners[i].uid}:${r.error?.code}`)).filter(Boolean);
+    logger.info("DAY RECAP 알림 보냄", { type: data.type, sent: responses.length - failed.length, failed });
     // 더는 쓸 수 없는 토큰은 기기 문서를 지운다(sendCaptureReminders 와 같은 방식)
     await Promise.all(responses.map(async (res, i) => {
       const code = res.error?.code;

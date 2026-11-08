@@ -204,6 +204,7 @@ fun ExploreScreen(
                     publicUrl = viewModel::publicUrl,
                     onBack = { viewModel.back() },
                     onRetry = viewModel::retryPlaces,
+                    lookupAddress = viewModel::lookupAddress,
                     onProfile = { profile = it },
                 )
             }
@@ -580,7 +581,11 @@ private fun CollectionPage(state: ExploreUiState, viewModel: ExploreViewModel, o
             }
             collection.items.isEmpty() -> Centered {
                 Text(
-                    "아직 ${collection.kind.label}한 영상이 없어요\n탐색에서 ${if (collection.kind == MarkKind.LIKE) "♡ 좋아요" else "저장"}를 눌러 보세요",
+                    when (collection.kind) {
+                        MarkKind.PLACE -> "아직 코인을 써서 장소를 본 여정이 없어요\n탐색에서 📍 장소 보기를 눌러 보세요"
+                        MarkKind.LIKE -> "아직 좋아요한 영상이 없어요\n탐색에서 ♡ 좋아요를 눌러 보세요"
+                        MarkKind.SAVE -> "아직 저장한 영상이 없어요\n탐색에서 저장을 눌러 보세요"
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
@@ -595,7 +600,15 @@ private fun CollectionPage(state: ExploreUiState, viewModel: ExploreViewModel, o
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(collection.items, key = { it.recapId }) { mark ->
-                    MarkCard(mark, viewModel::publicUrl, onClick = { viewModel.openViewer(mark.recapId) })
+                    MarkCard(
+                        mark,
+                        viewModel::publicUrl,
+                        onClick = {
+                            // 장소 보기한 여정은 바로 여정 상세(기록·추억 지도·DAY RECAP), 나머지는 영상 하나 보기
+                            if (collection.kind == MarkKind.PLACE) viewModel.openUnlocked(mark.recapId)
+                            else viewModel.openViewer(mark.recapId)
+                        },
+                    )
                 }
             }
         }

@@ -66,10 +66,14 @@ data class PublicPlace(val logId: String, val authorId: String, val location: Ge
 /** 좋아요·저장 목록 한 줄(모아보기) */
 data class RecapMark(val recapId: String, val journeyName: String, val city: String, val date: String, val thumbPath: String?)
 
-/** 좋아요(recapLikes) · 저장(recapSaves) */
+/**
+ * 모아보기 탭: 좋아요(recapLikes) · 저장(recapSaves) · 장소 보기(placeUnlocks, 20코인을 써서 장소를 연 여정).
+ * 장소 보기는 앱이 쓰지 않고 서버(unlockRecapPlaces)가 만든 열람 기록을 읽기만 한다.
+ */
 enum class MarkKind(val collection: String, val label: String) {
     LIKE("recapLikes", "좋아요"),
     SAVE("recapSaves", "저장"),
+    PLACE("placeUnlocks", "장소 보기"),
 }
 
 /** 한 묶음 읽은 결과와 다음 묶음 시작점(없으면 끝) */
@@ -170,8 +174,9 @@ class ExploreRepository {
             .documents.map { it.id }.toSet()
 
     /** 모아보기 목록(최근에 누른 순서) */
-    suspend fun loadMarks(uid: String, kind: MarkKind): List<RecapMark> =
-        db.collection("users").document(uid).collection(kind.collection)
+    suspend fun loadMarks(uid: String, kind: MarkKind): List<RecapMark> {
+        if (kind == MarkKind.PLACE) return loadUnlocked(uid)
+        return db.collection("users").document(uid).collection(kind.collection)
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(100).get().await()
             .documents.map {
                 RecapMark(
@@ -182,6 +187,28 @@ class ExploreRepository {
                     thumbPath = it.getString("thumbPath"),
                 )
             }
+    }
+
+    /**
+     * [장소 보기]: 20코인으로 장소를 연 여정(최근에 연 순서, 50개까지).
+     * 열람 기록에는 요약이 없어서 공개 리캡을 하나씩 읽어 이름·도시·날짜·대표 화면을 채운다. 탐색에서 내려간 것은 뺀다.
+     */
+    private suspend fun loadUnlocked(uid: String): List<RecapMark> {
+        val ids = db.collection("users").document(uid).collection("placeUnlocks")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(50).get().await()
+            .documents.map { it.id }
+        return ids.mapNotNull { id ->
+            runCatching { loadRecap(id) }.getOrNull()?.let { recap ->
+                RecapMark(
+                    recapId = recap.id,
+                    journeyName = recap.journeyName,
+                    city = recap.city,
+                    date = recap.date,
+                    thumbPath = recap.coverThumbPath,
+                )
+            }
+        }
+    }
 
     /** 좋아요·저장 켜기(목록에 보여 줄 요약을 함께 저장) / 끄기 */
     suspend fun setMark(uid: String, kind: MarkKind, recap: PublicRecap, on: Boolean) {

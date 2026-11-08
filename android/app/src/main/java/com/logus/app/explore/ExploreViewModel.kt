@@ -225,6 +225,7 @@ class ExploreViewModel : ViewModel() {
         fun PublicRecap.bump() = if (id != recapId) this else when (kind) {
             MarkKind.LIKE -> copy(likeCount = (likeCount + delta).coerceAtLeast(0))
             MarkKind.SAVE -> copy(saveCount = (saveCount + delta).coerceAtLeast(0))
+            MarkKind.PLACE -> this
         }
         _state.update { s ->
             s.copy(
@@ -349,6 +350,18 @@ class ExploreViewModel : ViewModel() {
         }
     }
 
+    /** 모아보기 [장소 보기]: 이미 20코인으로 연 여정이라 팝업 없이 바로 여정 상세 */
+    fun openUnlocked(recapId: String) {
+        viewModelScope.launch {
+            val recap = runCatching { repository.loadRecap(recapId) }.getOrNull()
+            if (recap == null) {
+                _state.update { it.copy(message = "이 여정은 탐색에서 내려가서 더 이상 볼 수 없어요.") }
+            } else {
+                openDetail(recap)
+            }
+        }
+    }
+
     // ---------- 장소 보기(20코인) → 여정 상세 ----------
 
     fun openPlaces(recap: PublicRecap) {
@@ -422,6 +435,11 @@ class ExploreViewModel : ViewModel() {
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
+
+    private val addresses = AddressRepository()
+
+    /** 좌표의 넓은 지역·상세 주소(오픈스트리트맵). 영상 팝업을 열거나 지도 번호를 누를 때만 부른다 */
+    suspend fun lookupAddress(point: com.logus.app.record.GeoPoint): PlaceAddress = addresses.lookup(point)
 
     /** 공개 파일 주소(영상·대표 화면) */
     fun publicUrl(path: String): String = repository.publicUrl(path)

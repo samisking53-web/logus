@@ -36,6 +36,7 @@ import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
 import com.logus.app.notify.CaptureReminder
+import com.logus.app.notify.RecapConsent
 import com.logus.app.record.PendingLogs
 import com.logus.app.journeydetail.JourneyDetailViewModel
 import com.logus.app.journeydetail.RecapExportState
@@ -153,6 +154,8 @@ fun MainScreen(
     // DAY RECAP 탐색 공개 동의: 홈에 들어올 때와 동의 요청 알림을 누를 때 내가 답할 요청이 있는지 본다
     val consentState by consentViewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(uid, consentRequest) { consentViewModel.check(uid) }
+    // 앱을 보고 있을 때 동의 요청 푸시가 오면 바로 팝업
+    LaunchedEffect(uid) { RecapConsent.arrived.collect { consentViewModel.check(uid) } }
     LaunchedEffect(consentState.message) {
         consentState.message?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
