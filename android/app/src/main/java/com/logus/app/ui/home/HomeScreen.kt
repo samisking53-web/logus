@@ -99,10 +99,12 @@ fun HomeScreen(
             NotificationBell(
                 unread = unreadNotifications,
                 onClick = onOpenNotifications,
-                // 오른쪽 위로 올려서 아래 프로필 상자와 넉넉히 떨어지게 한다(2026-11-09 팀 요청: 붙어 보여서 불안함)
+                // 종 동그라미의 세로 가운데를 LOG EARTH 글자 줄 가운데에 맞춘다(2026-11-09 팀 요청).
+                // 로고 위 여백 28dp·아래 12dp 라 위에 16dp 를 더 두면 가운데가 같아지는데,
+                // 종 동그라미는 숫자 배지 자리(위 4dp) 때문에 버튼 상자 가운데보다 2dp 아래에 있어서 4dp 를 뺀 12dp 를 둔다.
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 8.dp),
+                    .align(Alignment.CenterEnd)
+                    .padding(top = 12.dp),
             )
         }
 
