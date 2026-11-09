@@ -99,9 +99,10 @@ fun HomeScreen(
             NotificationBell(
                 unread = unreadNotifications,
                 onClick = onOpenNotifications,
+                // 오른쪽 위로 올려서 아래 프로필 상자와 넉넉히 떨어지게 한다(2026-11-09 팀 요청: 붙어 보여서 불안함)
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(top = 16.dp), // 로고 글자 줄과 가운데를 맞춘다(로고 위 여백 28dp·아래 12dp)
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp),
             )
         }
 
@@ -225,8 +226,9 @@ fun HomeScreen(
 }
 
 /**
- * 홈 오른쪽 위 종 버튼: 흰 동그라미 + 종(강조 보라). 안 읽은 알림이 있으면 오른쪽 위에 빨간 숫자(10개 이상은 9+).
+ * 홈 오른쪽 위 종 버튼: 흰 동그라미(36dp) + 종(강조 보라). 안 읽은 알림이 있으면 오른쪽 위에 빨간 숫자(10개 이상은 9+).
  * 누르면 알림 화면(ui/notify/NotificationsScreen.kt)을 연다.
+ * 동그라미는 36dp 로 작게 그리지만, 누르는 범위는 Compose 가 최소 48dp 로 넓혀 준다(작은 버튼도 누르기 쉬움).
  */
 @Composable
 private fun NotificationBell(unread: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -239,18 +241,18 @@ private fun NotificationBell(unread: Int, onClick: () -> Unit, modifier: Modifie
             shadowElevation = 2.dp,
             modifier = Modifier
                 .padding(top = 4.dp, end = 4.dp)
-                .size(44.dp),
+                .size(36.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Notifications,
                     contentDescription = if (unread > 0) "알림, 안 읽은 알림 ${unread}개" else "알림",
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
         if (unread > 0) {
-            CountBadge(unread, size = 20, modifier = Modifier.align(Alignment.TopEnd))
+            CountBadge(unread, size = 18, modifier = Modifier.align(Alignment.TopEnd))
         }
     }
 }
