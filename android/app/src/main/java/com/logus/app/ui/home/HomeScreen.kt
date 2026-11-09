@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +53,7 @@ import com.logus.app.journey.Member
 import com.logus.app.ui.components.ErrorMessage
 import com.logus.app.ui.components.LogoMark
 import com.logus.app.ui.feed.DeleteHint
+import com.logus.app.ui.notify.CountBadge
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PrimaryStrong
@@ -82,6 +85,8 @@ fun HomeScreen(
     onLongPressJourney: (OngoingCard) -> Unit = {},
     myUid: String? = null,
     coverUrl: suspend (String) -> String? = { null },
+    unreadNotifications: Int = 0,
+    onOpenNotifications: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -89,7 +94,17 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
-        LogoHeader()
+        // 맨 위: 가운데 LOG EARTH + 오른쪽 종 버튼(안 읽은 알림 수 배지) → 알림 화면(2026-11-09 팀 그림, S01·S01-A 공통)
+        Box(Modifier.fillMaxWidth()) {
+            LogoHeader()
+            NotificationBell(
+                unread = unreadNotifications,
+                onClick = onOpenNotifications,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(top = 16.dp), // 로고 글자 줄과 가운데를 맞춘다(로고 위 여백 28dp·아래 12dp)
+            )
+        }
 
         when (state) {
             is HomeUiState.Ongoing -> {
@@ -217,6 +232,37 @@ fun HomeScreen(
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * 홈 오른쪽 위 종 버튼: 흰 동그라미 + 종(강조 보라). 안 읽은 알림이 있으면 오른쪽 위에 빨간 숫자(10개 이상은 9+).
+ * 누르면 알림 화면(ui/notify/NotificationsScreen.kt)을 연다.
+ */
+@Composable
+private fun NotificationBell(unread: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = LogUsColors.card,
+            contentColor = LogUsColors.primaryStrong,
+            shadowElevation = 2.dp,
+            modifier = Modifier
+                .padding(top = 4.dp, end = 4.dp)
+                .size(44.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Notifications,
+                    contentDescription = if (unread > 0) "알림, 안 읽은 알림 ${unread}개" else "알림",
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        if (unread > 0) {
+            CountBadge(unread, size = 20, modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
 }
 

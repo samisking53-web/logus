@@ -22,6 +22,7 @@ import {
   requireInviteOpen,
   requireObject,
 } from "./common";
+import { inboxData, inboxRef } from "./notifications";
 
 type JoinJourneyResult = { journeyId: string; alreadyMember: boolean };
 
@@ -61,12 +62,16 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
     const inviterRef = db.collection("users").doc(inviterId);
     const ledgerRef = inviterRef.collection("coinLedger").doc(`invite_${journeyId}_${uid}`);
     // 트랜잭션에서는 읽기를 모두 끝낸 뒤 쓴다.
-    const [ownerMemberSnap, inviterSnap, ledgerSnap, inviterDaily] = await Promise.all([
+    const [ownerMemberSnap, inviterSnap, ledgerSnap, inviterDaily, joinerSnap] = await Promise.all([
       tx.get(journeyRef.collection("members").doc(ownerId)),
       tx.get(inviterRef),
       tx.get(ledgerRef),
       readDailyCoins(tx, inviterId), // 초대한 사람이 오늘(UTC) 받은 코인
+      tx.get(db.collection("users").doc(uid)), // 새 구성원 닉네임(알림 목록 "○○ 님이 여정에 참여했어요")
     ]);
+    const joinerName = (joinerSnap.get("nickname") as string | undefined) ??
+      (request.auth?.token.name as string | undefined) ?? "새 구성원";
+    const journeyName = (journeySnap.get("name") as string | undefined) ?? "우리 여정";
     const notifyIntervalHours = (ownerMemberSnap.get("notifyIntervalHours") as number | null) ?? null;
 
     const memberCount = memberIds.length + 1;
@@ -80,6 +85,14 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
       joinedAt: FieldValue.serverTimestamp(),
     });
     tx.update(inviteRef, { memberCount });
+
+    // 앱 안 알림 목록(2026-11-09): 원래 있던 구성원에게 "○○ 님이 여정에 참여했어요 · 우리의 포르투 · 구성원 4명"(폰 알림은 보내지 않음)
+    memberIds.forEach((memberId) => tx.set(inboxRef(memberId, `joined_${journeyId}_${uid}`), inboxData({
+      type: "memberJoined",
+      title: `${joinerName} 님이 여정에 참여했어요`,
+      body: `${journeyName} · 구성원 ${memberCount}명`,
+      journeyId,
+    })));
 
     // 초대 보상: 초대한 사람이 이 여정의 구성원이고 프로필이 있을 때, 이 친구로 처음 받는 코인만 준다(하루 50코인까지만).
     if (memberIds.includes(inviterId) && inviterSnap.exists && !ledgerSnap.exists) {
@@ -95,6 +108,13 @@ export const joinJourney = onCall(async (request): Promise<JoinJourneyResult> =>
       if (granted > 0) {
         grantDailyCoins(tx, inviterDaily, granted);
         tx.update(inviterRef, { coins: FieldValue.increment(granted) });
+        // 앱 안 알림 목록: "+5코인을 받았어요 · ○○ 님이 내 초대 코드로 참여했어요"
+        tx.set(inboxRef(inviterId, `coin_invite_${journeyId}_${uid}`), inboxData({
+          type: "coins",
+          title: `+${granted}코인을 받았어요`,
+          body: `${joinerName} 님이 내 초대 코드로 참여했어요`,
+          journeyId,
+        }));
       }
     }
 

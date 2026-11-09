@@ -7,6 +7,7 @@ export { deleteJourney } from "./deleteJourney";
 export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
 export { leaveJourney } from "./leaveJourney";
+export { onLogCreated } from "./logNotifications";
 export { previewInvite } from "./previewInvite";
 export { answerRecapPublish, requestRecapPublish } from "./recapPublish";
 export {

@@ -28,6 +28,8 @@ class LogUsMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val notification = message.notification ?: return
+        // 서버가 앱 안 알림 목록에도 같은 알림을 넣었으니, 앱을 보고 있으면 홈 종 버튼의 숫자를 다시 센다
+        NotificationInbox.notifyChanged()
         // DAY RECAP 탐색 공개 동의 요청·결과 알림
         if (message.data["type"] in RecapConsent.TYPES) {
             RecapConsent.show(

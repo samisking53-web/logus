@@ -16,6 +16,7 @@ import { deleteJourney } from "../../functions/src/deleteJourney";
 import { getInviteCode } from "../../functions/src/getInviteCode";
 import { joinJourney } from "../../functions/src/joinJourney";
 import { leaveJourney } from "../../functions/src/leaveJourney";
+import { notifyNewLog, windowStartLabel } from "../../functions/src/logNotifications";
 import { previewInvite } from "../../functions/src/previewInvite";
 import { LOCATION_REWARD_COINS, saveLogLocation } from "../../functions/src/saveLogLocation";
 
@@ -565,5 +566,79 @@ describe("leaveJourney (참여자의 여정 나가기)", () => {
     expect(await leaveJourney.run(req({ journeyId }, newUid()))).toEqual({ left: false });
     await expect(leaveJourney.run(req({ journeyId }))).rejects.toMatchObject({ code: "unauthenticated" });
     expect((await db.doc(`journeys/${journeyId}`).get()).get("memberIds")).toEqual([owner]);
+  });
+});
+
+describe("앱 안 알림함(users/{uid}/notifications)", () => {
+  const inbox = (uid: string, id: string) => db.doc(`users/${uid}/notifications/${id}`).get();
+
+  it("위치 코인을 받으면 '+10코인을 받았어요', 덜 받으면 안내를 붙이고, 못 받으면 남기지 않는다", async () => {
+    const owner = newUid();
+    const { journeyId } = await makeJourney(owner);
+    const first = await makeLog(journeyId, owner);
+    await saveLogLocation.run(req({ journeyId, logId: first, location: porto }, owner));
+    expect((await inbox(owner, `coin_${first}`)).data()).toMatchObject({
+      type: "coins", title: "+10코인을 받았어요", body: "위치와 함께 저장한 기록 1개", journeyId, read: false,
+    });
+
+    await setDailyCoins(owner, 45);
+    const partial = await makeLog(journeyId, owner);
+    await saveLogLocation.run(req({ journeyId, logId: partial, location: porto }, owner));
+    const p = (await inbox(owner, `coin_${partial}`)).data();
+    expect(p?.title).toBe("+5코인을 받았어요");
+    expect(p?.body).toContain("오늘 받을 수 있는 코인");
+
+    const none = await makeLog(journeyId, owner);
+    await saveLogLocation.run(req({ journeyId, logId: none, location: porto }, owner));
+    expect((await inbox(owner, `coin_${none}`)).exists).toBe(false);
+  });
+
+  it("새 구성원이 들어오면 원래 구성원에게 '○○ 님이 여정에 참여했어요', 코드 주인에게 '+5코인'", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    await makeUser(owner, "성연");
+    await makeUser(guest, "수현");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode }, guest));
+    expect((await inbox(owner, `joined_${journeyId}_${guest}`)).data()).toMatchObject({
+      type: "memberJoined", title: "수현 님이 여정에 참여했어요", body: "우리의 포르투 · 구성원 2명", journeyId,
+    });
+    expect((await inbox(owner, `coin_invite_${journeyId}_${guest}`)).data()).toMatchObject({
+      type: "coins", title: `+${INVITE_REWARD_COINS}코인을 받았어요`, body: "수현 님이 내 초대 코드로 참여했어요",
+    });
+    // 들어온 사람 자신에게는 남기지 않는다
+    expect((await inbox(guest, `joined_${journeyId}_${guest}`)).exists).toBe(false);
+  });
+
+  it("기록을 올리면 다른 구성원에게 '○○ 님이 기록을 올렸어요'(올린 사람·여정을 마친 사람은 빼고)", async () => {
+    const owner = newUid();
+    const guest = newUid();
+    const done = newUid();
+    await makeUser(owner, "성연");
+    await makeUser(guest, "민지");
+    await makeUser(done, "현우");
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    await joinJourney.run(req({ inviteCode }, guest));
+    await joinJourney.run(req({ inviteCode }, done));
+    await db.doc(`journeys/${journeyId}/members/${done}`).update({ finishedAt: new Date() });
+    const logId = await makeLog(journeyId, guest);
+    const log = (await db.doc(`journeys/${journeyId}/logs/${logId}`).get()).data()!;
+
+    expect(await notifyNewLog(journeyId, logId, log)).toBe(1);
+    const n = (await inbox(owner, `log_${logId}`)).data();
+    expect(n).toMatchObject({ type: "newLog", title: "민지 님이 기록을 올렸어요", journeyId, read: false });
+    expect(n?.body).toMatch(/^우리의 포르투 · \d{2}:\d{2} 시간대$/);
+    expect((await inbox(guest, `log_${logId}`)).exists).toBe(false);
+    expect((await inbox(done, `log_${logId}`)).exists).toBe(false);
+  });
+
+  it("알림의 시간대는 N01 과 같이 여정을 만든 시각에서 간격마다 나눈다", () => {
+    const anchor = Date.UTC(2031, 4, 9, 19 - 9, 23); // 한국 19:23 에 만든 여정 → 기준 19:20
+    const seoul = (day: number, hour: number, minute: number) => Date.UTC(2031, 4, day, hour - 9, minute);
+    expect(windowStartLabel(seoul(9, 19, 25), anchor, 2, "Asia/Seoul")).toBe("19:20");
+    expect(windowStartLabel(seoul(10, 9, 30), anchor, 2, "Asia/Seoul")).toBe("09:20");
+    expect(windowStartLabel(seoul(10, 0, 30), anchor, 2, "Asia/Seoul")).toBe("23:20");
+    expect(windowStartLabel(seoul(10, 10, 0), anchor, 3, "Asia/Seoul")).toBe("07:20");
+    expect(windowStartLabel(seoul(10, 10, 0), null, 2, "Asia/Seoul")).toBeNull();
   });
 });
