@@ -444,6 +444,41 @@ describe("촬영 알림 기기", () => {
   });
 });
 
+describe("앱 안 알림함(users/{uid}/notifications)", () => {
+  const seed = async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", ALICE, "notifications", "n1"), {
+        type: "newLog", title: "민지 님이 기록을 올렸어요", body: "우리의 포르투 · 11:20 시간대",
+        journeyId: JOURNEY_ID, requestId: null, read: false, createdAt: new Date(),
+      });
+    });
+  };
+
+  it("본인만 읽고, 읽음 표시(read → true)만 바꿀 수 있다", async () => {
+    await seed();
+    const ref = doc(dbAs(ALICE), "users", ALICE, "notifications", "n1");
+    await assertSucceeds(getDoc(ref));
+    await assertSucceeds(updateDoc(ref, { read: true }));
+    await assertFails(getDoc(doc(dbAs(BOB), "users", ALICE, "notifications", "n1")));
+    await assertFails(getDoc(doc(dbAnon(), "users", ALICE, "notifications", "n1")));
+    await assertFails(updateDoc(doc(dbAs(BOB), "users", ALICE, "notifications", "n1"), { read: true }));
+  });
+
+  it("앱은 알림을 만들거나 지우거나 내용을 고치거나 안 읽음으로 되돌릴 수 없다", async () => {
+    await seed();
+    const ref = doc(dbAs(ALICE), "users", ALICE, "notifications", "n1");
+    await assertFails(setDoc(doc(dbAs(ALICE), "users", ALICE, "notifications", "fake"), {
+      type: "coins", title: "+1000코인을 받았어요", body: "", journeyId: null, requestId: null,
+      read: false, createdAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(ref, { title: "바꾼 제목" }));
+    await assertFails(updateDoc(ref, { read: true, body: "같이 바꾸기" }));
+    await assertFails(deleteDoc(ref));
+    await assertSucceeds(updateDoc(ref, { read: true }));
+    await assertFails(updateDoc(ref, { read: false }));
+  });
+});
+
 describe("탐색 공개 DAY RECAP·좋아요·저장·장소 열람", () => {
   const RECAP = `${JOURNEY_ID}_2026-09-24`;
   const mark = (thumbPath: string | null = `public/recaps/${RECAP}/log1.jpg`) => ({

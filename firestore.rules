@@ -11,6 +11,7 @@ rules_version = '2';
 //   - journeys 문서와 members 문서 생성·참여·삭제·나가기 → createJourney, joinJourney, deleteJourney, leaveJourney
 //   - 기록의 location·placeName·isPublic → saveLogLocation
 //   - users.coins, coinLedger, coinDaily(하루 50코인 제한) → saveLogLocation, joinJourney
+//   - users/{uid}/notifications(앱 안 알림함, 읽음 표시만 본인) → sendCaptureReminders·saveLogLocation·joinJourney·onLogCreated·DAY RECAP 공개 함수
 //   - invites, inviteAttempts, publicLogs, sharedRecaps, recaps → 서버 함수
 //   (coinDaily·inviteAttempts·invites 는 아래에 match 가 없어서 앱이 읽지도 쓰지도 못한다)
 //
@@ -218,6 +219,16 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create: if isOwner(uid) && isValidRecapMark(request.resource.data, recapId);
         allow update: if false;
+      }
+
+      // 앱 안 알림함(2026-11-09, 홈 종 버튼 → 알림 목록). 서버 함수만 만든다.
+      // 본인만 읽고, 읽음 표시(read: false → true)만 바꿀 수 있다. 제목·내용·종류는 고칠 수 없고 지울 수도 없다.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(uid);
+        allow update: if isOwner(uid)
+          && changedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow create, delete: if false;
       }
 
       // 촬영 알림을 받을 폰(문서 ID = FCM 토큰). 본인만 읽고 쓰고 지운다(로그아웃하면 지운다).

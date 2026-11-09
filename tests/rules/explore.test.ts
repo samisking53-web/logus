@@ -80,6 +80,12 @@ describe("requestRecapPublish·answerRecapPublish (구성원 모두 동의하면
     const res = await requestRecapPublish.run(req({ journeyId, date: today, scenes }, a));
     expect(res).toMatchObject({ status: "pending", alreadyRequested: false });
     expect(sent.some((s) => s.token === "tokenB" && s.type === "recapConsent")).toBe(true);
+    // 앱 안 알림 목록에도 남는다(폰이 없는 c 도). 요청한 사람에게는 없다
+    for (const uid of [b, c]) {
+      expect((await db.doc(`users/${uid}/notifications/recapConsent_${res.requestId}`).get()).data())
+        .toMatchObject({ type: "recapConsent", title: "DAY RECAP 공개 동의 요청", requestId: res.requestId, read: false });
+    }
+    expect((await db.doc(`users/${a}/notifications/recapConsent_${res.requestId}`).get()).exists).toBe(false);
 
     // 같은 날 다시 요청하면 새로 만들지 않는다
     expect(await requestRecapPublish.run(req({ journeyId, date: today, scenes }, b)))
@@ -91,6 +97,8 @@ describe("requestRecapPublish·answerRecapPublish (구성원 모두 동의하면
 
     const done = await answerRecapPublish.run(req({ requestId: res.requestId, approve: true }, c));
     expect(done.status).toBe("published");
+    expect((await db.doc(`users/${a}/notifications/recapPublished_${res.requestId}`).get()).get("title"))
+      .toBe("DAY RECAP을 탐색에 올렸어요");
     const recap = await db.doc(`publicRecaps/${done.publicRecapId}`).get();
     expect(recap.get("memberIds")).toEqual([a, b, c]);
     expect(recap.get("keywords")).toEqual(expect.arrayContaining(["포르투", "카페"]));

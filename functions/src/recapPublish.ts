@@ -19,6 +19,7 @@ import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { db, storage } from "./admin";
 import { requireAuth, requireDate, requireObject, requireString } from "./common";
+import { addToInboxes, type NotificationType } from "./notifications";
 
 /** 동의 요청 알림 채널·누르면 여는 동작(앱 notify/RecapConsent.kt 와 같아야 한다) */
 export const CONSENT_CHANNEL_ID = "recap_consent";
@@ -83,8 +84,13 @@ export function searchKeywords(parts: Array<string | null | undefined>): string[
   return [...words].slice(0, 50);
 }
 
-/** uid 들의 기기(FCM 토큰)로 알림을 보낸다. 실패해도 요청·공개는 그대로 진행한다 */
+/**
+ * uid 들의 기기(FCM 토큰)로 알림을 보낸다. 실패해도 요청·공개는 그대로 진행한다.
+ * 앱 안 알림 목록(users/{uid}/notifications, 2026-11-09)에도 같은 제목·내용을 남긴다(type = recapConsent·recapPublished·recapRejected).
+ */
 async function notify(uids: string[], title: string, body: string, data: Record<string, string>): Promise<void> {
+  const type = data.type as NotificationType;
+  await addToInboxes(uids, { type, title, body, requestId: data.requestId ?? null }, `${type}_${data.requestId ?? Date.now()}`);
   try {
     const messages: Message[] = [];
     const owners: Array<{ uid: string; token: string }> = [];

@@ -13,6 +13,7 @@ import {
   requireObject,
   requireString,
 } from "./common";
+import { inboxData, inboxRef } from "./notifications";
 
 export const LOCATION_REWARD_COINS = 10;
 
@@ -94,6 +95,15 @@ export const saveLogLocation = onCall(async (request): Promise<SaveLogLocationRe
     }
     if (coinsGranted > 0) {
       grantDailyCoins(tx, daily, coinsGranted);
+      // 앱 안 알림 목록(2026-11-09): "+10코인을 받았어요 · 위치와 함께 저장한 기록 1개"(폰 알림은 보내지 않음)
+      tx.set(inboxRef(uid, `coin_${logId}`), inboxData({
+        type: "coins",
+        title: `+${coinsGranted}코인을 받았어요`,
+        body: dailyLimitReached
+          ? "위치와 함께 저장한 기록 1개 · 오늘 받을 수 있는 코인을 다 받았어요"
+          : "위치와 함께 저장한 기록 1개",
+        journeyId,
+      }));
       if (userSnap.exists) {
         tx.update(userRef, { coins: FieldValue.increment(coinsGranted) });
       } else {

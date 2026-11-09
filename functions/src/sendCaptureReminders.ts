@@ -13,6 +13,7 @@ import { getMessaging } from "firebase-admin/messaging";
 import { logger } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { db } from "./admin";
+import { addToInboxes } from "./notifications";
 
 /** 하루 중 알림을 보내는 시간(폰 시각, 시): 9시 0분 ~ 23시 59분 */
 export const REMINDER_FIRST_HOUR = 9;
@@ -113,6 +114,8 @@ export async function runCaptureReminders(
 
   const journeys = await db.collection("journeys").where("endDate", ">=", minEndDate).limit(MAX_JOURNEYS).get();
   const outgoing: Outgoing[] = [];
+  // 앱 안 알림함에 남길 것(여정마다, 이번에 폰 알림을 받는 구성원). 폰이 여러 대여도 사람마다 하나만 남긴다
+  const inbox: Array<{ journeyId: string; name: string; interval: number; uids: Set<string> }> = [];
 
   await Promise.all(
     journeys.docs.map(async (journey) => {
@@ -136,6 +139,8 @@ export async function runCaptureReminders(
       const active = members.docs
         .filter((m) => memberIds.includes(m.id) && m.get("finishedAt") == null)
         .map((m) => m.id);
+      const receivers = new Set<string>();
+      inbox.push({ journeyId: journey.id, name: typeof name === "string" ? name : "우리 여정", interval, uids: receivers });
 
       await Promise.all(
         active.map(async (uid) => {
@@ -146,6 +151,7 @@ export async function runCaptureReminders(
             if (typeof token !== "string" || typeof timeZone !== "string") continue;
             const local = localTimeIn(timeZone, slotDate);
             if (!local || !isReminderTime(local, startDate, endDate)) continue;
+            receivers.add(uid);
             outgoing.push({
               devicePath: device.ref.path,
               message: {
@@ -195,6 +201,13 @@ export async function runCaptureReminders(
       }),
     );
   }
+  // 앱 안 알림 목록에도 남긴다("지금 기록할 시간이에요 · 우리의 포르투 · 2시간 주기 알림"). 같은 칸은 한 번만(문서 ID)
+  await Promise.all(inbox.filter((j) => j.uids.size > 0).map((j) => addToInboxes([...j.uids], {
+    type: "captureReminder",
+    title: "지금 기록할 시간이에요",
+    body: `${j.name} · ${j.interval}시간 주기 알림`,
+    journeyId: j.journeyId,
+  }, `reminder_${j.journeyId}_${slot}`)));
   logger.info("촬영 알림", { journeys: journeys.size, sent, failed, removed });
   return { sent, failed, removed };
 }

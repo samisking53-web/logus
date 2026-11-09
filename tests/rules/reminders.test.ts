@@ -117,7 +117,7 @@ describe("촬영 알림 시각 계산", () => {
 
 describe("촬영 알림 보내기", () => {
   it("간격에 맞는 시각에 여정을 마치지 않은 구성원 폰으로 보낸다(누르면 앱 홈)", async () => {
-    const { journeyId, tokens } = await seed({ interval: 2, members: [{}, {}, { finished: true }] });
+    const { journeyId, uids, tokens } = await seed({ interval: 2, members: [{}, {}, { finished: true }] });
     const fake = fakeSend();
     // 예약 함수가 몇 초 늦게 돌아도(11:20:07) 11:20 칸으로 계산한다
     await runCaptureReminders(seoulAt(11, 20, 7), fake.send);
@@ -126,6 +126,14 @@ describe("촬영 알림 보내기", () => {
     expect(mine[0].notification?.title).toBe("지금 기록할 시간이에요");
     expect(mine[0].android?.notification?.channelId).toBe("capture_reminder");
     expect(mine[0].android?.notification?.clickAction).toBe("com.logus.app.CAPTURE_REMINDER");
+    // 앱 안 알림 목록에도 사람마다 하나씩 남는다(여정을 마친 사람은 빼고)
+    const slot = Date.UTC(2031, 4, 10, 11 - 9, 20);
+    const inbox = (uid: string) => db.doc(`users/${uid}/notifications/reminder_${journeyId}_${slot}`).get();
+    expect((await inbox(uids[0])).data()).toMatchObject({
+      type: "captureReminder", title: "지금 기록할 시간이에요", body: "알림 여정 · 2시간 주기 알림", journeyId, read: false,
+    });
+    expect((await inbox(uids[1])).exists).toBe(true);
+    expect((await inbox(uids[2])).exists).toBe(false);
   });
 
   it("간격에 맞지 않는 시각(정각·다른 분)·밤에는 보내지 않는다", async () => {

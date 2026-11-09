@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +52,7 @@ import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ErrorMessage
 import com.logus.app.ui.components.LogoMark
-import com.logus.app.ui.feed.DeleteHint
+import com.logus.app.ui.notify.CountBadge
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.LogUsTheme
 import com.logus.app.ui.theme.PrimaryStrong
@@ -65,7 +67,7 @@ import com.logus.app.ui.theme.PrimaryStrong
  * "새 여정 시작하기"는 S02, "초대 코드로 참여"는 6자리 초대 코드 입력 팝업(링크는 쓰지 않음)을 연다.
  * 여정 카드: 누르면 N01 기록 보기, 사람+ 버튼은 "여정에 초대하기" 팝업, 사진 위 연필 버튼은 대표 사진 선택 팝업(MainScreen 이 연결).
  *   길게 누르면 삭제(내가 만든 여정)·나가기(초대받은 여정) 팝업(RemoveJourneyDialog, 2026-11-04 팀 그림).
- *   S01-A 로고 아래에 "ⓘ 내가 만든 여정은 길게 눌러 삭제할 수 있어요" 안내 띠를 둔다(초대받은 여정만 있으면 "나갈 수 있어요").
+ *   (예전 로고 아래 "ⓘ 내가 만든 여정은 길게 눌러 삭제할 수 있어요" 안내 띠는 종 버튼과 겹쳐 보여서 2026-11-09 팀 요청으로 뺐다)
  * coverUrl: 대표 사진 Storage 경로 → 내려받기 주소(HomeViewModel 이 한 번 받으면 기억한다).
  */
 @Composable
@@ -82,6 +84,8 @@ fun HomeScreen(
     onLongPressJourney: (OngoingCard) -> Unit = {},
     myUid: String? = null,
     coverUrl: suspend (String) -> String? = { null },
+    unreadNotifications: Int = 0,
+    onOpenNotifications: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -89,22 +93,23 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
-        LogoHeader()
+        // 맨 위: 가운데 LOG EARTH + 오른쪽 종 버튼(안 읽은 알림 수 배지) → 알림 화면(2026-11-09 팀 그림, S01·S01-A 공통)
+        Box(Modifier.fillMaxWidth()) {
+            LogoHeader()
+            NotificationBell(
+                unread = unreadNotifications,
+                onClick = onOpenNotifications,
+                // 오른쪽 위로 올려서 아래 프로필 상자와 넉넉히 떨어지게 한다(2026-11-09 팀 요청: 붙어 보여서 불안함)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp),
+            )
+        }
 
         when (state) {
             is HomeUiState.Ongoing -> {
-                // S01-A
-                // 로고 아래 안내 띠: 내가 만든 여정은 길게 눌러 삭제, 초대받은 여정은 길게 눌러 나가기
-                val anyMine = state.journeys.any { it.journey.ownerId == myUid }
-                val anyOthers = state.journeys.any { it.journey.ownerId != myUid }
-                DeleteHint(
-                    when {
-                        anyMine && anyOthers -> "여정 카드를 길게 눌러 삭제하거나 나갈 수 있어요"
-                        anyMine -> "내가 만든 여정은 길게 눌러 삭제할 수 있어요"
-                        else -> "여정 카드를 길게 누르면 나갈 수 있어요"
-                    },
-                )
-                Spacer(Modifier.height(12.dp))
+                // S01-A (로고 아래 "길게 눌러 삭제" 안내 띠는 종 버튼과 겹쳐 보여서 뺐다, 2026-11-09 팀 요청)
+                Spacer(Modifier.height(8.dp))
                 ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto)
                 Spacer(Modifier.height(if (state.journeys.size > 1) 24.dp else 32.dp))
                 if (state.journeys.size > 1) {
@@ -217,6 +222,38 @@ fun HomeScreen(
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * 홈 오른쪽 위 종 버튼: 흰 동그라미(36dp) + 종(강조 보라). 안 읽은 알림이 있으면 오른쪽 위에 빨간 숫자(10개 이상은 9+).
+ * 누르면 알림 화면(ui/notify/NotificationsScreen.kt)을 연다.
+ * 동그라미는 36dp 로 작게 그리지만, 누르는 범위는 Compose 가 최소 48dp 로 넓혀 준다(작은 버튼도 누르기 쉬움).
+ */
+@Composable
+private fun NotificationBell(unread: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = LogUsColors.card,
+            contentColor = LogUsColors.primaryStrong,
+            shadowElevation = 2.dp,
+            modifier = Modifier
+                .padding(top = 4.dp, end = 4.dp)
+                .size(36.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Notifications,
+                    contentDescription = if (unread > 0) "알림, 안 읽은 알림 ${unread}개" else "알림",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        if (unread > 0) {
+            CountBadge(unread, size = 18, modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
 }
 

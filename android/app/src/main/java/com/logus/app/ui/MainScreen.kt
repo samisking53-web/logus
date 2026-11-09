@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.logus.app.auth.Coins
@@ -36,6 +37,9 @@ import com.logus.app.home.HomeViewModel
 import com.logus.app.home.JoinViewModel
 import com.logus.app.mylog.MyLogViewModel
 import com.logus.app.notify.CaptureReminder
+import com.logus.app.notify.AppNotification
+import com.logus.app.notify.NotificationInbox
+import com.logus.app.notify.NotificationsViewModel
 import com.logus.app.notify.RecapConsent
 import com.logus.app.record.PendingLogs
 import com.logus.app.journeydetail.JourneyDetailViewModel
@@ -62,6 +66,7 @@ import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.home.ProfileEditDialog
 import com.logus.app.ui.home.RemoveJourneyDialog
+import com.logus.app.ui.notify.NotificationsScreen
 import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
 import com.logus.app.ui.journey.JourneyInviteDialog
@@ -98,6 +103,8 @@ fun MainScreen(
     openHomeRequest: Int = 0,
     // 탐색(S08·S09·모아보기·공개 여정 상세)
     exploreViewModel: ExploreViewModel = viewModel(),
+    // 홈 오른쪽 위 종 버튼 → 알림 화면(2026-11-09 팀 그림)
+    notificationsViewModel: NotificationsViewModel = viewModel(),
     // DAY RECAP 탐색 공개 동의 팝업. consentRequest 는 동의 요청 알림을 누를 때마다 1씩 늘어난다(MainActivity)
     consentViewModel: RecapConsentViewModel = viewModel(),
     consentRequest: Int = 0,
@@ -162,6 +169,58 @@ fun MainScreen(
             consentViewModel.consumeMessage()
         }
     }
+    // 알림 화면(홈 오른쪽 위 종 버튼, 하단 탭은 보인다). 안 읽은 수는 홈에 들어올 때·앱으로 돌아올 때·
+    // 앱을 보는 중 푸시가 올 때 다시 센다(실시간 리스너 대신 개수 세기, 비용 관리)
+    var viewingNotifications by rememberSaveable { mutableStateOf(false) }
+    val notificationsState by notificationsViewModel.state.collectAsStateWithLifecycle()
+    LifecycleStartEffect(uid) {
+        notificationsViewModel.refreshCount(uid)
+        onStopOrDispose { }
+    }
+    LaunchedEffect(uid) { NotificationInbox.changed.collect { notificationsViewModel.refreshCount(uid) } }
+    LaunchedEffect(notificationsState.error) {
+        notificationsState.error?.let {
+            // 목록이 있을 때(모두 읽음 실패 등)는 알림 문구로, 목록이 비었으면 화면 안 오류 글로 보여 준다
+            if (notificationsState.items.isNotEmpty()) {
+                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                notificationsViewModel.consumeError()
+            }
+        }
+    }
+    /**
+     * 알림을 눌렀을 때: 읽음으로 바꾸고 관련 화면을 연다(2026-11-09 팀 결정).
+     * 촬영 알림·구성원 기록·새 구성원 → 그 여정의 N01 기록 보기(진행 중일 때) 또는 여정 상세(끝난 여정),
+     * DAY RECAP 공개 동의 요청 → 동의 팝업, 탐색에 올렸어요 → 탐색 탭, 그 밖(코인·공개 취소)은 읽음 표시만.
+     * 기록 보기·여정 상세에서 뒤로 가면 알림 화면으로 돌아온다.
+     */
+    fun openNotification(item: AppNotification) {
+        notificationsViewModel.markRead(uid, item)
+        when (item.type) {
+            "captureReminder", "newLog", "memberJoined" -> {
+                val journeyId = item.journeyId ?: return
+                val card = ongoing?.journeys?.firstOrNull { it.journey.id == journeyId }
+                if (card != null) {
+                    activeJourneyId = journeyId
+                    feedViewModel.open(card.journey, uid)
+                    viewingFeed = true
+                } else {
+                    notificationsViewModel.findJourney(journeyId) { journey ->
+                        if (journey != null) {
+                            detailViewModel.open(journey)
+                            viewingDetail = true
+                        } else {
+                            Toast.makeText(context, "이 여정은 더 볼 수 없어요", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            "recapConsent" -> consentViewModel.check(uid)
+            "recapPublished" -> {
+                viewingNotifications = false
+                tab = MainTab.EXPLORE
+            }
+        }
+    }
     // 촬영 알림 권한(안드로이드 13 이상): 홈에 처음 들어올 때 한 번만 묻는다. 거절하면 알림이 오지 않는다(폰 설정에서 다시 켤 수 있다)
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(uid) {
@@ -182,6 +241,7 @@ fun MainScreen(
         if (viewingDetail) exportViewModel.dismiss() // 다 만든·실패한 영상 팝업도 닫는다
         viewingDetail = false
         invitingToJourney = false
+        viewingNotifications = false
         tab = MainTab.HOME
         // 앱을 막 켠 경우엔 위에서 이미 읽는 중이라 다시 읽지 않는다
         if (homeViewModel.state.value !is HomeUiState.Loading) homeViewModel.load(uid, force = true)
@@ -200,6 +260,7 @@ fun MainScreen(
     // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
     LaunchedEffect(uploadState.done) {
         if (uploadState.done && capturing) {
+            notificationsViewModel.refreshCount(uid) // 위치 코인을 받았으면 알림 목록에 "+10코인"이 생긴다
             captureViewModel.discardAndStop()
             capturing = false
             mapOpen = false
@@ -436,7 +497,20 @@ fun MainScreen(
                         onAccept = joinViewModel::accept,
                         accepting = joinState.accepting,
                         error = joinState.acceptError,
-                    ) else HomeScreen(
+                    ) else if (viewingNotifications) {
+                        // 알림 화면(홈 종 버튼). 폰의 뒤로 가기·‹ → 홈
+                        BackHandler { viewingNotifications = false; notificationsViewModel.refreshCount(uid) }
+                        NotificationsScreen(
+                            state = notificationsState,
+                            onBack = {
+                                viewingNotifications = false
+                                notificationsViewModel.refreshCount(uid)
+                            },
+                            onMarkAllRead = { notificationsViewModel.markAllRead(uid) },
+                            onOpen = ::openNotification,
+                            onRetry = { notificationsViewModel.open(uid) },
+                        )
+                    } else HomeScreen(
                         profile = profile,
                         state = homeState,
                         // S01·S01-A 프로필 상자 "사진 수정 ›" → 프로필 사진 수정 팝업(뒤는 지금 홈 그대로)
@@ -466,6 +540,12 @@ fun MainScreen(
                         onLongPressJourney = { card -> homeViewModel.openRemove(card, uid) },
                         myUid = uid,
                         coverUrl = homeViewModel::coverUrl,
+                        // 오른쪽 위 종 버튼 → 알림 화면
+                        unreadNotifications = notificationsState.unreadCount,
+                        onOpenNotifications = {
+                            viewingNotifications = true
+                            notificationsViewModel.open(uid)
+                        },
                     )
                     // S08 공개 영상 피드(‹ 또는 폰의 뒤로 가기 → 홈 탭)
                     MainTab.EXPLORE -> ExploreScreen(
@@ -502,7 +582,11 @@ fun MainScreen(
             }
             // 탐색의 공개 여정 상세에서는 하단 탭을 숨긴다(마이로그 여정 상세와 같게)
             if (!(tab == MainTab.EXPLORE && exploreState.route is ExploreRoute.Detail)) {
-                BottomTabBar(selected = tab, onSelect = { tab = it })
+                BottomTabBar(selected = tab, onSelect = {
+                    // 알림 화면에서 홈 탭을 다시 누르면 홈으로
+                    if (it == MainTab.HOME && tab == MainTab.HOME) viewingNotifications = false
+                    tab = it
+                })
             }
         }
         // 프로필 사진 수정 팝업. 저장하면 홈 프로필은 실시간으로 바뀐다(AuthViewModel 이 users/{uid} 를 지켜봄)
