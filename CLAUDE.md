@@ -187,6 +187,7 @@
 - 플레이스토어 배포 시 Play 앱 서명 키의 SHA-1도 Firebase에 추가해야 한다
 - 저장소를 iCloud Drive 가 동기화하는 `~/Documents` 아래에 두면 빌드 파일이 `… 2.jar` 처럼 복제돼 `Type … is defined multiple times`(mergeProjectDexDebug)로 빌드가 깨진다. `android/app/build` 를 지우고 다시 빌드하면 풀리고, 근본적으로는 저장소를 iCloud 밖(예: `~/dev`)으로 옮긴다(2026-11-08)
 - Claude Code 클라우드 세션: 환경 설정(Edit)의 Setup script에 `docs/cloud-setup.sh`(안드로이드 SDK 설치)를 넣고, 허용 도메인(파일 맨 위 목록)과 환경 변수 `ANDROID_HOME=/opt/android-sdk`를 추가한다. `android/app/google-services.json`이 없으면 빌드 확인용 가짜 파일(패키지 `com.logus.app`, 가짜 값)을 만들어 `assembleDebug`만 확인한다. 이 파일은 커밋하지 않고(gitignore), 로그인 같은 실제 동작은 팀원이 폰에서 확인한다
+- Claude Code 클라우드 세션에서 `npm run test:rules`를 돌리면 `tests/rules/storage.test.ts`의 "구성원은 본인 폴더에 사진·영상을 올린다"·"구성원은 다른 구성원의 파일을 읽을 수 있다" 2개가 실패한다(로그 `storage.rules line [19] … Null value error`). 규칙·코드 문제가 아니다: firebase-tools 는 `HTTPS_PROXY` 가 있으면 `NO_PROXY` 를 무시하고 127.0.0.1 요청까지 프록시로 보내서, Storage 규칙의 `firestore.get`(구성원 확인)이 Firestore 에뮬레이터에 닿지 못하고 프록시에서 막힌다(2026-11-10 확인). 프록시가 없는 팀원 컴퓨터에서 돌려 통과하는지 확인한다
 
 ## 지금 범위 밖 (요청이 있을 때만 만든다)
 - 로그아웃 버튼(마이로그에서 뺐고 홈 화면에 만든다, 2026-10-14 팀 결정. `MainScreen`의 `onSignOut`이 연결 자리)
