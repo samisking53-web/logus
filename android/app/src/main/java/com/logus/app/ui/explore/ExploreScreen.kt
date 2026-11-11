@@ -369,6 +369,8 @@ internal fun RecapPage(
             onProfileClick = actions.onProfile,
             onLongPress = onLongPress?.let { { it(recap) } },
             onClick = { actions.onOpenFull(recap) },
+            // 누르기 전에는 10초만 미리보기(전체·내 영상·검색·모아보기 모두, 2026-11-11 요청)
+            previewMillis = EXPLORE_PREVIEW_MILLIS,
             muted = actions.muted,
             onToggleMute = actions.onToggleMute,
             modifier = Modifier
