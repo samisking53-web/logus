@@ -407,6 +407,11 @@ class RecapExporter(
     }
 }
 
+/** 영상 다운로드 워터마크 글자·크기(픽셀, 1080×1920 기준) */
+private const val WATERMARK = "LOG EARTH"
+private const val WATERMARK_TEXT = 30f
+private const val WATERMARK_ICON = 36f
+
 /**
  * 칸 영상들을 한 화면(1080×1920)에 놓는 규칙: 칸 i 는 그 장면의 i번째 자리(위에서부터)에 놓고,
  * 그 장면에 없는 칸(지도 장면, 칸이 적은 장면)은 보이지 않게 한다.
@@ -432,7 +437,8 @@ private fun sceneAt(scenes: List<ExportScene>, ms: Long): ExportScene? =
 
 /**
  * 합친 화면 위에 덧그리는 그림(1080×1920, 투명 바탕): 위 로고·여정 이름·날짜·시각, 영상 장면의 프로필·장소 이름·칸 사이 흰 선,
- * 지도 장면의 지도 사진·점선·프로필 핀(같은 건물은 흰 말풍선에 묶음)·"© OpenStreetMap".
+ * 지도 장면의 지도 사진·점선·프로필 핀(같은 건물은 흰 말풍선에 묶음)·"© OpenStreetMap",
+ * 모든 장면 오른쪽 아래 워터마크(지구 로고 + "LOG EARTH", 2026-11-11 팀 요청).
  * 움직이지 않는 장면은 한 번 그린 그림을 다시 쓴다.
  */
 private class RecapOverlay(
@@ -476,6 +482,51 @@ private class RecapOverlay(
             is RecapScene -> drawLanes(canvas, scene, step)
         }
         drawHeader(canvas, scene.step)
+        // 지도 장면은 오른쪽 아래 "© OpenStreetMap" 위로 올려 겹치지 않게 한다
+        drawWatermark(canvas, if (scene.step is RecapMapScene) ReelLayout.HEIGHT - 100f else ReelLayout.HEIGHT - 34f)
+    }
+
+    /**
+     * 워터마크(2026-11-11 팀 요청): 오른쪽 아래에 지구 로고 + "LOG EARTH".
+     * 흰색을 조금 투명하게(80%) 하고 어두운 그림자를 깔아 밝은 영상 위에서도 보이게 한다. baseline 은 글자 바닥 높이.
+     */
+    private fun drawWatermark(canvas: Canvas, baseline: Float) {
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.textSize = WATERMARK_TEXT
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.letterSpacing = 0.15f
+        val textWidth = paint.measureText(WATERMARK)
+        val right = ReelLayout.WIDTH - 36f
+        val textLeft = right - textWidth
+        val iconLeft = textLeft - WATERMARK_ICON - 10f
+        val iconTop = baseline - WATERMARK_ICON + 4f
+        val alpha = (255 * 0.8f).toInt()
+        val shadow = PhotoScrim.toArgb()
+        globe?.let {
+            val icon = it.toBitmap(WATERMARK_ICON.toInt(), WATERMARK_ICON.toInt())
+            // 그림자: 로고 모양을 어둡게 한 번 깔고 그 위에 흰 로고
+            paint.colorFilter = android.graphics.PorterDuffColorFilter(shadow, android.graphics.PorterDuff.Mode.SRC_IN)
+            canvas.drawBitmap(icon, iconLeft + 2f, iconTop + 2f, paint)
+            paint.colorFilter = android.graphics.PorterDuffColorFilter(white, android.graphics.PorterDuff.Mode.SRC_IN)
+            paint.alpha = alpha
+            canvas.drawBitmap(icon, iconLeft, iconTop, paint)
+            paint.colorFilter = null
+        }
+        paint.color = white
+        paint.alpha = alpha
+        paint.setShadowLayer(6f, 0f, 2f, shadow)
+        canvas.drawText(WATERMARK, textLeft, baseline, paint)
+        paint.clearShadowLayer()
+    }
+
+    /** 워터마크가 차지하는 너비(로고 + 간격 + 글자). 맨 아래 칸 장소 이름이 워터마크 밑으로 들어가지 않게 쓴다 */
+    private fun watermarkWidth(): Float {
+        paint.reset()
+        paint.textSize = WATERMARK_TEXT
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.letterSpacing = 0.15f
+        return paint.measureText(WATERMARK) + WATERMARK_ICON + 10f
     }
 
     private fun drawHeader(canvas: Canvas, step: RecapStep) {
@@ -520,7 +571,9 @@ private class RecapOverlay(
                 paint.shader = LinearGradient(0f, bottom - 140f, 0f, bottom, 0, PhotoScrim.toArgb(), Shader.TileMode.CLAMP)
                 canvas.drawRect(0f, bottom - 140f, ReelLayout.WIDTH.toFloat(), bottom, paint)
                 paint.shader = null
-                text(canvas, place, 36f, bottom - 34f, 36f, white, bold = true, maxWidth = ReelLayout.WIDTH - 72f)
+                // 맨 아래 칸은 오른쪽 아래 워터마크 자리를 비워 둔다
+                val maxWidth = if (i == step.clips.lastIndex) ReelLayout.WIDTH - 72f - watermarkWidth() - 24f else ReelLayout.WIDTH - 72f
+                text(canvas, place, 36f, bottom - 34f, 36f, white, bold = true, maxWidth = maxWidth)
             }
             drawFace(canvas, clip.uid, clip.colorIndex, 36f + 46f, top + 36f + 46f, 46f, badge = false)
         }
