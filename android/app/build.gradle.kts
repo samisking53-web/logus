@@ -23,6 +23,8 @@ android {
         // 출시 전에 AdMob 콘솔에서 만든 앱 ID·광고 단위 ID 로 바꾼다(비밀 값이 아니라 코드에 둬도 된다).
         manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
+        // DAY RECAP 일반 다운로드 중에 보여 주는 300×250 배너(2026-11-11). 지금은 구글 공개 테스트 배너 ID(출시 전에 AdMob 콘솔에서 만든 ID 로 바꾼다)
+        buildConfigField("String", "ADMOB_EXPORT_BANNER_UNIT_ID", "\"ca-app-pub-3940256099942544/6300978111\"")
     }
 
     buildTypes {

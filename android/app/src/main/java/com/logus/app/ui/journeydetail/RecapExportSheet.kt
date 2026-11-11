@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,8 +60,8 @@ import com.logus.app.ui.theme.Success
 /**
  * "영상 추출"을 누르면 아래에서 올라오는 창.
  * - 영상 다운로드(일반): 폰에서 릴스 크기 영상을 만들어 갤러리 "LOG US" 앨범에 저장한다(onDownload).
- *   오른쪽 아래에 "LOG EARTH" 워터마크가 들어간다. 무료이고 광고도 없다.
- * - 프리미엄 다운로드: 50코인을 내면 워터마크 없이 만든다(onPremium → 확인 팝업 PremiumExportDialog).
+ *   오른쪽 아래에 "LOG EARTH" 워터마크가 들어간다. 무료이고, 만드는 동안 진행 팝업 위쪽에 광고(300×250 배너)가 나온다(2026-11-11).
+ * - 프리미엄 다운로드: 50코인을 내면 광고·워터마크 없이 만든다(onPremium → 확인 팝업 PremiumExportDialog).
  *   한 번 낸 날(premiumUnlocked = true)은 "이날 무료"로 보이고 팝업 없이 바로 만든다.
  * - 탐색에 자동 올리기(2026-11-08 탐색과 연결): 확인 팝업 → 구성원 모두에게 동의 요청 → 모두 동의하면 탐색(S08)에 전체 공개.
  *   onPublish 가 null 이면 예전처럼 흐리게 둔다.
@@ -96,7 +98,7 @@ fun RecapExportSheet(
                 filled = true,
                 title = "영상 다운로드",
                 badge = "무료",
-                body = "릴스 크기(세로) 영상으로 갤러리 \"LOG US\" 앨범에 저장해요. 오른쪽 아래에 LOG EARTH 워터마크가 들어가요",
+                body = "릴스 크기 영상으로 갤러리 \"LOG US\" 앨범에 저장해요. 만드는 동안 광고가 나오고, LOG EARTH 워터마크가 들어가요",
                 onClick = onDownload,
             )
             Spacer(Modifier.height(10.dp))
@@ -108,9 +110,9 @@ fun RecapExportSheet(
                 badge = if (premiumUnlocked == true) "이날 무료" else "${PremiumExport.COINS}코인",
                 coinBadge = premiumUnlocked != true,
                 body = if (premiumUnlocked == true) {
-                    "이날은 ${PremiumExport.COINS}코인을 냈어요. 워터마크 없이 다시 받아도 무료예요"
+                    "이날은 ${PremiumExport.COINS}코인을 냈어요. 광고·워터마크 없이 다시 받아도 무료예요"
                 } else {
-                    "워터마크 없이 깔끔하게 저장해요. 한 번 내면 이날 DAY RECAP은 다시 받아도 무료예요"
+                    "광고·워터마크 없이 저장해요. 한 번 내면 이날 DAY RECAP은 다시 받아도 무료예요"
                 },
                 onClick = onPremium,
             )
@@ -213,16 +215,27 @@ private fun ExportOption(
 /**
  * 영상 만들기 팝업들: 만드는 중(진행률·취소) → 다 만들면 "갤러리에 저장했어요"([닫기] [공유하기]) / 실패하면 안내.
  * 공유하기는 안드로이드 공유 창(인스타그램·카카오톡 등)을 띄운다.
+ * 일반 다운로드는 만드는 동안 위쪽에 광고(ExportAdBanner, 300×250)를 보여 주고 그 아래에 "지금 DAY RECAP 영상을 추출하고 있어요"
+ * ·진행 막대·[취소]를 둔다(2026-11-11 팀 요청). 광고와 영상 만들기는 동시에 돌아서 광고 때문에 늦어지지 않는다.
+ * 프리미엄은 광고 없이 예전 모양 그대로.
  */
 @Composable
 fun RecapExportDialogs(state: RecapExportState, onCancel: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     when (state) {
         RecapExportState.Idle -> Unit
-        is RecapExportState.Working -> ExportDialog(onDismiss = {}) {
-            CircleIcon { Icon(painterResource(R.drawable.ic_download), null, tint = LogUsColors.primaryStrong, modifier = Modifier.size(30.dp)) }
-            DialogTitle("영상을 만들고 있어요")
-            DialogBody("폰에서 직접 만들어서 시간이 조금 걸려요.\n화면을 켜 둔 채로 기다려 주세요.")
+        is RecapExportState.Working -> ExportDialog(onDismiss = {}, wide = !state.premium) {
+            if (state.premium) {
+                CircleIcon { Icon(painterResource(R.drawable.ic_download), null, tint = LogUsColors.primaryStrong, modifier = Modifier.size(30.dp)) }
+                DialogTitle("영상을 만들고 있어요")
+                DialogBody("프리미엄이라 광고·워터마크가 없어요.\n화면을 켜 둔 채로 기다려 주세요.")
+            } else {
+                // 일반 다운로드: 위에 광고, 그 아래에 추출 중 안내(광고를 못 불러오면 광고 자리는 접힌다)
+                ExportAdBanner()
+                Spacer(Modifier.height(18.dp))
+                DialogTitle("지금 DAY RECAP 영상을\n추출하고 있어요")
+                DialogBody("광고가 나오는 동안에도 영상은 계속 만들어져요.\n화면을 켜 둔 채로 기다려 주세요.")
+            }
             Spacer(Modifier.height(16.dp))
             LinearProgressIndicator(
                 progress = { state.progress },
@@ -239,6 +252,15 @@ fun RecapExportDialogs(state: RecapExportState, onCancel: () -> Unit, onDismiss:
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
             )
+            if (!state.premium) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "광고·워터마크 없이 받으려면 프리미엄 다운로드(${PremiumExport.COINS}코인)",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 Text("취소", color = LogUsColors.primaryStrong, fontWeight = FontWeight.Bold)
@@ -292,18 +314,20 @@ fun RecapExportDialogs(state: RecapExportState, onCancel: () -> Unit, onDismiss:
     }
 }
 
+/** wide: 광고(가로 300dp)를 넣을 때는 팝업 양옆 여백을 줄여 광고가 잘리지 않게 한다. 키가 작은 폰은 위아래로 밀어 본다 */
 @Composable
-private fun ExportDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+private fun ExportDialog(onDismiss: () -> Unit, wide: Boolean = false, content: @Composable () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
         Column(
             Modifier
-                .padding(horizontal = 28.dp)
+                .padding(horizontal = if (wide) 14.dp else 28.dp, vertical = 16.dp)
                 .fillMaxWidth()
                 .background(LogUsColors.card, RoundedCornerShape(28.dp))
-                .padding(start = 22.dp, end = 22.dp, top = 26.dp, bottom = 20.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(start = if (wide) 14.dp else 22.dp, end = if (wide) 14.dp else 22.dp, top = if (wide) 18.dp else 26.dp, bottom = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) { content() }
     }
