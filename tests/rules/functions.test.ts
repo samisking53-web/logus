@@ -291,8 +291,8 @@ describe("초대 보상(코드 주인에게 5코인)과 구성원별 초대 코�
 });
 
 describe("saveLogLocation (코인 중복 지급 거부)", () => {
-  it("위치를 처음 저장하면 10코인을 한 번만 준다", async () => {
-    expect(LOCATION_REWARD_COINS).toBe(10); // 화면 문구 "+10P"와 같아야 한다
+  it("위치를 처음 저장하면 5코인을 한 번만 준다", async () => {
+    expect(LOCATION_REWARD_COINS).toBe(5); // 앱 Coins.LOCATION_REWARD·화면 문구 "+5코인"과 같아야 한다(2026-11-11 팀 결정 10 → 5)
     const owner = newUid();
     const { journeyId } = await makeJourney(owner);
     const logId = await makeLog(journeyId, owner);
@@ -415,10 +415,11 @@ describe("하루 코인 제한(UTC 하루 50코인)", () => {
     expect(DAILY_COIN_LIMIT).toBe(50);
     const owner = newUid();
     const { journeyId } = await makeJourney(owner);
-    for (let i = 0; i < 5; i++) {
+    // 위치 5코인 × 10번 = 50코인
+    for (let i = 0; i < DAILY_COIN_LIMIT / LOCATION_REWARD_COINS; i++) {
       const logId = await makeLog(journeyId, owner);
       const result = await saveLogLocation.run(req({ journeyId, logId, location: porto, placeName: "히베이라" }, owner));
-      expect(result).toEqual({ coinsGranted: 10, dailyLimitReached: false });
+      expect(result).toEqual({ coinsGranted: LOCATION_REWARD_COINS, dailyLimitReached: false });
     }
     expect(await coinsOf(owner)).toBe(50);
     expect((await db.doc(`coinDaily/${owner}`).get()).data()).toEqual({ date: utcToday(), earned: 50 });
@@ -435,17 +436,17 @@ describe("하루 코인 제한(UTC 하루 50코인)", () => {
     expect((await saveLogLocation.run(req({ journeyId, logId: sixth, location: porto }, owner))).coinsGranted).toBe(0);
   });
 
-  it("50에 가까우면 50까지만 채운다(오늘 45코인 → 위치 저장 5코인)", async () => {
+  it("50에 가까우면 50까지만 채운다(오늘 48코인 → 위치 저장 2코인)", async () => {
     const owner = newUid();
     await makeUser(owner, "성연");
     const { journeyId } = await makeJourney(owner);
-    await setDailyCoins(owner, 45);
+    await setDailyCoins(owner, 48);
     const logId = await makeLog(journeyId, owner);
     const result = await saveLogLocation.run(req({ journeyId, logId, location: porto }, owner));
-    expect(result).toEqual({ coinsGranted: 5, dailyLimitReached: true });
-    expect(await coinsOf(owner)).toBe(5);
+    expect(result).toEqual({ coinsGranted: 2, dailyLimitReached: true });
+    expect(await coinsOf(owner)).toBe(2);
     expect((await db.doc(`coinDaily/${owner}`).get()).get("earned")).toBe(50);
-    expect((await db.doc(`users/${owner}/coinLedger/${logId}`).get()).data()).toMatchObject({ amount: 5, dailyLimited: true });
+    expect((await db.doc(`users/${owner}/coinLedger/${logId}`).get()).data()).toMatchObject({ amount: 2, dailyLimited: true });
   });
 
   it("어제(UTC) 받은 코인은 오늘 제한에 세지 않는다", async () => {
@@ -454,8 +455,8 @@ describe("하루 코인 제한(UTC 하루 50코인)", () => {
     await setDailyCoins(owner, 50, "2000-01-01");
     const logId = await makeLog(journeyId, owner);
     expect(await saveLogLocation.run(req({ journeyId, logId, location: porto }, owner)))
-      .toEqual({ coinsGranted: 10, dailyLimitReached: false });
-    expect((await db.doc(`coinDaily/${owner}`).get()).data()).toEqual({ date: utcToday(), earned: 10 });
+      .toEqual({ coinsGranted: LOCATION_REWARD_COINS, dailyLimitReached: false });
+    expect((await db.doc(`coinDaily/${owner}`).get()).data()).toEqual({ date: utcToday(), earned: LOCATION_REWARD_COINS });
   });
 
   it("초대 코인도 같은 하루 50코인 안에서 준다(오늘 48코인 → 2코인, 그다음 친구는 0코인)", async () => {
@@ -572,20 +573,20 @@ describe("leaveJourney (참여자의 여정 나가기)", () => {
 describe("앱 안 알림함(users/{uid}/notifications)", () => {
   const inbox = (uid: string, id: string) => db.doc(`users/${uid}/notifications/${id}`).get();
 
-  it("위치 코인을 받으면 '+10코인을 받았어요', 덜 받으면 안내를 붙이고, 못 받으면 남기지 않는다", async () => {
+  it("위치 코인을 받으면 '+5코인을 받았어요', 덜 받으면 안내를 붙이고, 못 받으면 남기지 않는다", async () => {
     const owner = newUid();
     const { journeyId } = await makeJourney(owner);
     const first = await makeLog(journeyId, owner);
     await saveLogLocation.run(req({ journeyId, logId: first, location: porto }, owner));
     expect((await inbox(owner, `coin_${first}`)).data()).toMatchObject({
-      type: "coins", title: "+10코인을 받았어요", body: "위치와 함께 저장한 기록 1개", journeyId, read: false,
+      type: "coins", title: "+5코인을 받았어요", body: "위치와 함께 저장한 기록 1개", journeyId, read: false,
     });
 
-    await setDailyCoins(owner, 45);
+    await setDailyCoins(owner, 48);
     const partial = await makeLog(journeyId, owner);
     await saveLogLocation.run(req({ journeyId, logId: partial, location: porto }, owner));
     const p = (await inbox(owner, `coin_${partial}`)).data();
-    expect(p?.title).toBe("+5코인을 받았어요");
+    expect(p?.title).toBe("+2코인을 받았어요");
     expect(p?.body).toContain("오늘 받을 수 있는 코인");
 
     const none = await makeLog(journeyId, owner);
