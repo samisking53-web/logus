@@ -75,6 +75,11 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/primary" />
 
+        <!-- 광고(AdMob) 앱 ID: 없으면 광고 라이브러리가 앱을 멈춘다. 값은 app/build.gradle.kts 의 admobAppId(지금은 구글 테스트 ID) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+
         <!-- 홈 프로필 사진 수정 팝업의 "사진 찍기": 폰의 카메라 앱이 찍은 사진을 앱 전용 임시 폴더에 쓰게 잠깐 허락한다 -->
         <provider
             android:name="androidx.core.content.FileProvider"

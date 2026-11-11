@@ -351,6 +351,23 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
     await assertFails(deleteDoc(doc(db, "coinDaily", ALICE)));
   });
 
+  it("오늘 광고로 코인 받은 횟수(adDaily)는 본인만 읽고, 쓰기·지우기는 누구도 못 한다(서버만)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "adDaily", ALICE), { date: "2026-11-11", count: 2 });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(ALICE), "adDaily", ALICE)));
+    await assertFails(getDoc(doc(dbAs(BOB), "adDaily", ALICE)));
+    await assertFails(getDoc(doc(dbAnon(), "adDaily", ALICE)));
+    // 횟수를 0으로 되돌리거나 지워서 더 받는 것을 막는다
+    await assertFails(setDoc(doc(dbAs(ALICE), "adDaily", ALICE), { date: "2026-11-11", count: 0 }));
+    await assertFails(updateDoc(doc(dbAs(ALICE), "adDaily", ALICE), { count: 0 }));
+    await assertFails(deleteDoc(doc(dbAs(ALICE), "adDaily", ALICE)));
+    // 광고 코인 내역도 앱이 직접 만들 수 없다
+    await assertFails(setDoc(doc(dbAs(ALICE), "users", ALICE, "coinLedger", "ad_fake12345"), {
+      reason: "adReward", amount: 2, createdAt: serverTimestamp(),
+    }));
+  });
+
   it("약관 동의 기록: 본인만 필수 항목을 모두 동의한 기록을 한 번 만든다", async () => {
     const ok = { ageOver14: true, terms: true, location: true, notifyNewLogs: false, agreedAt: serverTimestamp() };
     const ref = (uid: string, version = "2026-10-03") => doc(dbAs(uid), "users", uid, "agreements", version);

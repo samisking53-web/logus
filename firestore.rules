@@ -11,6 +11,7 @@ rules_version = '2';
 //   - journeys 문서와 members 문서 생성·참여·삭제·나가기 → createJourney, joinJourney, deleteJourney, leaveJourney
 //   - 기록의 location·placeName·isPublic → saveLogLocation
 //   - users.coins, coinLedger, coinDaily(하루 50코인 제한) → saveLogLocation, joinJourney
+//   - 광고 코인(users.coins, coinLedger ad_*, adDaily 하루 5번) → claimAdReward (adDaily 는 본인 읽기만)
 //   - users/{uid}/notifications(앱 안 알림함, 읽음 표시만 본인) → sendCaptureReminders·saveLogLocation·joinJourney·onLogCreated·DAY RECAP 공개 함수
 //   - invites, inviteAttempts, publicLogs, sharedRecaps, recaps → 서버 함수
 //   (coinDaily·inviteAttempts·invites 는 아래에 match 가 없어서 앱이 읽지도 쓰지도 못한다)
@@ -331,6 +332,13 @@ service cloud.firestore {
     // 초대 코드 입력 횟수(joinJourney 가 하루 횟수 제한에 쓴다). 서버만 쓴다.
     match /inviteAttempts/{uid} {
       allow read, write: if false;
+    }
+
+    // 오늘 광고를 보고 코인 받은 횟수(2026-11-11, 하루 5번 · 1번에 2코인). date(UTC "YYYY-MM-DD")·count·updatedAt.
+    // 홈 "광고 보고 코인 받기" 팝업의 "오늘 N / 5회 사용"에 쓰려고 본인만 읽는다. 쓰기는 서버 함수 claimAdReward 만.
+    match /adDaily/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
     }
 
     // 탐색 화면용 공개 기록 사본

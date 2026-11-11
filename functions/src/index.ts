@@ -2,6 +2,7 @@
 // 기능별 함수는 functions/src/ 아래에 파일을 나눠 만들고, 여기서 export 한다.
 import "./globalOptions"; // 반드시 맨 위에 둔다
 
+export { claimAdReward } from "./adReward";
 export { createJourney } from "./createJourney";
 export { deleteJourney } from "./deleteJourney";
 export { getInviteCode } from "./getInviteCode";

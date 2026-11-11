@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +31,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,7 +50,8 @@ import java.util.Locale
 /**
  * 홈 위쪽 프로필 상자(S01·S01-A 공통): 동그란 프로필 + 카메라 표시, 닉네임, "사진 수정 ›", 오른쪽 위 보유 코인.
  * compact = true 면 S01-A 처럼 조금 작게 그린다(아래 여정 카드 자리를 넓히려고).
- * onEditPhoto: 프로필 사진 수정 화면은 나중에 만든다. 지금은 눌러도 아무 일도 없다.
+ * onEditPhoto: "사진 수정 ›" → P03 프로필 사진 수정 팝업.
+ * onCoinClick: 보유 코인 상자를 누르면 "광고 보고 코인 받기" 팝업(2026-11-11 요청). 있으면 상자 왼쪽 위에 보라 "+" 표시.
  */
 @Composable
 fun ProfileCard(
@@ -55,6 +59,7 @@ fun ProfileCard(
     compact: Boolean,
     onEditPhoto: () -> Unit,
     modifier: Modifier = Modifier,
+    onCoinClick: (() -> Unit)? = null,
 ) {
     val avatarSize = if (compact) 72.dp else 96.dp
     Box(
@@ -98,6 +103,7 @@ fun ProfileCard(
 
         CoinChip(
             coins = profile.coins,
+            onClick = onCoinClick,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(14.dp),
@@ -141,27 +147,64 @@ private fun ProfilePhoto(photoUrl: String?, size: Dp) {
     }
 }
 
-/** 보유 코인 상자: "보유 코인" + 금색 동전 + 숫자 */
+/**
+ * 보유 코인 상자: "보유 코인" + 금색 동전 + 숫자.
+ * onClick 이 있으면 누를 수 있고(광고 보고 코인 받기, 2026-11-11), 왼쪽 위 모서리에 보라 동그라미 "+" 표시를 겹쳐 그린다.
+ */
 @Composable
-private fun CoinChip(coins: Long, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(LogUsColors.coinChip)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        Text("보유 코인", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-        Spacer(Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-            CoinIcon(Modifier.size(15.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                NumberFormat.getNumberInstance(Locale.KOREA).format(coins),
-                color = LogUsColors.amberText,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-            )
+private fun CoinChip(coins: Long, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
+    val count = NumberFormat.getNumberInstance(Locale.KOREA).format(coins)
+    Box(modifier) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(LogUsColors.coinChip)
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .clickable(role = Role.Button, onClickLabel = "광고 보고 코인 받기", onClick = onClick)
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = "보유 코인 ${count}개. 눌러서 광고 보고 코인 받기"
+                            }
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            Text("보유 코인", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+                CoinIcon(Modifier.size(15.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    count,
+                    color = LogUsColors.amberText,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        if (onClick != null) {
+            // 왼쪽 위 모서리 보라 "+"(광고로 코인을 더 받을 수 있다는 뜻, 흰 테두리). 상자 밖으로 조금 걸치게 그린다
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (-9).dp, y = (-9).dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .border(2.dp, LogUsColors.card, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
         }
     }
 }

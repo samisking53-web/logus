@@ -11,6 +11,7 @@ import {
   localDateIn,
   utcToday,
 } from "../../functions/src/common";
+import { AD_REWARD_COINS, AD_REWARD_DAILY_LIMIT, claimAdReward } from "../../functions/src/adReward";
 import { createJourney } from "../../functions/src/createJourney";
 import { deleteJourney } from "../../functions/src/deleteJourney";
 import { getInviteCode } from "../../functions/src/getInviteCode";
@@ -641,5 +642,70 @@ describe("앱 안 알림함(users/{uid}/notifications)", () => {
     expect(windowStartLabel(seoul(10, 0, 30), anchor, 2, "Asia/Seoul")).toBe("23:20");
     expect(windowStartLabel(seoul(10, 10, 0), anchor, 3, "Asia/Seoul")).toBe("07:20");
     expect(windowStartLabel(seoul(10, 10, 0), null, 2, "Asia/Seoul")).toBeNull();
+  });
+});
+
+describe("claimAdReward (광고 보고 코인 받기: 하루 5번 · 1번에 2코인)", () => {
+  const viewId = () => randomUUID();
+
+  it("광고를 끝까지 보면 2코인을 주고, 코인 내역·오늘 횟수를 남긴다", async () => {
+    expect(AD_REWARD_COINS).toBe(2); // 앱 ads/AdReward.kt 의 COINS_PER_VIEW 와 같아야 한다
+    expect(AD_REWARD_DAILY_LIMIT).toBe(5); // 앱 ads/AdReward.kt 의 DAILY_LIMIT 과 같아야 한다
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    const id = viewId();
+    const res = await claimAdReward.run(req({ viewId: id }, uid));
+    expect(res).toEqual({ granted: 2, count: 1, limit: 5, coins: 2, alreadyClaimed: false, limitReached: false });
+    expect(await coinsOf(uid)).toBe(2);
+    expect((await db.doc(`users/${uid}/coinLedger/ad_${id}`).get()).data())
+      .toMatchObject({ reason: "adReward", amount: 2, viewId: id });
+    expect((await db.doc(`adDaily/${uid}`).get()).data()).toMatchObject({ date: utcToday(), count: 1 });
+  });
+
+  it("같은 광고(viewId)로 다시 불러도 코인을 두 번 주지 않는다", async () => {
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    const id = viewId();
+    await claimAdReward.run(req({ viewId: id }, uid));
+    const again = await claimAdReward.run(req({ viewId: id }, uid));
+    expect(again).toMatchObject({ granted: 0, count: 1, coins: 2, alreadyClaimed: true });
+    expect(await coinsOf(uid)).toBe(2);
+  });
+
+  it("하루 5번(10코인)까지만 주고, 6번째는 0코인과 limitReached 를 돌려준다", async () => {
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    for (let i = 1; i <= AD_REWARD_DAILY_LIMIT; i++) {
+      const res = await claimAdReward.run(req({ viewId: viewId() }, uid));
+      expect(res).toMatchObject({ granted: 2, count: i, limitReached: i === AD_REWARD_DAILY_LIMIT });
+    }
+    expect(await coinsOf(uid)).toBe(10);
+    const sixth = await claimAdReward.run(req({ viewId: viewId() }, uid));
+    expect(sixth).toEqual({ granted: 0, count: 5, limit: 5, coins: 10, alreadyClaimed: false, limitReached: true });
+    expect(await coinsOf(uid)).toBe(10);
+  });
+
+  it("어제(UTC) 본 횟수는 오늘 횟수에 세지 않는다", async () => {
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    await db.doc(`adDaily/${uid}`).set({ date: "2000-01-01", count: 5 });
+    expect(await claimAdReward.run(req({ viewId: viewId() }, uid))).toMatchObject({ granted: 2, count: 1 });
+  });
+
+  it("위치·초대 코인의 하루 50코인 제한과는 따로 센다", async () => {
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    await setDailyCoins(uid, 50);
+    expect(await claimAdReward.run(req({ viewId: viewId() }, uid))).toMatchObject({ granted: 2 });
+    expect((await db.doc(`coinDaily/${uid}`).get()).get("earned")).toBe(50);
+  });
+
+  it("로그인하지 않았거나, 광고 ID 가 이상하거나, 프로필이 없으면 거부", async () => {
+    await expect(claimAdReward.run(req({ viewId: viewId() }))).rejects.toMatchObject({ code: "unauthenticated" });
+    const uid = newUid();
+    await makeUser(uid, "성연");
+    await expect(claimAdReward.run(req({ viewId: "짧음" }, uid))).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(claimAdReward.run(req({ viewId: "a/b/c/d/e/f/g" }, uid))).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(claimAdReward.run(req({ viewId: viewId() }, newUid()))).rejects.toMatchObject({ code: "failed-precondition" });
   });
 });

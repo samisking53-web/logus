@@ -18,6 +18,11 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // 광고(AdMob) ID. 지금은 구글이 공개한 "테스트용" ID 라서 진짜 광고·수익은 없고 테스트 광고만 나온다.
+        // 출시 전에 AdMob 콘솔에서 만든 앱 ID·광고 단위 ID 로 바꾼다(비밀 값이 아니라 코드에 둬도 된다).
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+        buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
     }
 
     buildTypes {
@@ -35,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // BuildConfig.ADMOB_REWARDED_UNIT_ID
     }
 }
 
@@ -84,5 +90,6 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.transformer)
     implementation(libs.media3.effect)
+    implementation(libs.play.services.ads) // 홈 "광고 보고 코인 받기"(보상형 광고, 하루 5번 · 2코인)
     implementation(libs.work.runtime.ktx) // 오프라인에서 찍은 기록을 인터넷이 연결되면 자동으로 올리기(앱이 꺼져 있어도)
 }
