@@ -1,4 +1,4 @@
-// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 10코인을 준다 (S05·S07, 화면 문구 "+10코인")
+// saveLogLocation: 기록에 위치·장소 이름·탐색 공개 여부를 저장하고, 위치가 있으면 5코인을 준다 (S05·S07, 화면 문구 "+5코인", 2026-11-11 팀 결정으로 10 → 5)
 // 코인은 users/{uid}/coinLedger/{logId} 문서가 없을 때만 준다 → 같은 기록으로 두 번 받을 수 없다.
 // 하루(UTC)에 받을 수 있는 코인은 DAILY_COIN_LIMIT(50)까지다. 넘으면 50까지만 채워 주고(0코인일 수도 있다),
 // 그래도 coinLedger 는 만들어서 이 기록의 위치 보상은 끝난 것으로 한다(다음 날 다시 불러도 주지 않음).
@@ -15,10 +15,10 @@ import {
 } from "./common";
 import { inboxData, inboxRef } from "./notifications";
 
-export const LOCATION_REWARD_COINS = 10;
+export const LOCATION_REWARD_COINS = 5;
 
 type Location = { lat: number; lng: number };
-/** coinsGranted: 이번에 받은 코인. dailyLimitReached: 하루 50코인 제한 때문에 10코인보다 적게 받았다 */
+/** coinsGranted: 이번에 받은 코인. dailyLimitReached: 하루 50코인 제한 때문에 5코인보다 적게 받았다 */
 type SaveLogLocationResult = { coinsGranted: number; dailyLimitReached: boolean };
 
 /** 좌표를 확인한다. 없거나 (0,0)이면 결측(null)으로 본다. */
@@ -95,7 +95,7 @@ export const saveLogLocation = onCall(async (request): Promise<SaveLogLocationRe
     }
     if (coinsGranted > 0) {
       grantDailyCoins(tx, daily, coinsGranted);
-      // 앱 안 알림 목록(2026-11-09): "+10코인을 받았어요 · 위치와 함께 저장한 기록 1개"(폰 알림은 보내지 않음)
+      // 앱 안 알림 목록(2026-11-09): "+5코인을 받았어요 · 위치와 함께 저장한 기록 1개"(폰 알림은 보내지 않음)
       tx.set(inboxRef(uid, `coin_${logId}`), inboxData({
         type: "coins",
         title: `+${coinsGranted}코인을 받았어요`,

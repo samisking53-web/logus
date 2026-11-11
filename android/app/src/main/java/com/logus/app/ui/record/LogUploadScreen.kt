@@ -100,7 +100,7 @@ import java.io.File
  *   끝나면(또는 다시 누르면) 첫 장면으로 돌아온다(LocalVideoPlayer)
  * - 흰 카드: "위치 확인 · 지도 열기"(누르면 영상 아래부터 L01 위치 확인 팝업이 올라온다.
  *   고르면 "위치 확인 완료"와 장소 이름·주소가 보인다) →
- *   "영상·위치 함께 저장하면 +10코인" → □ 위치 없이 저장(켜면 위치 정보 없이 올린다)
+ *   "영상·위치 함께 저장하면 +5코인"(Coins.LOCATION_REWARD) → □ 위치 없이 저장(켜면 위치 정보 없이 올린다)
  * - 테마(직접 입력): 인스타그램 해시태그처럼 # 이 앞에 붙는다. 띄어쓰기·쉼표·완료로 태그 하나가 되고 최대 3개.
  * - 맨 아래 "여정에 올리기"와 작은 안내 문구
  * 뒤로 가기(버튼·폰)는 S04 로 돌아간다(찍은 영상은 지우고 다시 찍는다). 올리는 중에는 뒤로 가지 않는다.
@@ -333,7 +333,7 @@ private fun LogUploadContent(
                 }
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "영상·위치 함께 저장하면 +10코인",
+                    "영상·위치 함께 저장하면 +${Coins.LOCATION_REWARD}코인",
                     color = LogUsColors.primaryStrong,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -491,7 +491,7 @@ private fun LogUploadContent(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            if (state.withoutLocation) "위치 없이 여정에 올려요 (코인은 쌓이지 않아요)" else "지도에 핀이 찍히고 코인 10개가 쌓여요 (하루 최대 ${Coins.DAILY_LIMIT}개)",
+            if (state.withoutLocation) "위치 없이 여정에 올려요 (코인은 쌓이지 않아요)" else "지도에 핀이 찍히고 코인 ${Coins.LOCATION_REWARD}개가 쌓여요 (하루 최대 ${Coins.DAILY_LIMIT}개)",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
             textAlign = TextAlign.Center,

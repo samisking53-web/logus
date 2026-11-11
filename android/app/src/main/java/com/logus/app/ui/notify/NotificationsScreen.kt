@@ -346,7 +346,7 @@ private fun NotificationsPreview() {
                 items = listOf(
                     AppNotification("1", "captureReminder", "지금 기록할 시간이에요", "우리의 포르투 · 2시간 주기 알림", "j", null, false, at(today, 14, 30)),
                     AppNotification("2", "newLog", "민지 님이 기록을 올렸어요", "우리의 포르투 · 11:20 시간대", "j", null, false, at(today, 13, 8)),
-                    AppNotification("3", "coins", "+10코인을 받았어요", "위치와 함께 저장한 기록 1개", "j", null, false, at(today, 12, 35)),
+                    AppNotification("3", "coins", "+5코인을 받았어요", "위치와 함께 저장한 기록 1개", "j", null, false, at(today, 12, 35)),
                     AppNotification("4", "memberJoined", "수현 님이 여정에 참여했어요", "우리의 포르투 · 구성원 4명", "j", null, true, at(today, 10, 12)),
                     AppNotification("5", "recapPublished", "DAY RECAP을 탐색에 올렸어요", "우리의 포르투 · 9.23 · 모두 동의해서 전체 공개로 올라갔어요", null, "r", true, at(y, 21, 0)),
                 ),

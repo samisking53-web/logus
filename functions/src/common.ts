@@ -101,7 +101,7 @@ export const MAX_INVITE_CODE_TRIES = 5;
 
 /**
  * 한 사람이 하루(UTC 0시 ~ 24시)에 받을 수 있는 코인(2026-11-04 팀 결정). 위치 저장·초대 보상을 모두 합친 값이다.
- * 넘으면 50까지만 채워 준다(예: 오늘 45코인 받았는데 위치 저장 10코인 → 5코인만). 앱 Coins.DAILY_LIMIT 과 같아야 한다.
+ * 넘으면 50까지만 채워 준다(예: 오늘 48코인 받았는데 위치 저장 5코인 → 2코인만). 앱 Coins.DAILY_LIMIT 과 같아야 한다.
  */
 export const DAILY_COIN_LIMIT = 50;
 

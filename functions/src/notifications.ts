@@ -12,7 +12,7 @@ export type NotificationType =
   | "captureReminder" // 지금 기록할 시간이에요(촬영 알림)
   | "newLog" // ○○ 님이 기록을 올렸어요
   | "memberJoined" // ○○ 님이 여정에 참여했어요
-  | "coins" // +10코인을 받았어요
+  | "coins" // +5코인을 받았어요
   | "recapConsent" // DAY RECAP 공개 동의 요청
   | "recapPublished" // DAY RECAP을 탐색에 올렸어요
   | "recapRejected"; // DAY RECAP 공개가 취소됐어요

@@ -260,7 +260,7 @@ fun MainScreen(
     // S05 에서 여정에 다 올리면: 영상 파일을 지우고 카메라를 닫아 홈(S01-A)으로
     LaunchedEffect(uploadState.done) {
         if (uploadState.done && capturing) {
-            notificationsViewModel.refreshCount(uid) // 위치 코인을 받았으면 알림 목록에 "+10코인"이 생긴다
+            notificationsViewModel.refreshCount(uid) // 위치 코인을 받았으면 알림 목록에 "+5코인"이 생긴다
             captureViewModel.discardAndStop()
             capturing = false
             mapOpen = false
