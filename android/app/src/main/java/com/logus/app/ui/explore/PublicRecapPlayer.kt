@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,12 +75,17 @@ import kotlinx.coroutines.delay
 /** 한 장면 칸 수 상한(DAY RECAP 과 같은 4칸) */
 private const val MAX_CLIPS = 4
 
+/** 탐색 목록(전체·내 영상·검색·모아보기)에서 누르기 전 미리보기로 재생하는 시간(2026-11-11 요청) */
+const val EXPLORE_PREVIEW_MILLIS = 10_000L
+
 /**
  * S08·S09 공개 DAY RECAP 재생(스토리보드 v5 21쪽: 같은 시간대 구성원 기록을 위·가운데·아래로 나눠 재생).
  * - active(지금 화면에 보이는 영상)이면 저절로 재생하고, 장면이 끝나면 다음 장면, 마지막 장면 뒤에는 처음부터 다시(자동 재생).
  * - 칸마다 그 사람의 영상을 동시에 재생한다. 소리는 맨 위 칸만. 영상을 누르면 멈춤·다시 재생.
  * - 재생기는 active 일 때만 만들고, 다른 영상으로 넘기거나 화면을 닫으면 정리한다(동시에 여러 영상 디코더를 잡지 않게).
  * - 영상은 폰 안 캐시(VideoCache)를 거쳐 받아서 한 번 본 영상은 다시 받지 않는다.
+ * - previewMillis 가 있으면(탐색 목록) 그 시간만큼만 재생하고 첫 장면으로 돌아가 멈춘다(미리보기). 아래 막대는 미리보기 진행.
+ *   다른 영상으로 넘겼다 돌아오면 다시 처음부터 미리보기. 전체는 눌러서 큰 화면으로 본다.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -100,6 +106,8 @@ fun PublicRecapPlayer(
     onToggleMute: (() -> Unit)? = null,
     /** 큰 화면: 아래에 재생 막대([❚❚/▶] 진행 막대 "1 / N")를 두고, 소리 버튼은 그 위 오른쪽에 따로 둔다 */
     showControls: Boolean = false,
+    /** 미리보기 시간(탐색 목록은 EXPLORE_PREVIEW_MILLIS). null 이면 끝까지 */
+    previewMillis: Long? = null,
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -111,7 +119,32 @@ fun PublicRecapPlayer(
     var players by remember { mutableStateOf<List<ExoPlayer>>(emptyList()) }
     val scene = recap.scenes[sceneIndex.coerceIn(0, recap.scenes.lastIndex)]
     val clips = scene.clips.take(MAX_CLIPS)
-    val playing = active && !paused && players.isNotEmpty()
+    // 미리보기: 재생한 시간과 끝났는지(보일 때마다 처음부터)
+    var previewElapsed by remember(recap.id) { mutableLongStateOf(0L) }
+    var previewDone by remember(recap.id) { mutableStateOf(false) }
+    LaunchedEffect(active) {
+        if (active && previewMillis != null) {
+            previewElapsed = 0L
+            previewDone = false
+            if (sceneIndex != 0) {
+                sceneIndex = 0
+                round++
+            }
+        }
+    }
+    val playing = active && !paused && !previewDone && players.isNotEmpty()
+
+    // 미리보기 시간을 세다가 다 되면 첫 장면으로 돌아가 멈춘다
+    LaunchedEffect(playing, previewMillis) {
+        if (!playing || previewMillis == null) return@LaunchedEffect
+        while (previewElapsed < previewMillis) {
+            delay(100)
+            previewElapsed += 100
+        }
+        previewDone = true
+        if (sceneIndex != 0) sceneIndex = 0
+        round++
+    }
 
     // 보이는 동안만 재생기를 만든다
     DisposableEffect(active, recap.id) {
@@ -294,7 +327,20 @@ fun PublicRecapPlayer(
                 )
             }
         } else {
-            // 목록: 오른쪽 아래 소리 버튼 + 아래 얇은 진행 막대
+            // 목록: 미리보기가 끝나면 가운데 아래 안내, 오른쪽 아래 소리 버튼, 아래 얇은 진행 막대(미리보기면 10초 진행)
+            if (previewDone) {
+                Text(
+                    "미리보기 끝 · 눌러서 전체 보기",
+                    color = PhotoFrame,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                        .background(PhotoScrim, RoundedCornerShape(50))
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                )
+            }
             if (onToggleMute != null) {
                 Box(Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 10.dp)) {
                     MuteButton(muted, onToggleMute, background = true)
@@ -307,9 +353,14 @@ fun PublicRecapPlayer(
                     .height(3.dp)
                     .background(PhotoScrim),
             ) {
+                val shown = when {
+                    !active -> 0f
+                    previewMillis != null -> (previewElapsed.toFloat() / previewMillis).coerceIn(0f, 1f)
+                    else -> progress
+                }
                 Box(
                     Modifier
-                        .fillMaxWidth(if (active) progress else 0f)
+                        .fillMaxWidth(shown)
                         .height(3.dp)
                         .background(PhotoFrame),
                 )
