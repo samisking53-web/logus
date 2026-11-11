@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.logus.app.ads.AdRewardViewModel
 import com.logus.app.auth.Coins
 import com.logus.app.auth.Profile
 import com.logus.app.feed.JourneyFeedViewModel
@@ -61,11 +62,13 @@ import com.logus.app.ui.explore.PublishConfirmDialog
 import com.logus.app.ui.explore.RecapConsentDialog
 import com.logus.app.ui.feed.JourneyFeedScreen
 import com.logus.app.ui.feed.UndoDeleteBar
+import com.logus.app.ui.home.AdRewardDialog
 import com.logus.app.ui.home.CoverPhotoDialog
 import com.logus.app.ui.home.HomeScreen
 import com.logus.app.ui.home.JoinCodeDialog
 import com.logus.app.ui.home.ProfileEditDialog
 import com.logus.app.ui.home.RemoveJourneyDialog
+import com.logus.app.ui.home.findActivity
 import com.logus.app.ui.notify.NotificationsScreen
 import com.logus.app.ui.invite.InviteAcceptedDialog
 import com.logus.app.ui.invite.InvitePreviewScreen
@@ -108,6 +111,8 @@ fun MainScreen(
     // DAY RECAP 탐색 공개 동의 팝업. consentRequest 는 동의 요청 알림을 누를 때마다 1씩 늘어난다(MainActivity)
     consentViewModel: RecapConsentViewModel = viewModel(),
     consentRequest: Int = 0,
+    // 홈 보유 코인 상자 → 광고 보고 코인 받기 팝업(2026-11-11 요청, 하루 5번 · 1번에 2코인)
+    adRewardViewModel: AdRewardViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
@@ -126,6 +131,7 @@ fun MainScreen(
     // 진행 중인 여정 확인(로그인한 사람이 바뀔 때만 다시 읽는다)
     LaunchedEffect(uid) { homeViewModel.load(uid) }
     val homeState by homeViewModel.state.collectAsStateWithLifecycle()
+    val adRewardState by adRewardViewModel.state.collectAsStateWithLifecycle()
 
     val ongoing = homeState as? HomeUiState.Ongoing
     val myInviteCode by homeViewModel.myInviteCode.collectAsStateWithLifecycle()
@@ -515,6 +521,8 @@ fun MainScreen(
                         state = homeState,
                         // S01·S01-A 프로필 상자 "사진 수정 ›" → 프로필 사진 수정 팝업(뒤는 지금 홈 그대로)
                         onEditPhoto = { profileEditViewModel.open(profile) },
+                        // 보유 코인 상자 → 광고 보고 코인 받기 팝업
+                        onCoinClick = { adRewardViewModel.open(uid) },
                         onRetry = { homeViewModel.load(uid, force = true) },
                         onNewJourney = {
                             newJourneyViewModel.reset()
@@ -588,6 +596,14 @@ fun MainScreen(
                     tab = it
                 })
             }
+        }
+        // 광고 보고 코인 받기 팝업(홈 보유 코인 상자). 받으면 홈 보유 코인 숫자는 실시간으로 바뀐다(AuthViewModel 이 users/{uid} 를 지켜봄)
+        if (tab == MainTab.HOME) {
+            AdRewardDialog(
+                state = adRewardState,
+                onWatch = { context.findActivity()?.let(adRewardViewModel::watch) },
+                onClose = adRewardViewModel::close,
+            )
         }
         // 프로필 사진 수정 팝업. 저장하면 홈 프로필은 실시간으로 바뀐다(AuthViewModel 이 users/{uid} 를 지켜봄)
         if (profileEditState.open && tab == MainTab.HOME) {

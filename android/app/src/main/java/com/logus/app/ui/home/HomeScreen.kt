@@ -76,6 +76,8 @@ fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
     onEditPhoto: () -> Unit = {},
+    // 보유 코인 상자 → 광고 보고 코인 받기 팝업(2026-11-11 요청, MainScreen)
+    onCoinClick: () -> Unit = {},
     onNewJourney: () -> Unit = {},
     onJoinWithCode: () -> Unit = {},
     onInviteToJourney: (Journey) -> Unit = {},
@@ -112,7 +114,7 @@ fun HomeScreen(
             is HomeUiState.Ongoing -> {
                 // S01-A (로고 아래 "길게 눌러 삭제" 안내 띠는 종 버튼과 겹쳐 보여서 뺐다, 2026-11-09 팀 요청)
                 Spacer(Modifier.height(8.dp))
-                ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto)
+                ProfileCard(profile, compact = true, onEditPhoto = onEditPhoto, onCoinClick = onCoinClick)
                 Spacer(Modifier.height(if (state.journeys.size > 1) 24.dp else 32.dp))
                 if (state.journeys.size > 1) {
                     Text(
@@ -174,7 +176,7 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(20.dp))
-                ProfileCard(profile, compact = false, onEditPhoto = onEditPhoto)
+                ProfileCard(profile, compact = false, onEditPhoto = onEditPhoto, onCoinClick = onCoinClick)
 
                 when (state) {
                     HomeUiState.Loading -> Box(
