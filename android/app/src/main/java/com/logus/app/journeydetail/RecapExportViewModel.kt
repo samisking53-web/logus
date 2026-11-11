@@ -19,7 +19,8 @@ import java.time.LocalDate
 /** S17 DAY RECAP 영상 추출 상태: 아무것도 안 함 / 만드는 중(0~1) / 다 만듦(갤러리 주소) / 실패(안내 글) */
 sealed interface RecapExportState {
     data object Idle : RecapExportState
-    data class Working(val progress: Float) : RecapExportState
+    /** premium: 프리미엄(광고·워터마크 없음)으로 만드는 중인지. 일반 다운로드는 만드는 동안 광고를 보여 준다(2026-11-11) */
+    data class Working(val progress: Float, val premium: Boolean = false) : RecapExportState
     /** premium: 프리미엄(워터마크 없음)으로 만들었는지 */
     data class Done(val uri: Uri, val premium: Boolean = false) : RecapExportState
     /** detail: 원인을 찾기 위한 오류 이름(팝업 아래 작은 글자. 팀원이 캡처해 개발에 쓴다) */
@@ -49,7 +50,7 @@ data class PremiumConfirmState(
 /**
  * S17 DAY RECAP "영상 추출 → 영상 다운로드" 상태 관리. 영상은 RecapExporter 가 폰에서 만든다.
  * 화면을 돌려도 만들기가 끊기지 않게 ViewModel 에서 돌린다. 여정 상세를 닫으면(ViewModel 정리) 멈춘다.
- * 2026-11-11 팀 요청: 일반 다운로드(무료·워터마크 있음, 광고 없음)와 프리미엄 다운로드(50코인·워터마크 없음)로 나눈다.
+ * 2026-11-11 팀 요청: 일반 다운로드(무료·워터마크 있음, 만드는 동안 광고)와 프리미엄 다운로드(50코인·광고·워터마크 없음)로 나눈다.
  * 프리미엄은 한 번 내면 같은 여정의 같은 날 DAY RECAP 을 다시 받을 때도 무료다(서버 unlockPremiumExport 가 기억).
  */
 class RecapExportViewModel(app: Application) : AndroidViewModel(app) {
@@ -79,11 +80,11 @@ class RecapExportViewModel(app: Application) : AndroidViewModel(app) {
             fileStem = fileStem(day),
             watermark = !premium,
         )
-        _state.value = RecapExportState.Working(0f)
+        _state.value = RecapExportState.Working(0f, premium)
         job = viewModelScope.launch {
             _state.value = try {
                 val uri = exporter.export(info, detail.recapScenes, detail.members) { p ->
-                    if (_state.value is RecapExportState.Working) _state.value = RecapExportState.Working(p)
+                    if (_state.value is RecapExportState.Working) _state.value = RecapExportState.Working(p, premium)
                 }
                 RecapExportState.Done(uri, premium)
             } catch (e: CancellationException) {

@@ -25,8 +25,8 @@ enum class AdOutcome { EARNED, CLOSED_EARLY, FAILED }
 object RewardedAds {
     @Volatile private var initialized = false
 
-    /** 광고 라이브러리 준비(앱에서 처음 광고를 부를 때 한 번) */
-    private fun ensureInitialized(context: Context) {
+    /** 광고 라이브러리 준비(앱에서 처음 광고를 부를 때 한 번). 영상 추출 중 배너(ExportAdBanner)도 이것을 부른다 */
+    fun ensureInitialized(context: Context) {
         if (initialized) return
         initialized = true
         MobileAds.initialize(context.applicationContext) {}
