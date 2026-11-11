@@ -45,22 +45,36 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.logus.app.R
+import com.logus.app.journeydetail.PremiumExport
 import com.logus.app.journeydetail.RecapExportState
+import com.logus.app.ui.home.CoinIcon
 import com.logus.app.ui.theme.LogUsColors
 import com.logus.app.ui.theme.OnPrimary
 import com.logus.app.ui.theme.Primary
 import com.logus.app.ui.theme.Success
 
-// S17 DAY RECAP 영상 추출 (2026-10-28 팀 요청: "영상 추출" → [영상 다운로드] [탐색에 자동 올리기])
+// S17 DAY RECAP 영상 추출 (2026-10-28 팀 요청: "영상 추출" → [영상 다운로드] [탐색에 자동 올리기],
+// 2026-11-11 팀 요청: 다운로드를 일반(무료·워터마크)과 프리미엄(50코인·워터마크 없음)으로 나눔)
 /**
  * "영상 추출"을 누르면 아래에서 올라오는 창.
- * - 영상 다운로드: 폰에서 릴스 크기 영상을 만들어 갤러리 "LOG US" 앨범에 저장한다(onDownload).
+ * - 영상 다운로드(일반): 폰에서 릴스 크기 영상을 만들어 갤러리 "LOG US" 앨범에 저장한다(onDownload).
+ *   오른쪽 아래에 "LOG EARTH" 워터마크가 들어간다. 무료이고 광고도 없다.
+ * - 프리미엄 다운로드: 50코인을 내면 워터마크 없이 만든다(onPremium → 확인 팝업 PremiumExportDialog).
+ *   한 번 낸 날(premiumUnlocked = true)은 "이날 무료"로 보이고 팝업 없이 바로 만든다.
  * - 탐색에 자동 올리기(2026-11-08 탐색과 연결): 확인 팝업 → 구성원 모두에게 동의 요청 → 모두 동의하면 탐색(S08)에 전체 공개.
  *   onPublish 가 null 이면 예전처럼 흐리게 둔다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecapExportSheet(summary: String, onDismiss: () -> Unit, onDownload: () -> Unit, onPublish: (() -> Unit)? = null) {
+fun RecapExportSheet(
+    summary: String,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit,
+    onPremium: () -> Unit = {},
+    /** 이날 프리미엄을 이미 50코인으로 열었는지(null = 아직 모름) */
+    premiumUnlocked: Boolean? = null,
+    onPublish: (() -> Unit)? = null,
+) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -81,8 +95,24 @@ fun RecapExportSheet(summary: String, onDismiss: () -> Unit, onDownload: () -> U
                 icon = R.drawable.ic_download,
                 filled = true,
                 title = "영상 다운로드",
-                body = "릴스 크기(세로) 영상으로 만들어 갤러리 \"LOG US\" 앨범에 저장해요",
+                badge = "무료",
+                body = "릴스 크기(세로) 영상으로 갤러리 \"LOG US\" 앨범에 저장해요. 오른쪽 아래에 LOG EARTH 워터마크가 들어가요",
                 onClick = onDownload,
+            )
+            Spacer(Modifier.height(10.dp))
+            ExportOption(
+                icon = R.drawable.ic_download,
+                filled = false,
+                coin = true,
+                title = "프리미엄 다운로드",
+                badge = if (premiumUnlocked == true) "이날 무료" else "${PremiumExport.COINS}코인",
+                coinBadge = premiumUnlocked != true,
+                body = if (premiumUnlocked == true) {
+                    "이날은 ${PremiumExport.COINS}코인을 냈어요. 워터마크 없이 다시 받아도 무료예요"
+                } else {
+                    "워터마크 없이 깔끔하게 저장해요. 한 번 내면 이날 DAY RECAP은 다시 받아도 무료예요"
+                },
+                onClick = onPremium,
             )
             Spacer(Modifier.height(10.dp))
             ExportOption(
@@ -108,6 +138,10 @@ private fun ExportOption(
     onClick: (() -> Unit)?,
     badge: String? = null,
     upload: Boolean = false,
+    /** 아이콘 자리에 동전 그림(프리미엄 다운로드) */
+    coin: Boolean = false,
+    /** 배지를 코인 색(연한 주황 바탕·amber 글자)으로 */
+    coinBadge: Boolean = false,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val content: @Composable () -> Unit = {
@@ -121,10 +155,19 @@ private fun ExportOption(
             Box(
                 Modifier
                     .size(44.dp)
-                    .background(if (filled) Primary else LogUsColors.iconCircle, CircleShape),
+                    .background(
+                        when {
+                            coin -> LogUsColors.warningBox
+                            filled -> Primary
+                            else -> LogUsColors.iconCircle
+                        },
+                        CircleShape,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
+                if (coin) {
+                    CoinIcon(Modifier.size(26.dp))
+                } else Icon(
                     painterResource(icon),
                     contentDescription = null,
                     tint = if (filled) OnPrimary else LogUsColors.primaryStrong,
@@ -142,11 +185,11 @@ private fun ExportOption(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             badge,
-                            color = LogUsColors.primaryStrong,
+                            color = if (coinBadge) LogUsColors.amberText else LogUsColors.primaryStrong,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
-                                .background(LogUsColors.profileBox, RoundedCornerShape(8.dp))
+                                .background(if (coinBadge) LogUsColors.warningBox else LogUsColors.profileBox, RoundedCornerShape(8.dp))
                                 .padding(horizontal = 7.dp, vertical = 1.dp),
                         )
                     }
@@ -204,7 +247,10 @@ fun RecapExportDialogs(state: RecapExportState, onCancel: () -> Unit, onDismiss:
         is RecapExportState.Done -> ExportDialog(onDismiss = onDismiss) {
             CircleIcon { Icon(Icons.Filled.Check, null, tint = Success, modifier = Modifier.size(30.dp)) }
             DialogTitle("갤러리에 저장했어요")
-            DialogBody("앨범 \"LOG US\"에서 볼 수 있어요.")
+            DialogBody(
+                if (state.premium) "워터마크 없는 프리미엄 영상이에요.\n앨범 \"LOG US\"에서 볼 수 있어요."
+                else "앨범 \"LOG US\"에서 볼 수 있어요.",
+            )
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).height(48.dp)) {

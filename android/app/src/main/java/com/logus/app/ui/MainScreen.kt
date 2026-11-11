@@ -163,6 +163,8 @@ fun MainScreen(
     var viewingDetail by rememberSaveable { mutableStateOf(false) }
     val detailState by detailViewModel.state.collectAsStateWithLifecycle()
     val exportState by exportViewModel.state.collectAsStateWithLifecycle()
+    val premiumStatus by exportViewModel.premium.collectAsStateWithLifecycle()
+    val premiumConfirm by exportViewModel.premiumConfirm.collectAsStateWithLifecycle()
     val exploreState by exploreViewModel.state.collectAsStateWithLifecycle()
     // DAY RECAP 탐색 공개 동의: 홈에 들어올 때와 동의 요청 알림을 누를 때 내가 답할 요청이 있는지 본다
     val consentState by consentViewModel.state.collectAsStateWithLifecycle()
@@ -458,6 +460,15 @@ fun MainScreen(
                 onExportPublish = { consentViewModel.askPublish(detailState) },
                 onExportCancel = exportViewModel::cancel,
                 onExportDismiss = exportViewModel::dismiss,
+                // 프리미엄 다운로드(50코인 · 워터마크 없음, 한 번 낸 날은 다시 무료, 2026-11-11)
+                onExportSheetOpen = { exportViewModel.checkPremium(detailState) },
+                premiumUnlocked = premiumStatus?.takeIf { p ->
+                    p.journeyId == detailState.journey?.id && p.date == detailState.days.getOrNull(detailState.dayIndex)?.toString()
+                }?.unlocked,
+                onExportPremium = { exportViewModel.askPremium(detailState) },
+                premiumConfirm = premiumConfirm,
+                onPremiumConfirm = { exportViewModel.confirmPremium(detailState) },
+                onPremiumDismiss = exportViewModel::dismissPremium,
             )
         }
     } else if (viewingFeed && active != null) {

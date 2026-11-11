@@ -368,6 +368,25 @@ describe("사용자·코인 (코인 중복 지급 거부)", () => {
     }));
   });
 
+  it("프리미엄 추출을 연 날(premiumExports)은 본인만 읽고, 만들기·고치기·지우기는 누구도 못 한다(서버만)", async () => {
+    const id = "j1_2026-11-11";
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", ALICE, "premiumExports", id), { journeyId: "j1", date: "2026-11-11" });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(ALICE), "users", ALICE, "premiumExports", id)));
+    await assertFails(getDoc(doc(dbAs(BOB), "users", ALICE, "premiumExports", id)));
+    await assertFails(getDoc(doc(dbAnon(), "users", ALICE, "premiumExports", id)));
+    // 50코인을 내지 않고 앱이 직접 "열었음"을 만들 수 없다
+    await assertFails(setDoc(doc(dbAs(ALICE), "users", ALICE, "premiumExports", "j1_2026-11-12"), {
+      journeyId: "j1", date: "2026-11-12",
+    }));
+    await assertFails(updateDoc(doc(dbAs(ALICE), "users", ALICE, "premiumExports", id), { date: "2026-11-12" }));
+    await assertFails(deleteDoc(doc(dbAs(ALICE), "users", ALICE, "premiumExports", id)));
+    await assertFails(setDoc(doc(dbAs(ALICE), "users", ALICE, "coinLedger", "premiumExport_j1_2026-11-12"), {
+      reason: "premiumExport", amount: -50, createdAt: serverTimestamp(),
+    }));
+  });
+
   it("약관 동의 기록: 본인만 필수 항목을 모두 동의한 기록을 한 번 만든다", async () => {
     const ok = { ageOver14: true, terms: true, location: true, notifyNewLogs: false, agreedAt: serverTimestamp() };
     const ref = (uid: string, version = "2026-10-03") => doc(dbAs(uid), "users", uid, "agreements", version);
