@@ -9,6 +9,7 @@ export { getInviteCode } from "./getInviteCode";
 export { joinJourney } from "./joinJourney";
 export { leaveJourney } from "./leaveJourney";
 export { onLogCreated } from "./logNotifications";
+export { unlockPremiumExport } from "./premiumExport";
 export { previewInvite } from "./previewInvite";
 export { answerRecapPublish, requestRecapPublish } from "./recapPublish";
 export {

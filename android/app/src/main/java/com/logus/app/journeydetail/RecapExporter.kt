@@ -76,8 +76,12 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.min
 
-/** 저장 영상의 글자: 여정 이름, 날짜·도시("2026.9.24 · 포르투"), 파일 이름 앞부분 */
-data class RecapExportInfo(val title: String, val subtitle: String, val fileStem: String)
+/**
+ * 저장 영상의 글자: 여정 이름, 날짜·도시("2026.9.24 · 포르투"), 파일 이름 앞부분.
+ * watermark: 오른쪽 아래 "LOG EARTH" 워터마크를 넣을지. 일반 다운로드는 넣고(true),
+ * 프리미엄 다운로드(50코인, 2026-11-11 팀 요청)는 빼고 만든다(false).
+ */
+data class RecapExportInfo(val title: String, val subtitle: String, val fileStem: String, val watermark: Boolean = true)
 
 /**
  * S17 DAY RECAP "영상 다운로드"(2026-10-22 팀 결정): 서버 비용 없이 폰에서 영상을 합친다(Media3 Transformer).
@@ -438,7 +442,7 @@ private fun sceneAt(scenes: List<ExportScene>, ms: Long): ExportScene? =
 /**
  * 합친 화면 위에 덧그리는 그림(1080×1920, 투명 바탕): 위 로고·여정 이름·날짜·시각, 영상 장면의 프로필·장소 이름·칸 사이 흰 선,
  * 지도 장면의 지도 사진·점선·프로필 핀(같은 건물은 흰 말풍선에 묶음)·"© OpenStreetMap",
- * 모든 장면 오른쪽 아래 워터마크(지구 로고 + "LOG EARTH", 2026-11-11 팀 요청).
+ * 모든 장면 오른쪽 아래 워터마크(지구 로고 + "LOG EARTH", 2026-11-11 팀 요청. 프리미엄 다운로드는 빼고 그림).
  * 움직이지 않는 장면은 한 번 그린 그림을 다시 쓴다.
  */
 private class RecapOverlay(
@@ -482,8 +486,11 @@ private class RecapOverlay(
             is RecapScene -> drawLanes(canvas, scene, step)
         }
         drawHeader(canvas, scene.step)
-        // 지도 장면은 오른쪽 아래 "© OpenStreetMap" 위로 올려 겹치지 않게 한다
-        drawWatermark(canvas, if (scene.step is RecapMapScene) ReelLayout.HEIGHT - 100f else ReelLayout.HEIGHT - 34f)
+        // 지도 장면은 오른쪽 아래 "© OpenStreetMap" 위로 올려 겹치지 않게 한다. 프리미엄(워터마크 없음)은 그리지 않는다
+        // ("© OpenStreetMap" 출처 표시는 지도 이용 규칙이라 프리미엄에도 그대로 남는다)
+        if (info.watermark) {
+            drawWatermark(canvas, if (scene.step is RecapMapScene) ReelLayout.HEIGHT - 100f else ReelLayout.HEIGHT - 34f)
+        }
     }
 
     /**
@@ -572,7 +579,8 @@ private class RecapOverlay(
                 canvas.drawRect(0f, bottom - 140f, ReelLayout.WIDTH.toFloat(), bottom, paint)
                 paint.shader = null
                 // 맨 아래 칸은 오른쪽 아래 워터마크 자리를 비워 둔다
-                val maxWidth = if (i == step.clips.lastIndex) ReelLayout.WIDTH - 72f - watermarkWidth() - 24f else ReelLayout.WIDTH - 72f
+                // 맨 아래 칸 장소 이름은 워터마크 자리만큼 짧게(워터마크가 없으면 끝까지)
+                val maxWidth = if (info.watermark && i == step.clips.lastIndex) ReelLayout.WIDTH - 72f - watermarkWidth() - 24f else ReelLayout.WIDTH - 72f
                 text(canvas, place, 36f, bottom - 34f, 36f, white, bold = true, maxWidth = maxWidth)
             }
             drawFace(canvas, clip.uid, clip.colorIndex, 36f + 46f, top + 36f + 46f, 46f, badge = false)

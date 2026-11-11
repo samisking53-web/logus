@@ -12,6 +12,7 @@ rules_version = '2';
 //   - 기록의 location·placeName·isPublic → saveLogLocation
 //   - users.coins, coinLedger, coinDaily(하루 50코인 제한) → saveLogLocation, joinJourney
 //   - 광고 코인(users.coins, coinLedger ad_*, adDaily 하루 5번) → claimAdReward (adDaily 는 본인 읽기만)
+//   - 프리미엄 추출 50코인(users.coins, coinLedger premiumExport_*, users/{uid}/premiumExports) → unlockPremiumExport (premiumExports 는 본인 읽기만)
 //   - users/{uid}/notifications(앱 안 알림함, 읽음 표시만 본인) → sendCaptureReminders·saveLogLocation·joinJourney·onLogCreated·DAY RECAP 공개 함수
 //   - invites, inviteAttempts, publicLogs, sharedRecaps, recaps → 서버 함수
 //   (coinDaily·inviteAttempts·invites 는 아래에 match 가 없어서 앱이 읽지도 쓰지도 못한다)
@@ -206,6 +207,13 @@ service cloud.firestore {
 
       // 탐색 장소 열람 기록(unlockRecapPlaces 가 20코인을 빼면서 만든다). 본인만 읽고, 쓰기는 서버만
       match /placeUnlocks/{recapId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // 프리미엄 추출(워터마크 없는 DAY RECAP 다운로드)을 연 여정·날짜(문서 ID {journeyId}_{date}, 2026-11-11).
+      // unlockPremiumExport 가 50코인을 빼면서 만든다. 앱이 "이날은 이미 열었어요(무료)"를 보려고 본인만 읽고, 쓰기는 서버만
+      match /premiumExports/{unlockId} {
         allow read: if isOwner(uid);
         allow write: if false;
       }

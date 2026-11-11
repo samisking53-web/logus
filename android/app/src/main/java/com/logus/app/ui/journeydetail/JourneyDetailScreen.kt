@@ -74,6 +74,7 @@ import com.logus.app.journey.Journey
 import com.logus.app.journey.Member
 import com.logus.app.ui.components.ProfileDialog
 import com.logus.app.journeydetail.JourneyDetailUiState
+import com.logus.app.journeydetail.PremiumConfirmState
 import com.logus.app.journeydetail.RecapExportState
 import com.logus.app.journeydetail.RecapMapScene
 import com.logus.app.record.FeedLog
@@ -125,6 +126,16 @@ fun JourneyDetailScreen(
     onExportPublish: () -> Unit = {},
     onExportCancel: () -> Unit = {},
     onExportDismiss: () -> Unit = {},
+    /** 추출 창을 열 때(이날 프리미엄을 이미 열었는지 읽기, 2026-11-11) */
+    onExportSheetOpen: () -> Unit = {},
+    /** 이날 프리미엄(50코인, 워터마크 없음)을 이미 열었는지(null = 모름) */
+    premiumUnlocked: Boolean? = null,
+    /** "프리미엄 다운로드": 이미 연 날이면 바로 만들고, 아니면 확인 팝업 */
+    onExportPremium: () -> Unit = {},
+    /** 프리미엄 확인 팝업(null 이면 닫힘)과 "50코인 사용"·닫기 */
+    premiumConfirm: PremiumConfirmState? = null,
+    onPremiumConfirm: () -> Unit = {},
+    onPremiumDismiss: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(DetailTab.RECORDS) }
     // S15 기록 카드를 누르면 여는 원본 영상 팝업(N01 과 같다)
@@ -160,6 +171,9 @@ fun JourneyDetailScreen(
         videoUrl = videoUrl,
         onExportDownload = onExportDownload,
         onExportPublish = onExportPublish,
+        onExportSheetOpen = onExportSheetOpen,
+        premiumUnlocked = premiumUnlocked,
+        onExportPremium = onExportPremium,
         onOpenVideo = { videoOf = it.id },
     )
     videoOf?.let { startId ->
@@ -174,6 +188,7 @@ fun JourneyDetailScreen(
             onDismiss = { videoOf = null },
         )
     }
+    premiumConfirm?.let { PremiumExportDialog(state = it, onConfirm = onPremiumConfirm, onDismiss = onPremiumDismiss) }
     RecapExportDialogs(state = exportState, onCancel = onExportCancel, onDismiss = onExportDismiss)
 }
 
@@ -192,6 +207,9 @@ private fun JourneyDetailContent(
     videoUrl: suspend (FeedLog) -> String?,
     onExportDownload: () -> Unit = {},
     onExportPublish: () -> Unit = {},
+    onExportSheetOpen: () -> Unit = {},
+    premiumUnlocked: Boolean? = null,
+    onExportPremium: () -> Unit = {},
     /** S15 기록 카드를 누르면 원본 영상 팝업 */
     onOpenVideo: (FeedLog) -> Unit = {},
 ) {
@@ -230,6 +248,9 @@ private fun JourneyDetailContent(
                 videoUrl = videoUrl,
                 onExportDownload = onExportDownload,
                 onExportPublish = onExportPublish,
+                onExportSheetOpen = onExportSheetOpen,
+                premiumUnlocked = premiumUnlocked,
+                onExportPremium = onExportPremium,
             )
         }
     }
@@ -513,8 +534,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.MapTab(state: Journey
 
 /**
  * S17 DAY RECAP: 연보라 카드 안에 재생기(RecapPlayer) → 아래 "영상 추출"(2026-10-28 팀 요청).
- * "영상 추출" → 아래에서 올라오는 창 [영상 다운로드] [탐색에 자동 올리기(구성원 동의 요청)].
- * 안드로이드 9 이하는 갤러리에 저장하려면 저장 공간 권한이 필요해서, 다운로드를 누를 때 먼저 묻는다.
+ * "영상 추출" → 아래에서 올라오는 창 [영상 다운로드(무료·워터마크)] [프리미엄 다운로드(50코인·워터마크 없음, 2026-11-11)]
+ * [탐색에 자동 올리기(구성원 동의 요청)].
+ * 안드로이드 9 이하는 갤러리에 저장하려면 저장 공간 권한이 필요해서, 다운로드(일반·프리미엄)를 누를 때 먼저 묻는다
+ * (프리미엄은 권한을 받은 뒤에 코인 확인 팝업을 띄워서, 코인을 냈는데 저장을 못 하는 일이 없게 한다).
  * 그날 영상 기록이 없으면 안내 글(영상 추출도 누를 수 없음).
  */
 @Composable
@@ -525,23 +548,37 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
     videoUrl: suspend (FeedLog) -> String?,
     onExportDownload: () -> Unit,
     onExportPublish: () -> Unit,
+    onExportSheetOpen: () -> Unit,
+    premiumUnlocked: Boolean?,
+    onExportPremium: () -> Unit,
 ) {
     val context = LocalContext.current
     var sheetOpen by remember { mutableStateOf(false) }
+    // 권한을 받은 뒤 할 일: true = 프리미엄 다운로드, false = 일반 다운로드(화면이 다시 만들어져도 기억)
+    var premiumAfterPermission by rememberSaveable { mutableStateOf(false) }
     // 안드로이드 9 이하: 저장 공간 권한을 받은 뒤 만들기 시작
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            onExportDownload()
+            if (premiumAfterPermission) onExportPremium() else onExportDownload()
         } else {
             Toast.makeText(context, "갤러리에 저장하려면 저장 공간 권한이 필요해요", Toast.LENGTH_SHORT).show()
         }
     }
-    val startDownload = {
+    val withStoragePermission = { premium: Boolean ->
         sheetOpen = false
         val needsPermission = Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
-        if (needsPermission) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else onExportDownload()
+        if (needsPermission) {
+            premiumAfterPermission = premium
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else if (premium) {
+            onExportPremium()
+        } else {
+            onExportDownload()
+        }
     }
+    // 창을 열 때 이날 프리미엄을 이미 열었는지 읽는다("50코인" / "이날 무료")
+    LaunchedEffect(sheetOpen) { if (sheetOpen) onExportSheetOpen() }
     if (sheetOpen) {
         val mapCount = state.recapScenes.count { it is RecapMapScene }
         RecapExportSheet(
@@ -551,7 +588,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecapTab(
                 if (mapCount > 0) "지도 장면 포함" else null,
             ).joinToString(" · "),
             onDismiss = { sheetOpen = false },
-            onDownload = startDownload,
+            onDownload = { withStoragePermission(false) },
+            onPremium = { withStoragePermission(true) },
+            premiumUnlocked = premiumUnlocked,
             onPublish = {
                 sheetOpen = false
                 onExportPublish()

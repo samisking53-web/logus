@@ -18,6 +18,7 @@ import { getInviteCode } from "../../functions/src/getInviteCode";
 import { joinJourney } from "../../functions/src/joinJourney";
 import { leaveJourney } from "../../functions/src/leaveJourney";
 import { notifyNewLog, windowStartLabel } from "../../functions/src/logNotifications";
+import { PREMIUM_EXPORT_COINS, unlockPremiumExport } from "../../functions/src/premiumExport";
 import { previewInvite } from "../../functions/src/previewInvite";
 import { LOCATION_REWARD_COINS, saveLogLocation } from "../../functions/src/saveLogLocation";
 
@@ -707,5 +708,75 @@ describe("claimAdReward (광고 보고 코인 받기: 하루 5번 · 1번에 2�
     await expect(claimAdReward.run(req({ viewId: "짧음" }, uid))).rejects.toMatchObject({ code: "invalid-argument" });
     await expect(claimAdReward.run(req({ viewId: "a/b/c/d/e/f/g" }, uid))).rejects.toMatchObject({ code: "invalid-argument" });
     await expect(claimAdReward.run(req({ viewId: viewId() }, newUid()))).rejects.toMatchObject({ code: "failed-precondition" });
+  });
+});
+
+describe("unlockPremiumExport (프리미엄 추출 50코인: 워터마크 없이, 같은 날은 다시 무료)", () => {
+  /** 코인 coins 개를 가진 여정 주인을 만든다 */
+  async function ownerWith(coins: number) {
+    const owner = newUid();
+    await makeUser(owner, "성연");
+    await db.doc(`users/${owner}`).update({ coins });
+    const { journeyId, inviteCode } = await makeJourney(owner);
+    return { owner, journeyId, inviteCode };
+  }
+
+  it("50코인을 빼고 열어 둔 기록·코인 내역을 남기고, 같은 날은 다시 불러도 코인을 빼지 않는다", async () => {
+    expect(PREMIUM_EXPORT_COINS).toBe(50); // 앱 journeydetail/PremiumExport.kt 의 COINS 와 같아야 한다
+    const { owner, journeyId } = await ownerWith(120);
+    const first = await unlockPremiumExport.run(req({ journeyId, date: START }, owner));
+    expect(first).toEqual({ coins: 70, charged: 50 });
+    expect(await coinsOf(owner)).toBe(70);
+    expect((await db.doc(`users/${owner}/premiumExports/${journeyId}_${START}`).get()).data())
+      .toMatchObject({ journeyId, date: START });
+    expect((await db.doc(`users/${owner}/coinLedger/premiumExport_${journeyId}_${START}`).get()).data())
+      .toMatchObject({ reason: "premiumExport", amount: -50, journeyId, date: START });
+
+    // 같은 날 DAY RECAP 을 다시 받을 때는 무료
+    expect(await unlockPremiumExport.run(req({ journeyId, date: START }, owner))).toEqual({ coins: 70, charged: 0 });
+    expect(await coinsOf(owner)).toBe(70);
+    // 다른 날은 따로 50코인
+    expect(await unlockPremiumExport.run(req({ journeyId, date: dateFromToday(1) }, owner))).toEqual({ coins: 20, charged: 50 });
+  });
+
+  it("이미 연 날은 코인이 모자라도 무료로 다시 받는다", async () => {
+    const { owner, journeyId } = await ownerWith(50);
+    await unlockPremiumExport.run(req({ journeyId, date: START }, owner));
+    expect(await coinsOf(owner)).toBe(0);
+    expect(await unlockPremiumExport.run(req({ journeyId, date: START }, owner))).toEqual({ coins: 0, charged: 0 });
+  });
+
+  it("열어 두기는 낸 사람만이다: 같은 여정의 다른 구성원은 따로 50코인", async () => {
+    const { owner, journeyId, inviteCode } = await ownerWith(100);
+    const guest = newUid();
+    await makeUser(guest, "민지");
+    await joinJourney.run(req({ inviteCode }, guest));
+    await db.doc(`users/${guest}`).update({ coins: 60 });
+    await unlockPremiumExport.run(req({ journeyId, date: START }, owner));
+    expect(await unlockPremiumExport.run(req({ journeyId, date: START }, guest))).toEqual({ coins: 10, charged: 50 });
+  });
+
+  it("코인이 50개보다 적으면 거부하고 코인을 빼지 않는다", async () => {
+    const { owner, journeyId } = await ownerWith(49);
+    await expect(unlockPremiumExport.run(req({ journeyId, date: START }, owner)))
+      .rejects.toMatchObject({ code: "failed-precondition", message: expect.stringContaining("코인이 부족") });
+    expect(await coinsOf(owner)).toBe(49);
+    expect((await db.doc(`users/${owner}/premiumExports/${journeyId}_${START}`).get()).exists).toBe(false);
+  });
+
+  it("구성원이 아니거나, 로그인하지 않았거나, 여정 기간 밖 날짜·이상한 날짜면 거부", async () => {
+    const { owner, journeyId } = await ownerWith(100);
+    const stranger = newUid();
+    await makeUser(stranger, "남");
+    await db.doc(`users/${stranger}`).update({ coins: 100 });
+    await expect(unlockPremiumExport.run(req({ journeyId, date: START }, stranger)))
+      .rejects.toMatchObject({ code: "permission-denied" });
+    await expect(unlockPremiumExport.run(req({ journeyId, date: START })))
+      .rejects.toMatchObject({ code: "unauthenticated" });
+    await expect(unlockPremiumExport.run(req({ journeyId, date: dateFromToday(5) }, owner)))
+      .rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(unlockPremiumExport.run(req({ journeyId, date: "2026-02-31" }, owner)))
+      .rejects.toMatchObject({ code: "invalid-argument" });
+    expect(await coinsOf(owner)).toBe(100);
   });
 });
